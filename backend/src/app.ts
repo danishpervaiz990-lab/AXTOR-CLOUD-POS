@@ -1,41 +1,108 @@
-import cors from 'cors';
-import express from 'express';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import { env } from './config/env.js';
-import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
-import { tenantMiddleware } from './middleware/tenant.middleware.js';
-import { authRouter } from './routes/auth.routes.js';
-import { customersRouter } from './routes/customers.routes.js';
-import { healthRouter } from './routes/health.routes.js';
-import { productsRouter } from './routes/products.routes.js';
+import express, { Request, Response, NextFunction } from "express";
+import cors from "cors";
+import { prisma } from "./lib/prisma";
 
-export function createApp(): express.Express {
-  const app = express();
+import authRoutes from "./routes/auth.routes";
+import customersRoutes from "./routes/customers.routes";
+import productsRoutes from "./routes/products.routes";
+import salesDocumentsRoutes from "./routes/sales-documents.routes";
 
-  app.disable('x-powered-by');
+const app = express();
 
-  app.use(helmet());
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
 
-  app.use(cors({
-    origin: env.corsOrigins === '*' ? true : env.corsOrigins,
-    credentials: true
-  }));
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
 
-  app.use(express.json({ limit: '2mb' }));
-  app.use(express.urlencoded({ extended: true }));
+app.get("/", (_req: Request, res: Response) => {
+  return res.json({
+    ok: true,
+    service: "Axtor POS Cloud API",
+    message: "Backend is running",
+    version: "phase-2-production-backend",
+    routes: {
+      health: "/health",
+      dbHealth: "/api/v1/health/db",
+      auth: "/api/v1/auth",
+      customers: "/api/v1/customers",
+      products: "/api/v1/products",
+      salesDocuments: "/api/v1/sales-documents",
+    },
+  });
+});
 
-  app.use(morgan(env.isProduction ? 'combined' : 'dev'));
+app.get("/health", (_req: Request, res: Response) => {
+  return res.json({
+    ok: true,
+    service: "Axtor POS Cloud API",
+    environment: process.env.NODE_ENV || "development",
+    timestamp: new Date().toISOString(),
+  });
+});
 
-  app.use(tenantMiddleware);
+app.get("/api/v1/health/db", async (_req: Request, res: Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
 
-  app.use(healthRouter);
-  app.use(authRouter);
-  app.use(customersRouter);
-  app.use(productsRouter);
+    const businessCount = await prisma.tenant.count();
 
-  app.use(notFoundHandler);
-  app.use(errorHandler);
+    return res.json({
+      ok: true,
+      service: "Axtor POS Cloud API",
+      environment: process.env.NODE_ENV || "development",
+      database: "ok",
+      checks: {
+        prismaConnection: true,
+        postgresQuery: true,
+        businessesTable: true,
+      },
+      businessCount,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("DB health check failed:", error);
 
-  return app;
-}
+    return res.status(500).json({
+      ok: false,
+      service: "Axtor POS Cloud API",
+      environment: process.env.NODE_ENV || "development",
+      database: "error",
+      error: {
+        message: "Database health check failed",
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/customers", customersRoutes);
+app.use("/api/v1/products", productsRoutes);
+app.use("/api/v1/sales-documents", salesDocumentsRoutes);
+
+app.use((req: Request, res: Response) => {
+  return res.status(404).json({
+    ok: false,
+    error: {
+      message: `Route not found: ${req.method} ${req.originalUrl}`,
+    },
+  });
+});
+
+app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("Unhandled API error:", error);
+
+  return res.status(500).json({
+    ok: false,
+    error: {
+      message: "Internal server error",
+    },
+  });
+});
+
+export default app;
