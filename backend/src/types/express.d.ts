@@ -3,7 +3,9 @@ declare global {
     interface Request {
       tenant?: {
         businessId: string | null;
-        source: 'header' | 'future-auth' | 'system';
+        businessSlug?: string | null;
+        userId?: string | null;
+        source: 'auth' | 'header' | 'future-auth' | 'system';
       };
     }
   }
