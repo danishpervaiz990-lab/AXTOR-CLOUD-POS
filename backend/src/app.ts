@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware.js';
 import { tenantMiddleware } from './middleware/tenant.middleware.js';
 import { authRouter } from './routes/auth.routes.js';
+import { customersRouter } from './routes/customers.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 
 export function createApp(): express.Express {
@@ -29,6 +30,7 @@ export function createApp(): express.Express {
 
   app.use(healthRouter);
   app.use(authRouter);
+  app.use(customersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
