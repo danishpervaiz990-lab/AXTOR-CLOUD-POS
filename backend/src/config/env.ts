@@ -42,5 +42,7 @@ export const env = {
   appName: optional('APP_NAME', 'Axtor POS Cloud API'),
   apiPrefix: optional('API_PREFIX', '/api/v1'),
   databaseUrl: required('DATABASE_URL'),
-  corsOrigins: parseCorsOrigins(optional('CORS_ORIGIN', 'http://localhost:3000,http://localhost:5173,https://axtorpos.vercel.app'))
+  corsOrigins: parseCorsOrigins(optional('CORS_ORIGIN', 'http://localhost:3000,http://localhost:5173,https://axtorpos.vercel.app')),
+  authTokenSecret: required('AUTH_TOKEN_SECRET'),
+  authTokenExpiresSeconds: numberEnv('AUTH_TOKEN_EXPIRES_SECONDS', 86400)
 };
