@@ -19,7 +19,7 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "latest",
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
@@ -27,12 +27,11 @@
     "morgan": "latest"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0"
     "@types/cors": "latest",
     "@types/express": "latest",
     "@types/morgan": "latest",
     "@types/node": "latest",
-    "prisma": "^6.0.0",
+    "prisma": "latest",
     "tsx": "latest",
     "typescript": "latest"
   }
