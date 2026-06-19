@@ -1,6 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 
-const HEALTH_PATHS = new Set(['/health', '/api/v1/health']);
+const HEALTH_PATHS = new Set([
+  '/health',
+  '/health/db',
+  '/api/v1/health',
+  '/api/v1/health/db'
+]);
 
 export function tenantMiddleware(req: Request, _res: Response, next: NextFunction): void {
   if (HEALTH_PATHS.has(req.path)) {
