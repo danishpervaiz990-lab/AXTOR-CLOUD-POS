@@ -8,6 +8,7 @@ import { tenantMiddleware } from './middleware/tenant.middleware.js';
 import { authRouter } from './routes/auth.routes.js';
 import { customersRouter } from './routes/customers.routes.js';
 import { healthRouter } from './routes/health.routes.js';
+import { productsRouter } from './routes/products.routes.js';
 
 export function createApp(): express.Express {
   const app = express();
@@ -31,6 +32,7 @@ export function createApp(): express.Express {
   app.use(healthRouter);
   app.use(authRouter);
   app.use(customersRouter);
+  app.use(productsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
