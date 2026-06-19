@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+  <title>Document View · Axtor POS Cloud</title>
+  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet">
+<link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f9f78">
+</head>
+<body>
+  <main class="page" style="max-width:1120px;margin:auto">
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3 no-print">
+      <div><h2 class="fw-bold mb-1">Document View</h2><p class="text-muted mb-0">Print-friendly shareable sales invoice, quotation, or delivery note page.</p></div>
+      <div class="d-flex gap-2"><a class="btn btn-soft" href="index.html"><i class="bi bi-arrow-left"></i> Dashboard</a><button id="invoiceViewPrintBtn" class="btn btn-brand"><i class="bi bi-printer"></i> Print</button></div>
+    </div>
+    <div id="invoiceViewStatus" class="alert alert-info no-print d-none"></div>
+    <div id="invoiceViewRoot"></div>
+  </main>
+  <div class="search-overlay" id="globalSearch">
+    <div class="search-box">
+      <div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off"><button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button></div>
+      <div class="search-results" id="globalSearchResults"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/core-data.js?v=20260618-sales-qr1"></script>
+  <script src="js/main.js?v=20260618-sales-qr1"></script>
+  <script src="js/theme-switcher.js?v=20260618-sales-qr1"></script>
+  <script src="js/app-data.js?v=20260618-sales-qr1"></script>
+  <script src="js/retail-advanced.js?v=20260618-sales-qr1"></script>
+  <script src="js/invoice-templates.js?v=20260618-sales-qr1"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      const root=document.getElementById('invoiceViewRoot');
+      const status=document.getElementById('invoiceViewStatus');
+      function decodePayload(){
+        const raw=new URLSearchParams(location.search).get('data');
+        if(!raw) return null;
+        try{return JSON.parse(decodeURIComponent(escape(atob(raw))));}catch(e){return null;}
+      }
+      const payload=decodePayload();
+      if(!payload){
+        status.classList.remove('d-none');
+        status.textContent='No invoice data found in the URL. Showing the selected demo invoice template.';
+      }
+      const template=(payload && payload.template) || (window.AxtorInvoice && AxtorInvoice.selectedTemplate()) || 'modern-a4';
+      const data=payload ? Object.assign({}, payload) : undefined;
+      if(data) delete data.template;
+      root.innerHTML=window.AxtorInvoice ? AxtorInvoice.render(template,{data}) : '<div class="alert alert-danger">Invoice engine not loaded.</div>';
+      document.getElementById('invoiceViewPrintBtn')?.addEventListener('click',()=>window.print());
+    });
+  </script>
+</body>
+</html>
