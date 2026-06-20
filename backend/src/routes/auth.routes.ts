@@ -1,8 +1,13 @@
-import { Router } from 'express';
-import { login, logout, me } from '../controllers/auth.controller.js';
+import { Router } from "express";
+import { login, logout, me } from "../controllers/auth.controller.js";
 
 export const authRouter = Router();
 
-authRouter.post('/api/v1/auth/login', login);
-authRouter.get('/api/v1/auth/me', me);
-authRouter.post('/api/v1/auth/logout', logout);
+authRouter.post("/login", login);
+authRouter.get("/me", me);
+authRouter.post("/logout", logout);
+
+export const authRoutes = authRouter;
+export const router = authRouter;
+
+export default authRouter;
