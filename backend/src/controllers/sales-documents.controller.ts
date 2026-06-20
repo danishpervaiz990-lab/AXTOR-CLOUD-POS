@@ -28,7 +28,10 @@ function getUserId(req: Request) {
 }
 
 function isValidDocumentType(value: unknown): value is SalesDocumentTypeInput {
-  return typeof value === "string" && allowedDocumentTypes.includes(value as SalesDocumentTypeInput);
+  return (
+    typeof value === "string" &&
+    allowedDocumentTypes.includes(value as SalesDocumentTypeInput)
+  );
 }
 
 function getCounterType(documentType: SalesDocumentTypeInput) {
@@ -37,7 +40,11 @@ function getCounterType(documentType: SalesDocumentTypeInput) {
   return "delivery_note";
 }
 
-function fallbackDocumentNumber(documentType: SalesDocumentTypeInput, nextNumber: number, padding = 6) {
+function fallbackDocumentNumber(
+  documentType: SalesDocumentTypeInput,
+  nextNumber: number,
+  padding = 6
+) {
   const prefixes: Record<SalesDocumentTypeInput, string> = {
     invoice: "INV-",
     quotation: "QUO-",
@@ -47,7 +54,11 @@ function fallbackDocumentNumber(documentType: SalesDocumentTypeInput, nextNumber
   return `${prefixes[documentType]}${String(nextNumber).padStart(padding, "0")}`;
 }
 
-function generateDocumentNo(documentType: SalesDocumentTypeInput, nextNumber: number, padding = 6) {
+function generateDocumentNo(
+  documentType: SalesDocumentTypeInput,
+  nextNumber: number,
+  padding = 6
+) {
   const utilFn = (documentNumberUtil as any).generateDocumentNumber;
 
   if (typeof utilFn === "function") {
@@ -240,7 +251,8 @@ export async function createSalesDocument(req: Request, res: Response) {
     }
 
     const result = await (prisma as any).$transaction(async (tx: any) => {
-      let branchId = typeof req.body.branchId === "string" ? req.body.branchId : undefined;
+      let branchId =
+        typeof req.body.branchId === "string" ? req.body.branchId : undefined;
 
       if (!branchId && userId) {
         const user = await tx.user.findFirst({
@@ -276,7 +288,9 @@ export async function createSalesDocument(req: Request, res: Response) {
         throw new Error("No branch found for this business");
       }
 
-      const customerId = typeof req.body.customerId === "string" ? req.body.customerId : undefined;
+      const customerId =
+        typeof req.body.customerId === "string" ? req.body.customerId : undefined;
+
       let customerNameSnapshot: string | undefined;
 
       if (customerId) {
@@ -300,7 +314,7 @@ export async function createSalesDocument(req: Request, res: Response) {
 
       const productIds = [...new Set(items.map((item) => item.productId))];
 
-      const products = await tx.product.findMany({
+      const products: any[] = await tx.product.findMany({
         where: {
           id: {
             in: productIds,
@@ -309,7 +323,9 @@ export async function createSalesDocument(req: Request, res: Response) {
         },
       });
 
-      const productById = new Map(products.map((product: any) => [product.id, product]));
+      const productById = new Map<string, any>(
+        products.map((product: any) => [String(product.id), product] as [string, any])
+      );
 
       if (products.length !== productIds.length) {
         throw new Error("One or more products are invalid");
@@ -353,10 +369,14 @@ export async function createSalesDocument(req: Request, res: Response) {
       let itemDiscountTotal = 0;
       let taxTotal = 0;
 
-      const preparedItems = [];
+      const preparedItems: any[] = [];
 
       for (const item of items) {
-        const product = productById.get(item.productId);
+        const product: any = productById.get(item.productId);
+
+        if (!product) {
+          throw new Error(`Product not found: ${item.productId}`);
+        }
 
         const qty = toNumber(item.qty);
         const unitPrice = toNumber(item.unitPrice, Number(product.salePrice || 0));
@@ -398,7 +418,9 @@ export async function createSalesDocument(req: Request, res: Response) {
         documentType === "invoice" ? roundMoney(grandTotal - paidTotal) : 0;
 
       const paymentStatus =
-        documentType === "invoice" ? getPaymentStatus(grandTotal, paidTotal) : "unpaid";
+        documentType === "invoice"
+          ? getPaymentStatus(grandTotal, paidTotal)
+          : "unpaid";
 
       const status = documentType === "invoice" ? "completed" : "issued";
 
@@ -424,7 +446,7 @@ export async function createSalesDocument(req: Request, res: Response) {
           createdById: userId || null,
           updatedById: userId || null,
           items: {
-            create: preparedItems.map((item) => ({
+            create: preparedItems.map((item: any) => ({
               productId: item.product.id,
               batchId: item.batchId || null,
               productNameSnapshot: item.product.name,
