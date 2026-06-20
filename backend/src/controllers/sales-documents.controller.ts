@@ -20,11 +20,11 @@ const allowedDocumentTypes: SalesDocumentTypeInput[] = [
 ];
 
 function getBusinessId(req: Request) {
-  return (req as any).businessId as string | undefined;
+  return req.tenant?.businessId ?? undefined;
 }
 
 function getUserId(req: Request) {
-  return (req as any).userId as string | undefined;
+  return req.tenant?.userId ?? undefined;
 }
 
 function isValidDocumentType(value: unknown): value is SalesDocumentTypeInput {
