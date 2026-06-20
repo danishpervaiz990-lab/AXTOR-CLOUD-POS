@@ -1,5 +1,5 @@
-import { Router, RequestHandler } from "express";
-import * as tenantMiddlewareModule from "../middleware/tenant.middleware.js";
+import { Router } from "express";
+import { requireAuth } from "../middleware/auth.middleware.js";
 import {
   createSalesDocument,
   getSalesDocumentById,
@@ -8,16 +8,7 @@ import {
 
 export const router = Router();
 
-const requireTenantAuth =
-  (tenantMiddlewareModule as any).requireAuth ||
-  (tenantMiddlewareModule as any).tenantMiddleware ||
-  (tenantMiddlewareModule as any).requireTenant ||
-  (tenantMiddlewareModule as any).authMiddleware ||
-  (tenantMiddlewareModule as any).default;
-
-if (requireTenantAuth) {
-  router.use(requireTenantAuth as RequestHandler);
-}
+router.use(requireAuth);
 
 router.get("/", listSalesDocuments);
 router.get("/:id", getSalesDocumentById);
