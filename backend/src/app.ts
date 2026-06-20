@@ -1,11 +1,21 @@
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
-import { prisma } from "./lib/prisma.js";
+import { prisma } from "./db/prisma.js";
 
-import authRoutes from "./routes/auth.routes.js";
-import customersRoutes from "./routes/customers.routes.js";
-import productsRoutes from "./routes/products.routes.js";
-import salesDocumentsRoutes from "./routes/sales-documents.routes.js";
+import * as authRoutesModule from "./routes/auth.routes.js";
+import * as customersRoutesModule from "./routes/customers.routes.js";
+import * as productsRoutesModule from "./routes/products.routes.js";
+import * as salesDocumentsRoutesModule from "./routes/sales-documents.routes.js";
+
+function getRouter(module: any, names: string[]) {
+  for (const name of names) {
+    if (module[name]) {
+      return module[name];
+    }
+  }
+
+  throw new Error(`Route module export not found. Tried: ${names.join(", ")}`);
+}
 
 export function createApp() {
   const app = express();
@@ -19,6 +29,34 @@ export function createApp() {
 
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
+
+  const authRoutes = getRouter(authRoutesModule, [
+    "default",
+    "authRoutes",
+    "authRouter",
+    "router",
+  ]);
+
+  const customersRoutes = getRouter(customersRoutesModule, [
+    "default",
+    "customersRoutes",
+    "customersRouter",
+    "router",
+  ]);
+
+  const productsRoutes = getRouter(productsRoutesModule, [
+    "default",
+    "productsRoutes",
+    "productsRouter",
+    "router",
+  ]);
+
+  const salesDocumentsRoutes = getRouter(salesDocumentsRoutesModule, [
+    "default",
+    "salesDocumentsRoutes",
+    "salesDocumentsRouter",
+    "router",
+  ]);
 
   app.get("/", (_req: Request, res: Response) => {
     return res.json({
@@ -50,7 +88,10 @@ export function createApp() {
     try {
       await prisma.$queryRaw`SELECT 1`;
 
-      const businessCount = await prisma.tenant.count();
+      const rows = await prisma.$queryRaw<Array<{ count: number }>>`
+        SELECT COUNT(*)::int AS count
+        FROM businesses
+      `;
 
       return res.json({
         ok: true,
@@ -62,7 +103,7 @@ export function createApp() {
           postgresQuery: true,
           businessesTable: true,
         },
-        businessCount,
+        businessCount: rows[0]?.count ?? 0,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
