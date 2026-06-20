@@ -1,23 +1,41 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
-import * as documentNumberUtil from "../utils/document-number.js";
+import {
+  getDocumentPrefix,
+  getNextDocumentNumber,
+} from "../utils/document-number.js";
 
-type SalesDocumentTypeInput = "invoice" | "quotation" | "delivery_note";
+type PrismaDocumentType = "INVOICE" | "QUOTATION" | "DELIVERY_NOTE";
+type ApiDocumentType = "invoice" | "quotation" | "delivery_note";
 
 type CreateSalesDocumentItemInput = {
-  productId: string;
-  batchId?: string;
-  qty: number;
+  productId?: string;
+  sku?: string;
+  barcode?: string;
+  qrCode?: string;
+  name?: string;
+  description?: string;
+  unit?: string;
+  qty?: number;
+  rate?: number;
+  price?: number;
   unitPrice?: number;
+  discount?: number;
   discountAmount?: number;
   taxRate?: number;
 };
 
-const allowedDocumentTypes: SalesDocumentTypeInput[] = [
-  "invoice",
-  "quotation",
-  "delivery_note",
-];
+const documentTypeMap: Record<string, PrismaDocumentType> = {
+  invoice: "INVOICE",
+  INVOICE: "INVOICE",
+  quotation: "QUOTATION",
+  QUOTATION: "QUOTATION",
+  quote: "QUOTATION",
+  delivery_note: "DELIVERY_NOTE",
+  DELIVERY_NOTE: "DELIVERY_NOTE",
+  dn: "DELIVERY_NOTE",
+  DN: "DELIVERY_NOTE",
+};
 
 function getBusinessId(req: Request) {
   return req.tenant?.businessId ?? undefined;
@@ -27,45 +45,9 @@ function getUserId(req: Request) {
   return req.tenant?.userId ?? undefined;
 }
 
-function isValidDocumentType(value: unknown): value is SalesDocumentTypeInput {
-  return (
-    typeof value === "string" &&
-    allowedDocumentTypes.includes(value as SalesDocumentTypeInput)
-  );
-}
-
-function getCounterType(documentType: SalesDocumentTypeInput) {
-  if (documentType === "invoice") return "invoice";
-  if (documentType === "quotation") return "quotation";
-  return "delivery_note";
-}
-
-function fallbackDocumentNumber(
-  documentType: SalesDocumentTypeInput,
-  nextNumber: number,
-  padding = 6
-) {
-  const prefixes: Record<SalesDocumentTypeInput, string> = {
-    invoice: "INV-",
-    quotation: "QUO-",
-    delivery_note: "DN-",
-  };
-
-  return `${prefixes[documentType]}${String(nextNumber).padStart(padding, "0")}`;
-}
-
-function generateDocumentNo(
-  documentType: SalesDocumentTypeInput,
-  nextNumber: number,
-  padding = 6
-) {
-  const utilFn = (documentNumberUtil as any).generateDocumentNumber;
-
-  if (typeof utilFn === "function") {
-    return utilFn(documentType, nextNumber, padding);
-  }
-
-  return fallbackDocumentNumber(documentType, nextNumber, padding);
+function cleanString(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  return text || undefined;
 }
 
 function toNumber(value: unknown, defaultValue = 0) {
@@ -77,19 +59,126 @@ function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 1000) / 1000;
 }
 
-function toDateOnly(value: unknown) {
-  if (typeof value === "string" && value.trim()) {
-    return new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+function normalizeDocumentType(value: unknown): PrismaDocumentType | null {
+  const text = cleanString(value);
+
+  if (!text) {
+    return null;
   }
 
-  const now = new Date();
-  return new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
+  return documentTypeMap[text] ?? documentTypeMap[text.toLowerCase()] ?? null;
 }
 
-function getPaymentStatus(grandTotal: number, paidTotal: number) {
-  if (paidTotal <= 0) return "unpaid";
-  if (paidTotal >= grandTotal) return "paid";
+function toApiDocumentType(documentType: PrismaDocumentType): ApiDocumentType {
+  if (documentType === "INVOICE") return "invoice";
+  if (documentType === "QUOTATION") return "quotation";
+  return "delivery_note";
+}
+
+function normalizeStatus(value: unknown) {
+  const text = cleanString(value);
+
+  if (!text) {
+    return undefined;
+  }
+
+  const status = text.toUpperCase();
+  const allowed = [
+    "DRAFT",
+    "ISSUED",
+    "PAID",
+    "PARTIALLY_PAID",
+    "CREDIT",
+    "CANCELLED",
+    "VOID",
+  ];
+
+  return allowed.includes(status) ? status : undefined;
+}
+
+function toDate(value: unknown): Date | undefined {
+  const text = cleanString(value);
+
+  if (!text) {
+    return undefined;
+  }
+
+  const date = new Date(text);
+
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date;
+}
+
+function getPaymentStatus(total: number, paid: number) {
+  if (paid <= 0) return "unpaid";
+  if (paid >= total) return "paid";
   return "partial";
+}
+
+function formatItem(item: any) {
+  return {
+    id: item.id,
+    businessId: item.businessId,
+    salesDocumentId: item.salesDocumentId,
+    productId: item.productId,
+    sku: item.sku,
+    barcode: item.barcode,
+    qrCode: item.qrCode,
+    name: item.name,
+    description: item.description,
+    unit: item.unit,
+    qty: Number(item.qty),
+    rate: Number(item.rate),
+    price: Number(item.price),
+    discount: Number(item.discount),
+    taxRate: Number(item.taxRate),
+    tax: Number(item.tax),
+    total: Number(item.total),
+    createdAt: item.createdAt,
+  };
+}
+
+function formatSalesDocument(document: any) {
+  const documentType = String(document.documentType) as PrismaDocumentType;
+
+  return {
+    id: document.id,
+    businessId: document.businessId,
+    branchId: document.branchId,
+    documentNo: document.documentNo,
+    documentType: toApiDocumentType(documentType),
+    documentTypeRaw: document.documentType,
+    documentPrefix: document.documentPrefix,
+    lpoNo: document.lpoNo,
+    customerPoNo: document.customerPoNo,
+    poNo: document.poNo,
+    customerId: document.customerId,
+    customerName: document.customerName,
+    salesmanId: document.salesmanId,
+    salesmanName: document.salesmanName,
+    paymentMethod: document.paymentMethod,
+    paymentStatus: document.paymentStatus,
+    stockStatus: document.stockStatus,
+    status: String(document.status).toLowerCase(),
+    statusRaw: document.status,
+    subtotal: Number(document.subtotal),
+    discount: Number(document.discount),
+    tax: Number(document.tax),
+    total: Number(document.total),
+    paid: Number(document.paid),
+    balance: Number(document.balance),
+    creditAmount: Number(document.creditAmount),
+    customerCreditApplied: document.customerCreditApplied,
+    dueDate: document.dueDate,
+    issuedAt: document.issuedAt,
+    metadata: document.metadata,
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt,
+    items: Array.isArray(document.items) ? document.items.map(formatItem) : [],
+  };
 }
 
 export async function listSalesDocuments(req: Request, res: Response) {
@@ -107,16 +196,22 @@ export async function listSalesDocuments(req: Request, res: Response) {
       businessId,
     };
 
-    if (isValidDocumentType(req.query.documentType)) {
-      where.documentType = req.query.documentType;
+    const documentType = normalizeDocumentType(req.query.documentType);
+
+    if (documentType) {
+      where.documentType = documentType;
     }
 
-    if (typeof req.query.customerId === "string" && req.query.customerId.trim()) {
-      where.customerId = req.query.customerId;
+    const customerId = cleanString(req.query.customerId);
+
+    if (customerId) {
+      where.customerId = customerId;
     }
 
-    if (typeof req.query.status === "string" && req.query.status.trim()) {
-      where.status = req.query.status;
+    const status = normalizeStatus(req.query.status);
+
+    if (status) {
+      where.status = status;
     }
 
     const documents = await (prisma as any).salesDocument.findMany({
@@ -125,20 +220,15 @@ export async function listSalesDocuments(req: Request, res: Response) {
         createdAt: "desc",
       },
       include: {
-        customer: true,
-        branch: true,
-        items: {
-          include: {
-            product: true,
-            batch: true,
-          },
-        },
+        items: true,
       },
+      take: 100,
     });
 
     return res.json({
       ok: true,
-      data: documents,
+      count: documents.length,
+      data: documents.map(formatSalesDocument),
     });
   } catch (error) {
     console.error("listSalesDocuments error:", error);
@@ -153,12 +243,19 @@ export async function listSalesDocuments(req: Request, res: Response) {
 export async function getSalesDocumentById(req: Request, res: Response) {
   try {
     const businessId = getBusinessId(req);
-    const { id } = req.params;
+    const id = cleanString(req.params.id);
 
     if (!businessId) {
       return res.status(401).json({
         ok: false,
         error: { message: "Unauthorized: business context missing" },
+      });
+    }
+
+    if (!id) {
+      return res.status(400).json({
+        ok: false,
+        error: { message: "Sales document id is required" },
       });
     }
 
@@ -168,14 +265,7 @@ export async function getSalesDocumentById(req: Request, res: Response) {
         businessId,
       },
       include: {
-        customer: true,
-        branch: true,
-        items: {
-          include: {
-            product: true,
-            batch: true,
-          },
-        },
+        items: true,
       },
     });
 
@@ -188,7 +278,7 @@ export async function getSalesDocumentById(req: Request, res: Response) {
 
     return res.json({
       ok: true,
-      data: document,
+      data: formatSalesDocument(document),
     });
   } catch (error) {
     console.error("getSalesDocumentById error:", error);
@@ -212,9 +302,9 @@ export async function createSalesDocument(req: Request, res: Response) {
       });
     }
 
-    const documentType = req.body.documentType;
+    const documentType = normalizeDocumentType(req.body?.documentType);
 
-    if (!isValidDocumentType(documentType)) {
+    if (!documentType) {
       return res.status(400).json({
         ok: false,
         error: {
@@ -223,7 +313,7 @@ export async function createSalesDocument(req: Request, res: Response) {
       });
     }
 
-    const items = Array.isArray(req.body.items)
+    const items = Array.isArray(req.body?.items)
       ? (req.body.items as CreateSalesDocumentItemInput[])
       : [];
 
@@ -234,65 +324,15 @@ export async function createSalesDocument(req: Request, res: Response) {
       });
     }
 
-    for (const item of items) {
-      if (!item.productId) {
-        return res.status(400).json({
-          ok: false,
-          error: { message: "Each item must have productId" },
-        });
-      }
-
-      if (toNumber(item.qty) <= 0) {
-        return res.status(400).json({
-          ok: false,
-          error: { message: "Each item qty must be greater than zero" },
-        });
-      }
-    }
+    const branchId = cleanString(req.body?.branchId);
+    const warehouseId = cleanString(req.body?.warehouseId);
+    const customerId = cleanString(req.body?.customerId);
+    let customerName =
+      cleanString(req.body?.customerName) ||
+      cleanString(req.body?.customerNameSnapshot) ||
+      "Walk-in Customer";
 
     const result = await (prisma as any).$transaction(async (tx: any) => {
-      let branchId =
-        typeof req.body.branchId === "string" ? req.body.branchId : undefined;
-
-      if (!branchId && userId) {
-        const user = await tx.user.findFirst({
-          where: {
-            id: userId,
-            businessId,
-          },
-          select: {
-            branchId: true,
-          },
-        });
-
-        branchId = user?.branchId || undefined;
-      }
-
-      if (!branchId) {
-        const defaultBranch = await tx.branch.findFirst({
-          where: {
-            businessId,
-          },
-          orderBy: {
-            createdAt: "asc",
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        branchId = defaultBranch?.id;
-      }
-
-      if (!branchId) {
-        throw new Error("No branch found for this business");
-      }
-
-      const customerId =
-        typeof req.body.customerId === "string" ? req.body.customerId : undefined;
-
-      let customerNameSnapshot: string | undefined;
-
       if (customerId) {
         const customer = await tx.customer.findFirst({
           where: {
@@ -309,254 +349,216 @@ export async function createSalesDocument(req: Request, res: Response) {
           throw new Error("Invalid customer for this business");
         }
 
-        customerNameSnapshot = customer.name;
+        customerName = customer.name;
       }
 
-      const productIds = [...new Set(items.map((item) => item.productId))];
+      const productIds = [
+        ...new Set(
+          items
+            .map((item) => cleanString(item.productId))
+            .filter((id): id is string => Boolean(id))
+        ),
+      ];
 
-      const products: any[] = await tx.product.findMany({
+      if (productIds.length !== items.length) {
+        throw new Error("Each item must have productId");
+      }
+
+      const products = await tx.product.findMany({
         where: {
+          businessId,
           id: {
             in: productIds,
           },
-          businessId,
+          deleted: false,
         },
       });
 
       const productById = new Map<string, any>(
-        products.map((product: any) => [String(product.id), product] as [string, any])
+        products.map((product: any) => [String(product.id), product])
       );
 
       if (products.length !== productIds.length) {
         throw new Error("One or more products are invalid");
       }
 
-      const counterType = getCounterType(documentType);
-
-      const counter = await tx.counter.findFirst({
-        where: {
-          businessId,
-          branchId,
-          counterType,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      });
-
-      if (!counter) {
-        throw new Error(`Missing counter for ${counterType}. Seed counters first.`);
-      }
-
-      const documentNo = generateDocumentNo(
-        documentType,
-        Number(counter.nextNumber),
-        Number(counter.padding || 6)
-      );
-
-      await tx.counter.update({
-        where: {
-          id: counter.id,
-        },
-        data: {
-          nextNumber: {
-            increment: 1,
-          },
-        },
-      });
-
       let subtotal = 0;
-      let itemDiscountTotal = 0;
+      let discountTotal = 0;
       let taxTotal = 0;
 
-      const preparedItems: any[] = [];
-
-      for (const item of items) {
-        const product: any = productById.get(item.productId);
+      const preparedItems = items.map((item) => {
+        const productId = cleanString(item.productId) as string;
+        const product = productById.get(productId);
 
         if (!product) {
-          throw new Error(`Product not found: ${item.productId}`);
+          throw new Error(`Product not found: ${productId}`);
         }
 
         const qty = toNumber(item.qty);
-        const unitPrice = toNumber(item.unitPrice, Number(product.salePrice || 0));
-        const discountAmount = toNumber(item.discountAmount);
-        const taxRate = toNumber(item.taxRate, Number(product.taxRate || 0));
 
-        const grossLine = roundMoney(qty * unitPrice);
-        const taxableAmount = Math.max(0, grossLine - discountAmount);
-        const taxAmount = roundMoney((taxableAmount * taxRate) / 100);
-        const lineTotal = roundMoney(taxableAmount + taxAmount);
+        if (qty <= 0) {
+          throw new Error(`Qty must be greater than zero for ${product.name}`);
+        }
 
-        subtotal = roundMoney(subtotal + grossLine);
-        itemDiscountTotal = roundMoney(itemDiscountTotal + discountAmount);
-        taxTotal = roundMoney(taxTotal + taxAmount);
+        const rate = toNumber(
+          item.unitPrice ?? item.rate ?? item.price,
+          Number(product.price || 0)
+        );
+        const linePrice = roundMoney(qty * rate);
+        const discount = toNumber(item.discountAmount ?? item.discount);
+        const taxRate = toNumber(item.taxRate);
+        const taxableAmount = Math.max(0, linePrice - discount);
+        const tax = roundMoney((taxableAmount * taxRate) / 100);
+        const total = roundMoney(taxableAmount + tax);
 
-        preparedItems.push({
+        subtotal = roundMoney(subtotal + linePrice);
+        discountTotal = roundMoney(discountTotal + discount);
+        taxTotal = roundMoney(taxTotal + tax);
+
+        return {
           product,
-          batchId: item.batchId,
+          productId,
+          sku: product.sku || cleanString(item.sku),
+          barcode: product.barcode || cleanString(item.barcode),
+          qrCode: product.qrCode || cleanString(item.qrCode),
+          name: product.name || cleanString(item.name) || "Item",
+          description: cleanString(item.description),
+          unit: product.unit || cleanString(item.unit) || "PCS",
           qty,
-          unitPrice,
-          discountAmount,
+          rate,
+          price: linePrice,
+          discount,
           taxRate,
-          taxAmount,
-          lineTotal,
-        });
-      }
+          tax,
+          total,
+        };
+      });
 
-      const headerDiscountTotal = toNumber(req.body.discountTotal);
-      const discountTotal = roundMoney(itemDiscountTotal + headerDiscountTotal);
-      const grandTotal = roundMoney(subtotal - discountTotal + taxTotal);
-
-      const requestedPaidTotal = toNumber(req.body.paidTotal);
-      const paidTotal =
-        documentType === "invoice"
-          ? Math.min(Math.max(0, requestedPaidTotal), grandTotal)
+      const headerDiscount = toNumber(req.body?.discount ?? req.body?.discountTotal);
+      discountTotal = roundMoney(discountTotal + headerDiscount);
+      const total = roundMoney(subtotal - discountTotal + taxTotal);
+      const paid =
+        documentType === "INVOICE"
+          ? Math.min(Math.max(0, toNumber(req.body?.paid ?? req.body?.paidTotal)), total)
           : 0;
-
-      const balanceTotal =
-        documentType === "invoice" ? roundMoney(grandTotal - paidTotal) : 0;
-
+      const balance = documentType === "INVOICE" ? roundMoney(total - paid) : 0;
       const paymentStatus =
-        documentType === "invoice"
-          ? getPaymentStatus(grandTotal, paidTotal)
-          : "unpaid";
+        documentType === "INVOICE" ? getPaymentStatus(total, paid) : "not_applicable";
+      const stockStatus = documentType === "INVOICE" ? "posted" : "not_posted";
+      const documentPrefix = getDocumentPrefix(documentType as any);
+      const documentNo = await getNextDocumentNumber(
+        tx,
+        businessId,
+        branchId ?? null,
+        documentType as any
+      );
 
-      const status = documentType === "invoice" ? "completed" : "issued";
+      if (documentType === "INVOICE") {
+        for (const item of preparedItems) {
+          const currentStock = Number(item.product.currentStock || 0);
+
+          if (currentStock < item.qty) {
+            throw new Error(
+              `Insufficient stock for ${item.name}. Available: ${currentStock}, Required: ${item.qty}`
+            );
+          }
+        }
+      }
 
       const document = await tx.salesDocument.create({
         data: {
           businessId,
-          branchId,
-          documentType,
+          branchId: branchId ?? null,
           documentNo,
-          status,
-          customerId,
-          customerNameSnapshot,
-          subtotal,
-          discountTotal,
-          taxTotal,
-          grandTotal,
-          paidTotal,
-          balanceTotal,
+          documentType,
+          documentPrefix,
+          lpoNo: cleanString(req.body?.lpoNo) ?? null,
+          customerPoNo: cleanString(req.body?.customerPoNo) ?? null,
+          poNo: cleanString(req.body?.poNo) ?? null,
+          customerId: customerId ?? null,
+          customerName,
+          salesmanId: cleanString(req.body?.salesmanId) ?? null,
+          salesmanName: cleanString(req.body?.salesmanName) ?? null,
+          paymentMethod: cleanString(req.body?.paymentMethod) ?? null,
           paymentStatus,
-          documentDate: toDateOnly(req.body.documentDate),
-          dueDate: req.body.dueDate ? toDateOnly(req.body.dueDate) : null,
-          notes: typeof req.body.notes === "string" ? req.body.notes : null,
-          createdById: userId || null,
-          updatedById: userId || null,
+          stockStatus,
+          status: "ISSUED",
+          subtotal,
+          discount: discountTotal,
+          tax: taxTotal,
+          total,
+          paid,
+          balance,
+          creditAmount: documentType === "INVOICE" ? balance : 0,
+          customerCreditApplied: false,
+          dueDate: toDate(req.body?.dueDate) ?? null,
+          issuedAt: toDate(req.body?.documentDate) ?? new Date(),
+          metadata: {
+            notes: cleanString(req.body?.notes) ?? null,
+            createdById: userId ?? null,
+            source: "api",
+          },
           items: {
-            create: preparedItems.map((item: any) => ({
-              productId: item.product.id,
-              batchId: item.batchId || null,
-              productNameSnapshot: item.product.name,
-              skuSnapshot: item.product.sku || null,
+            create: preparedItems.map((item) => ({
+              businessId,
+              productId: item.productId,
+              sku: item.sku ?? null,
+              barcode: item.barcode ?? null,
+              qrCode: item.qrCode ?? null,
+              name: item.name,
+              description: item.description ?? null,
+              unit: item.unit,
               qty: item.qty,
-              unitPrice: item.unitPrice,
-              discountAmount: item.discountAmount,
+              rate: item.rate,
+              price: item.price,
+              discount: item.discount,
               taxRate: item.taxRate,
-              taxAmount: item.taxAmount,
-              lineTotal: item.lineTotal,
+              tax: item.tax,
+              total: item.total,
             })),
           },
         },
         include: {
-          customer: true,
-          branch: true,
           items: true,
         },
       });
 
-      if (documentType === "invoice") {
-        for (const item of preparedItems) {
-          let batch = null;
+      if (documentType === "INVOICE") {
+        for (let index = 0; index < preparedItems.length; index += 1) {
+          const item = preparedItems[index];
+          const beforeQty = Number(item.product.currentStock || 0);
+          const afterQty = roundMoney(beforeQty - item.qty);
 
-          if (item.batchId) {
-            batch = await tx.productBatch.findFirst({
-              where: {
-                id: item.batchId,
-                businessId,
-                branchId,
-                productId: item.product.id,
-              },
-            });
-          }
-
-          if (!batch) {
-            batch = await tx.productBatch.findFirst({
-              where: {
-                businessId,
-                branchId,
-                productId: item.product.id,
-                currentQty: {
-                  gt: 0,
-                },
-              },
-              orderBy: {
-                createdAt: "asc",
-              },
-            });
-          }
-
-          if (!batch) {
-            throw new Error(`No stock batch found for product: ${item.product.name}`);
-          }
-
-          const currentQty = Number(batch.currentQty);
-
-          if (currentQty < item.qty) {
-            throw new Error(
-              `Insufficient stock for ${item.product.name}. Available: ${currentQty}, Required: ${item.qty}`
-            );
-          }
-
-          const newRunningQty = roundMoney(currentQty - item.qty);
-
-          await tx.productBatch.update({
+          await tx.product.update({
             where: {
-              id: batch.id,
+              id: item.productId,
             },
             data: {
-              currentQty: {
+              currentStock: {
                 decrement: item.qty,
               },
             },
           });
 
-          await tx.stockLedger.create({
+          await tx.stockMovement.create({
             data: {
               businessId,
-              branchId,
-              productId: item.product.id,
-              batchId: batch.id,
-              movementType: "sale_issue",
-              sourceType: "sales_document",
-              sourceId: document.id,
-              qtyIn: 0,
-              qtyOut: item.qty,
-              unitCost: item.product.costPrice || 0,
-              runningQty: newRunningQty,
-              note: `Stock deducted for invoice ${document.documentNo}`,
-              createdById: userId || null,
-            },
-          });
-        }
-
-        if (customerId && balanceTotal > 0) {
-          await tx.customerLedger.create({
-            data: {
-              businessId,
-              customerId,
-              branchId,
-              entryType: "sales_invoice",
-              sourceType: "sales_document",
-              sourceId: document.id,
-              salesDocumentId: document.id,
-              debit: balanceTotal,
-              credit: 0,
-              entryDate: toDateOnly(req.body.documentDate),
-              notes: `Credit balance for invoice ${document.documentNo}`,
-              createdById: userId || null,
+              movementNo: `${documentNo}-${String(index + 1).padStart(3, "0")}`,
+              productId: item.productId,
+              sku: item.sku ?? null,
+              productName: item.name,
+              warehouseId: warehouseId ?? null,
+              direction: "OUT",
+              movementType: "sales_invoice",
+              referenceNo: documentNo,
+              qty: item.qty,
+              beforeQty,
+              afterQty,
+              source: "sales_document",
+              metadata: {
+                salesDocumentId: document.id,
+                createdById: userId ?? null,
+              },
             },
           });
         }
@@ -568,7 +570,7 @@ export async function createSalesDocument(req: Request, res: Response) {
     return res.status(201).json({
       ok: true,
       message: "Sales document created successfully",
-      data: result,
+      data: formatSalesDocument(result),
     });
   } catch (error: any) {
     console.error("createSalesDocument error:", error);
