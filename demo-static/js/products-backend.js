@@ -19,6 +19,29 @@
     return "QAR " + amount.toFixed(2);
   }
 
+  function numberValue(value, fallback) {
+    const parsed = Number(value);
+
+    if (!Number.isFinite(parsed)) {
+      return fallback || 0;
+    }
+
+    return parsed;
+  }
+
+  function inputValue(id) {
+    const input = document.getElementById(id);
+    return input ? String(input.value || "").trim() : "";
+  }
+
+  function setInputValue(id, value) {
+    const input = document.getElementById(id);
+
+    if (input) {
+      input.value = value;
+    }
+  }
+
   function stockStatus(product) {
     const stock = Number(product.currentStock ?? product.stock ?? 0);
     const minStock = Number(product.minStock ?? 5);
@@ -158,12 +181,140 @@
     }
   }
 
+  function showProductStatus(message, type) {
+    const saveButton = document.getElementById("saveProductBtn");
+
+    if (!saveButton) {
+      return;
+    }
+
+    let statusBox = document.getElementById("productBackendStatus");
+
+    if (!statusBox) {
+      statusBox = document.createElement("div");
+      statusBox.id = "productBackendStatus";
+      statusBox.className = "col-12";
+      saveButton.closest(".col-12").before(statusBox);
+    }
+
+    const alertType = type || "info";
+
+    statusBox.innerHTML =
+      '<div class="alert alert-' + alertType + ' py-2 mb-0">' +
+      escapeHtml(message) +
+      "</div>";
+  }
+
+  function clearProductForm() {
+    setInputValue("productNameInput", "");
+    setInputValue("productSkuInput", "");
+    setInputValue("productBarcodeInput", "");
+    setInputValue("productQrCodeInput", "");
+    setInputValue("productSalePriceInput", "0.00");
+    setInputValue("productOpeningStockInput", "0");
+    setInputValue("productCostPriceInput", "");
+
+    const imagePreview = document.getElementById("productImagePreview");
+
+    if (imagePreview) {
+      imagePreview.innerHTML = '<i class="bi bi-image text-muted"></i>';
+      delete imagePreview.dataset.imageData;
+    }
+  }
+
+  async function saveProductToBackend(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const saveButton = document.getElementById("saveProductBtn");
+
+    const name = inputValue("productNameInput");
+
+    if (!name) {
+      showProductStatus("Product name is required.", "warning");
+      return;
+    }
+
+    const sku = inputValue("productSkuInput") || "SKU-" + Date.now().toString().slice(-6);
+    const barcode = inputValue("productBarcodeInput");
+    const qrCode = inputValue("productQrCodeInput");
+    const category = inputValue("productCategoryInput") || "General";
+    const price = numberValue(inputValue("productSalePriceInput"), 0);
+    const costPrice = numberValue(inputValue("productCostPriceInput"), 0);
+    const openingStock = numberValue(inputValue("productOpeningStockInput"), 0);
+
+    const payload = {
+      sku: sku,
+      name: name,
+      barcode: barcode || undefined,
+      qrCode: qrCode || undefined,
+      category: category,
+      unit: "PCS",
+      price: price,
+      costPrice: costPrice,
+      openingStock: openingStock,
+      currentStock: openingStock,
+      active: true
+    };
+
+    const oldButtonText = saveButton ? saveButton.innerHTML : "";
+
+    try {
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.innerHTML = "Saving to backend...";
+      }
+
+      showProductStatus("Saving product to backend...", "info");
+
+      const response = await window.AxtorAPI.apiPost("/api/v1/products", payload);
+
+      showProductStatus("Product saved to backend successfully.", "success");
+      clearProductForm();
+      await loadProducts();
+
+      return response;
+    } catch (error) {
+      console.error("Save product failed:", error);
+      showProductStatus("Product save failed. Check SKU duplicate or console error.", "danger");
+      throw error;
+    } finally {
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.innerHTML = oldButtonText || "Save Product";
+      }
+    }
+  }
+
+  function bindSaveProductButton() {
+    const oldButton = document.getElementById("saveProductBtn");
+
+    if (!oldButton) {
+      return;
+    }
+
+    if (oldButton.dataset.axtorBackendBound === "1") {
+      return;
+    }
+
+    const newButton = oldButton.cloneNode(true);
+    newButton.dataset.axtorBackendBound = "1";
+
+    oldButton.parentNode.replaceChild(newButton, oldButton);
+
+    newButton.addEventListener("click", saveProductToBackend);
+  }
+
   window.AxtorProductsBackend = {
     loadProducts: loadProducts,
-    renderProducts: renderProducts
+    renderProducts: renderProducts,
+    saveProductToBackend: saveProductToBackend
   };
 
   document.addEventListener("DOMContentLoaded", function () {
-    setTimeout(loadProducts, 100);
+    setTimeout(function () {
+      bindSaveProductButton();
+      loadProducts();
+    }, 150);
   });
 })();
