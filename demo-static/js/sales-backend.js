@@ -1,9 +1,3 @@
-/**
- * Axtor POS Cloud
- * Phase 3 — Sales Backend Integration
- * Sales Step 2B ProductId Fix
- */
-
 (function () {
   "use strict";
 
@@ -16,24 +10,28 @@
   const state = {
     initialized: false,
     docs: [],
+    products: [],
+    cart: [],
     cache: new Map(),
     activeEditPreview: null,
     searchText: "",
+    productSearch: "",
     creating: false,
   };
 
   window.AxtorSalesBackend = {
     exists: true,
-    version: "20260624-phase3-sales2b-productidfix-full",
+    version: "20260624-phase3-sales2c-backend-products",
     init,
     refresh: loadSavedDocuments,
+    refreshProducts: loadBackendProducts,
     loadSavedDocuments,
+    loadBackendProducts,
     viewDocument,
     editPreviewDocument,
     exitEditPreview,
     createBackendDocumentFromPage,
     buildCreatePayloadFromPage,
-    buildCreatePayloadFromPageWithProductIds,
     getState: () => state,
   };
 
@@ -49,9 +47,13 @@
 
     ensureStyles();
     ensureModal();
-    ensureBackendPanel();
     ensureCreateToolbar();
+    ensureBackendProductGrid();
+    ensureBackendCart();
+    ensureBackendPanel();
     bindEvents();
+
+    loadBackendProducts();
     loadSavedDocuments();
 
     console.log("AxtorSalesBackend loaded:", window.AxtorSalesBackend.version);
@@ -59,6 +61,35 @@
 
   function bindEvents() {
     document.addEventListener("click", function (e) {
+      const addBtn = e.target.closest("[data-backend-product-add]");
+      if (addBtn) {
+        e.preventDefault();
+        addProductToCart(addBtn.dataset.backendProductAdd);
+        return;
+      }
+
+      const qtyBtn = e.target.closest("[data-cart-qty]");
+      if (qtyBtn) {
+        e.preventDefault();
+        changeCartQty(qtyBtn.dataset.cartQty, Number(qtyBtn.dataset.delta || 0));
+        return;
+      }
+
+      const removeBtn = e.target.closest("[data-cart-remove]");
+      if (removeBtn) {
+        e.preventDefault();
+        removeCartItem(removeBtn.dataset.cartRemove);
+        return;
+      }
+
+      const clearBtn = e.target.closest("[data-cart-clear]");
+      if (clearBtn) {
+        e.preventDefault();
+        state.cart = [];
+        renderCart();
+        return;
+      }
+
       const viewBtn = e.target.closest("[data-sales-view-id]");
       if (viewBtn) {
         e.preventDefault();
@@ -77,6 +108,13 @@
       if (refreshBtn) {
         e.preventDefault();
         loadSavedDocuments();
+        return;
+      }
+
+      const refreshProductsBtn = e.target.closest("[data-products-refresh]");
+      if (refreshProductsBtn) {
+        e.preventDefault();
+        loadBackendProducts();
         return;
       }
 
@@ -105,6 +143,11 @@
       if (e.target && e.target.id === "axtorSalesBackendSearch") {
         state.searchText = e.target.value || "";
         renderSavedDocuments();
+      }
+
+      if (e.target && e.target.id === "axtorBackendProductSearch") {
+        state.productSearch = e.target.value || "";
+        renderBackendProducts();
       }
     });
   }
@@ -141,6 +184,333 @@
     }
 
     return data;
+  }
+
+  async function loadBackendProducts() {
+    ensureBackendProductGrid();
+
+    const grid = document.getElementById("axtorBackendProductGridBody");
+    const status = document.getElementById("axtorBackendProductStatus");
+
+    if (status) {
+      status.className = "small text-muted";
+      status.textContent = "Loading backend products...";
+    }
+
+    if (grid) {
+      grid.innerHTML = '<div class="text-muted p-3">Loading backend products...</div>';
+    }
+
+    try {
+      const response = await backendGet("/api/v1/products");
+      const data = unwrapData(response);
+
+      const products = Array.isArray(data)
+        ? data
+        : data?.products || data?.items || data?.rows || data?.results || [];
+
+      state.products = products.map(normalizeProduct);
+
+      renderBackendProducts();
+
+      if (status) {
+        status.className = "small text-success";
+        status.innerHTML = "Backend products loaded: <strong>" + state.products.length + "</strong>";
+      }
+    } catch (err) {
+      console.error("Backend products load failed:", err);
+
+      if (status) {
+        status.className = "small text-danger";
+        status.textContent = err.message || "Failed to load backend products";
+      }
+
+      if (grid) {
+        grid.innerHTML = '<div class="text-danger p-3">Failed to load backend products.</div>';
+      }
+    }
+  }
+
+  function renderBackendProducts() {
+    const grid = document.getElementById("axtorBackendProductGridBody");
+    if (!grid) return;
+
+    const search = String(state.productSearch || "").toLowerCase().trim();
+
+    const products = state.products.filter((p) => {
+      if (!search) return true;
+      return [p.name, p.sku, p.barcode].join(" ").toLowerCase().includes(search);
+    });
+
+    if (!products.length) {
+      grid.innerHTML = '<div class="text-muted p-3">No backend products found.</div>';
+      return;
+    }
+
+    grid.innerHTML = products
+      .map(
+        (p) => `
+        <div class="axtor-backend-product-card" data-product-id="${escapeAttr(p.id)}">
+          <div class="axtor-product-icon">▣</div>
+          <div class="fw-bold">${escapeHtml(p.name)}</div>
+          <div class="small text-muted">SKU ${escapeHtml(p.sku || "-")}</div>
+          <div class="small text-muted">${escapeHtml(p.barcode || "")}</div>
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <strong>${money(p.price)}</strong>
+            <button type="button" class="btn btn-sm btn-success" data-backend-product-add="${escapeAttr(
+              p.id
+            )}">Add</button>
+          </div>
+        </div>
+      `
+      )
+      .join("");
+  }
+
+  function addProductToCart(productId) {
+    const product = state.products.find((p) => String(p.id) === String(productId));
+    if (!product) {
+      alert("Backend product not found.");
+      return;
+    }
+
+    const existing = state.cart.find((item) => String(item.productId) === String(product.id));
+
+    if (existing) {
+      existing.quantity += 1;
+      existing.lineTotal = existing.quantity * existing.unitPrice;
+    } else {
+      state.cart.push({
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        barcode: product.barcode,
+        quantity: 1,
+        unitPrice: product.price,
+        lineTotal: product.price,
+      });
+    }
+
+    renderCart();
+  }
+
+  function changeCartQty(productId, delta) {
+    const item = state.cart.find((x) => String(x.productId) === String(productId));
+    if (!item) return;
+
+    item.quantity += delta;
+
+    if (item.quantity <= 0) {
+      removeCartItem(productId);
+      return;
+    }
+
+    item.lineTotal = item.quantity * item.unitPrice;
+    renderCart();
+  }
+
+  function removeCartItem(productId) {
+    state.cart = state.cart.filter((x) => String(x.productId) !== String(productId));
+    renderCart();
+  }
+
+  function renderCart() {
+    ensureBackendCart();
+
+    const tbody = document.getElementById("axtorBackendCartTbody");
+    const totalBox = document.getElementById("axtorBackendCartTotal");
+    const countBox = document.getElementById("axtorBackendCartCount");
+
+    if (!tbody) return;
+
+    if (!state.cart.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="5" class="text-center py-3 text-muted">Cart empty. Add backend product first.</td></tr>';
+    } else {
+      tbody.innerHTML = state.cart
+        .map(
+          (item) => `
+          <tr>
+            <td>
+              <strong>${escapeHtml(item.productName)}</strong>
+              <div class="small text-muted">${escapeHtml(item.sku || "")}</div>
+              <div class="small text-success">productId: ${escapeHtml(item.productId)}</div>
+            </td>
+            <td class="text-center">
+              <button class="btn btn-sm btn-outline-secondary" data-cart-qty="${escapeAttr(
+                item.productId
+              )}" data-delta="-1">−</button>
+              <span class="mx-2">${item.quantity}</span>
+              <button class="btn btn-sm btn-outline-secondary" data-cart-qty="${escapeAttr(
+                item.productId
+              )}" data-delta="1">+</button>
+            </td>
+            <td class="text-end">${money(item.unitPrice)}</td>
+            <td class="text-end"><strong>${money(item.lineTotal)}</strong></td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-danger" data-cart-remove="${escapeAttr(
+                item.productId
+              )}">Remove</button>
+            </td>
+          </tr>
+        `
+        )
+        .join("");
+    }
+
+    const total = state.cart.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
+
+    if (totalBox) totalBox.textContent = money(total);
+    if (countBox) countBox.textContent = state.cart.length + " item(s)";
+  }
+
+  async function createBackendDocumentFromPage() {
+    if (state.creating) return;
+
+    if (state.activeEditPreview) {
+      alert(PATCH_DISABLED_MESSAGE);
+      return;
+    }
+
+    try {
+      const payload = buildCreatePayloadFromPage();
+
+      if (!payload.items.length) {
+        throw new Error("Cart empty. Add backend product first.");
+      }
+
+      const missingProductId = payload.items.find((item) => !item.productId);
+      if (missingProductId) {
+        throw new Error("Product ID missing. Add products only from backend product grid.");
+      }
+
+      const ok = confirm(
+        "Create backend " +
+          documentTypeLabel(payload.documentType) +
+          " now?\n\nItems: " +
+          payload.items.length +
+          "\nTotal: " +
+          money(payload.grandTotal)
+      );
+
+      if (!ok) return;
+
+      state.creating = true;
+      setCreateButtonsDisabled(true);
+      setCreateStatus("Creating backend document...", "muted");
+
+      console.log("Axtor Step 2C create payload:", payload);
+
+      const response = await backendPost("/api/v1/sales-documents", payload);
+      const created = normalizeDocument(unwrapData(response));
+
+      setCreateStatus("Created successfully: " + escapeHtml(created.documentNoText), "success");
+
+      alert("Backend document created successfully: " + created.documentNoText);
+
+      state.cart = [];
+      renderCart();
+
+      await loadSavedDocuments();
+      switchToSavedInvoices();
+    } catch (err) {
+      console.error("Create backend sales document failed:", err);
+      setCreateStatus(err.message || "Create failed", "danger");
+      alert("Backend create failed:\n\n" + (err.message || "Unknown error"));
+    } finally {
+      state.creating = false;
+      setCreateButtonsDisabled(false);
+    }
+  }
+
+  function buildCreatePayloadFromPage() {
+    const root = findNewSaleRoot() || document;
+
+    const documentTypeRaw = readFieldValue(root, [
+      "#documentType",
+      "#salesDocumentType",
+      "#saleDocumentType",
+      "#newSaleDocumentType",
+      '[name="documentType"]',
+      '[name="salesDocumentType"]',
+      '[name="saleDocumentType"]',
+    ]);
+
+    const documentType = normalizeDocumentType(documentTypeRaw || "invoice");
+
+    const customerInfo = readCustomerInfo(root);
+
+    const lpoNo = readFieldValue(root, [
+      "#lpoNo",
+      "#saleLpoNo",
+      "#salesLpoNo",
+      "#customerPoNo",
+      '[name="lpoNo"]',
+      '[name="lpo"]',
+      '[name="customerPoNo"]',
+    ]);
+
+    const documentDate =
+      readFieldValue(root, [
+        "#saleDate",
+        "#documentDate",
+        "#invoiceDate",
+        '[name="saleDate"]',
+        '[name="documentDate"]',
+        '[name="invoiceDate"]',
+        '[name="date"]',
+      ]) || new Date().toISOString().slice(0, 10);
+
+    const paymentMethod =
+      readFieldValue(root, ["#paymentMethod", "#salePaymentMethod", '[name="paymentMethod"]']) ||
+      "cash";
+
+    const paidAmount = documentType === "invoice"
+      ? state.cart.reduce((sum, item) => sum + toNumber(item.lineTotal), 0)
+      : 0;
+
+    const totalAmount = state.cart.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
+
+    return {
+      documentType,
+      documentDate,
+      customerId: customerInfo.customerId || null,
+      customerName: customerInfo.customerName || "Walk-in Customer",
+      lpoNo: lpoNo || null,
+      customerPoNo: lpoNo || null,
+      poNo: lpoNo || null,
+      paidAmount,
+      paymentMethod,
+      totalAmount,
+      grandTotal: totalAmount,
+      items: state.cart.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        sku: item.sku || null,
+        quantity: item.quantity,
+        qty: item.quantity,
+        unitPrice: item.unitPrice,
+        rate: item.unitPrice,
+        price: item.unitPrice,
+        lineTotal: item.lineTotal,
+        total: item.lineTotal,
+      })),
+    };
+  }
+
+  function previewCreatePayload() {
+    try {
+      const payload = buildCreatePayloadFromPage();
+      console.log("Axtor Sales Step 2C payload:", payload);
+      alert(
+        "Payload printed in console.\n\nItems: " +
+          payload.items.length +
+          "\nTotal: " +
+          money(payload.grandTotal)
+      );
+    } catch (err) {
+      alert(err.message || "Payload preview failed");
+    }
   }
 
   async function loadSavedDocuments() {
@@ -403,348 +773,20 @@
     }, 100);
   }
 
-  async function createBackendDocumentFromPage() {
-    if (state.creating) return;
+  function exitEditPreview() {
+    state.activeEditPreview = null;
 
-    if (state.activeEditPreview) {
-      alert(PATCH_DISABLED_MESSAGE);
-      return;
-    }
-
-    state.creating = true;
-    setCreateStatus("Checking products and creating backend document...", "muted");
-    setCreateButtonsDisabled(true);
-
-    try {
-      const payload = await buildCreatePayloadFromPageWithProductIds();
-
-      if (!payload.items.length) {
-        throw new Error("No sale line items found. Add at least one item first.");
-      }
-
-      const ok = confirm(
-        "Create backend " +
-          documentTypeLabel(payload.documentType) +
-          " now?\n\nItems: " +
-          payload.items.length +
-          "\nTotal: QAR " +
-          toNumber(payload.grandTotal).toFixed(2)
-      );
-
-      if (!ok) return;
-
-      console.log("Axtor create payload:", payload);
-
-      const response = await backendPost("/api/v1/sales-documents", payload);
-      const created = normalizeDocument(unwrapData(response));
-
-      setCreateStatus(
-        "Created successfully: " + escapeHtml(created.documentNoText || "Backend document"),
-        "success"
-      );
-
-      alert("Backend document created successfully: " + (created.documentNoText || "New document"));
-
-      await loadSavedDocuments();
-      switchToSavedInvoices();
-    } catch (err) {
-      console.error("Create backend sales document failed:", err);
-      setCreateStatus(err.message || "Create failed", "danger");
-
-      alert(
-        "Backend create failed:\n\n" +
-          (err.message || "Unknown error") +
-          "\n\nCheck console payload with:\nAxtorSalesBackend.buildCreatePayloadFromPageWithProductIds()"
-      );
-    } finally {
-      state.creating = false;
-      setCreateButtonsDisabled(false);
-    }
-  }
-
-  function buildCreatePayloadFromPage() {
-    const root = findNewSaleRoot() || document;
-
-    const documentTypeRaw = readFieldValue(root, [
-      "#documentType",
-      "#salesDocumentType",
-      "#saleDocumentType",
-      "#newSaleDocumentType",
-      '[name="documentType"]',
-      '[name="salesDocumentType"]',
-      '[name="saleDocumentType"]',
-    ]);
-
-    const documentType = normalizeDocumentType(documentTypeRaw || "invoice");
-
-    const customerInfo = readCustomerInfo(root);
-
-    const lpoNo = readFieldValue(root, [
-      "#lpoNo",
-      "#saleLpoNo",
-      "#salesLpoNo",
-      "#customerPoNo",
-      '[name="lpoNo"]',
-      '[name="lpo"]',
-      '[name="customerPoNo"]',
-    ]);
-
-    const documentDate =
-      readFieldValue(root, [
-        "#saleDate",
-        "#documentDate",
-        "#invoiceDate",
-        '[name="saleDate"]',
-        '[name="documentDate"]',
-        '[name="invoiceDate"]',
-        '[name="date"]',
-      ]) || new Date().toISOString().slice(0, 10);
-
-    const paidAmount = readMoneyValue(root, [
-      "#paidAmount",
-      "#amountPaid",
-      "#receivedAmount",
-      "#cashAmount",
-      "#paymentAmount",
-      '[name="paidAmount"]',
-      '[name="receivedAmount"]',
-      '[name="cashAmount"]',
-      '[name="paymentAmount"]',
-    ]);
-
-    const paymentMethod =
-      readFieldValue(root, ["#paymentMethod", "#salePaymentMethod", '[name="paymentMethod"]']) ||
-      "cash";
-
-    const items = collectSaleLines(root);
-    const totalAmount = items.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
-
-    return {
-      documentType,
-      documentDate,
-      customerId: customerInfo.customerId || null,
-      customerName: customerInfo.customerName || "Walk-in Customer",
-      lpoNo: lpoNo || null,
-      customerPoNo: lpoNo || null,
-      poNo: lpoNo || null,
-      paidAmount: paidAmount || 0,
-      paymentMethod,
-      totalAmount,
-      grandTotal: totalAmount,
-      items: items.map((item) => ({
-        productId: item.productId || null,
-        productName: item.productName || item.name || "Item",
-        sku: item.sku || null,
-        quantity: item.quantity,
-        qty: item.quantity,
-        unitPrice: item.unitPrice,
-        rate: item.unitPrice,
-        price: item.unitPrice,
-        lineTotal: item.lineTotal,
-        total: item.lineTotal,
-      })),
-    };
-  }
-
-  async function buildCreatePayloadFromPageWithProductIds() {
-    const payload = buildCreatePayloadFromPage();
-
-    const productsResponse = await backendGet("/api/v1/products");
-    const productsData = unwrapData(productsResponse);
-
-    const products = Array.isArray(productsData)
-      ? productsData
-      : productsData?.items ||
-        productsData?.products ||
-        productsData?.rows ||
-        productsData?.results ||
-        [];
-
-    payload.items = payload.items.map((item) => {
-      if (item.productId) return item;
-
-      const itemSku = String(item.sku || "").toLowerCase().trim();
-      const itemName = String(item.productName || "").toLowerCase().trim();
-
-      const matched = products.find((p) => {
-        const pSku = String(p.sku || "").toLowerCase().trim();
-        const pName = String(p.name || p.productName || "").toLowerCase().trim();
-        const pBarcode = String(p.barcode || "").toLowerCase().trim();
-
-        return (
-          (itemSku && (pSku === itemSku || pBarcode === itemSku)) ||
-          (itemName && pName === itemName)
-        );
-      });
-
-      return {
-        ...item,
-        productId: matched?.id || null,
-      };
+    document.querySelectorAll("[data-edit-preview-disabled='true']").forEach((btn) => {
+      const originalDisabled = btn.getAttribute("data-original-disabled") === "true";
+      btn.disabled = originalDisabled;
+      btn.classList.remove("axtor-disabled-preview");
+      btn.removeAttribute("data-edit-preview-disabled");
+      btn.removeAttribute("data-original-disabled");
+      btn.removeAttribute("title");
     });
 
-    const missing = payload.items.find((item) => !item.productId);
-
-    if (missing) {
-      throw new Error(
-        "Product ID required. Product not matched from backend: " +
-          (missing.productName || missing.sku || "Unknown item")
-      );
-    }
-
-    return payload;
-  }
-
-  function collectSaleLines(root) {
-    const rows = Array.from(root.querySelectorAll("tbody tr"));
-    const lines = [];
-
-    rows.forEach((row) => {
-      if (
-        row.closest("#axtorSalesBackendPanel") ||
-        row.closest("#axtorEditPreviewPanel") ||
-        row.closest("#axtorSalesDocViewModal")
-      ) {
-        return;
-      }
-
-      const rowText = String(row.textContent || "").trim();
-      if (!rowText) return;
-
-      const productId =
-        row.getAttribute("data-product-id") ||
-        row.getAttribute("data-backend-product-id") ||
-        readFieldValue(row, [
-          '[name="productId"]',
-          '[name="backendProductId"]',
-          ".product-id",
-          ".backend-product-id",
-        ]);
-
-      const productName =
-        row.getAttribute("data-product-name") ||
-        readFieldValue(row, [
-          '[name="productName"]',
-          '[name="itemName"]',
-          ".product-name",
-          ".item-name",
-          ".name",
-        ]) ||
-        guessCellText(row, 0);
-
-      const sku =
-        row.getAttribute("data-sku") ||
-        readFieldValue(row, ['[name="sku"]', ".sku", ".product-sku"]) ||
-        guessSku(row);
-
-      const quantity =
-        readMoneyValue(row, [
-          '[name="quantity"]',
-          '[name="qty"]',
-          ".quantity",
-          ".qty",
-          ".item-qty",
-        ]) || guessNumberFromCells(row, ["qty", "quantity"], 1) || 1;
-
-      const unitPrice =
-        readMoneyValue(row, [
-          '[name="unitPrice"]',
-          '[name="rate"]',
-          '[name="price"]',
-          ".unit-price",
-          ".rate",
-          ".price",
-          ".item-price",
-        ]) || guessNumberFromCells(row, ["price", "rate"], 2) || 0;
-
-      const lineTotal =
-        readMoneyValue(row, [
-          '[name="lineTotal"]',
-          '[name="total"]',
-          ".line-total",
-          ".total",
-          ".amount",
-        ]) || quantity * unitPrice;
-
-      if (!productName && !sku && !productId) return;
-      if (!quantity || quantity <= 0) return;
-
-      lines.push({
-        productId,
-        productName,
-        sku,
-        quantity: toNumber(quantity),
-        unitPrice: toNumber(unitPrice),
-        lineTotal: toNumber(lineTotal),
-      });
-    });
-
-    return lines;
-  }
-
-  async function previewCreatePayload() {
-    try {
-      const payload = await buildCreatePayloadFromPageWithProductIds();
-      console.log("Axtor Sales Step 2B payload with productId:", payload);
-
-      alert(
-        "Payload preview printed in console.\n\nItems: " +
-          payload.items.length +
-          "\nDocument type: " +
-          payload.documentType +
-          "\nTotal: QAR " +
-          toNumber(payload.grandTotal).toFixed(2)
-      );
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Payload preview failed");
-    }
-  }
-
-  function ensureCreateToolbar() {
-    const root = findNewSaleRoot() || document.querySelector("main") || document.body;
-    if (document.getElementById("axtorSalesCreateToolbar")) return;
-
-    const toolbar = document.createElement("div");
-    toolbar.id = "axtorSalesCreateToolbar";
-    toolbar.className = "card my-3 axtor-sales-create-toolbar";
-
-    toolbar.innerHTML = `
-      <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <div>
-          <strong>Backend Create — Sales Step 2B</strong>
-          <div id="axtorSalesCreateStatus" class="small text-muted">
-            Ready. ProductId auto-match enabled.
-          </div>
-        </div>
-
-        <div class="d-flex flex-wrap gap-2">
-          <button type="button" class="btn btn-sm btn-outline-secondary" data-sales-preview-payload="1">
-            Preview Payload
-          </button>
-          <button type="button" class="btn btn-sm btn-success" data-sales-create-backend="1">
-            Create Backend Document
-          </button>
-        </div>
-      </div>
-    `;
-
-    root.prepend(toolbar);
-  }
-
-  function setCreateStatus(message, type) {
-    const status = document.getElementById("axtorSalesCreateStatus");
-    if (!status) return;
-    status.className = "small text-" + (type || "muted");
-    status.innerHTML = message;
-  }
-
-  function setCreateButtonsDisabled(disabled) {
-    document
-      .querySelectorAll("[data-sales-create-backend], [data-sales-preview-payload]")
-      .forEach((btn) => {
-        btn.disabled = !!disabled;
-      });
+    document.getElementById("axtorEditPreviewBanner")?.remove();
+    document.getElementById("axtorEditPreviewPanel")?.remove();
   }
 
   function disableSaveButtons() {
@@ -779,20 +821,112 @@
     });
   }
 
-  function exitEditPreview() {
-    state.activeEditPreview = null;
+  function ensureCreateToolbar() {
+    const root = findNewSaleRoot() || document.querySelector("main") || document.body;
+    if (document.getElementById("axtorSalesCreateToolbar")) return;
 
-    document.querySelectorAll("[data-edit-preview-disabled='true']").forEach((btn) => {
-      const originalDisabled = btn.getAttribute("data-original-disabled") === "true";
-      btn.disabled = originalDisabled;
-      btn.classList.remove("axtor-disabled-preview");
-      btn.removeAttribute("data-edit-preview-disabled");
-      btn.removeAttribute("data-original-disabled");
-      btn.removeAttribute("title");
-    });
+    const toolbar = document.createElement("div");
+    toolbar.id = "axtorSalesCreateToolbar";
+    toolbar.className = "card my-3 axtor-sales-create-toolbar";
 
-    document.getElementById("axtorEditPreviewBanner")?.remove();
-    document.getElementById("axtorEditPreviewPanel")?.remove();
+    toolbar.innerHTML = `
+      <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <strong>Backend Create — Sales Step 2C</strong>
+          <div id="axtorSalesCreateStatus" class="small text-muted">
+            Ready. Backend product grid enabled.
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-sales-preview-payload="1">Preview Payload</button>
+          <button type="button" class="btn btn-sm btn-success" data-sales-create-backend="1">Create Backend Document</button>
+        </div>
+      </div>
+    `;
+
+    root.prepend(toolbar);
+  }
+
+  function ensureBackendProductGrid() {
+    const root = findNewSaleRoot() || document.querySelector("main") || document.body;
+    if (document.getElementById("axtorBackendProductGrid")) return;
+
+    removeOldLocalProductCards();
+
+    const card = document.createElement("div");
+    card.id = "axtorBackendProductGrid";
+    card.className = "card my-3 axtor-backend-products";
+
+    card.innerHTML = `
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <strong>Backend Product Grid</strong>
+          <div id="axtorBackendProductStatus" class="small text-muted">Ready</div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <input id="axtorBackendProductSearch" class="form-control form-control-sm" style="max-width:240px" placeholder="Search backend product / SKU">
+          <button type="button" class="btn btn-sm btn-outline-success" data-products-refresh="1">Refresh Products</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="axtorBackendProductGridBody" class="axtor-backend-product-grid">
+          <div class="text-muted p-3">Waiting for backend products...</div>
+        </div>
+      </div>
+    `;
+
+    root.appendChild(card);
+  }
+
+  function ensureBackendCart() {
+    const root = findNewSaleRoot() || document.querySelector("main") || document.body;
+    if (document.getElementById("axtorBackendCart")) return;
+
+    const card = document.createElement("div");
+    card.id = "axtorBackendCart";
+    card.className = "card my-3 axtor-backend-cart";
+
+    card.innerHTML = `
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <strong>Backend Cart</strong>
+          <div class="small text-muted">Uses real backend productId</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span id="axtorBackendCartCount" class="badge text-bg-light">0 item(s)</span>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-cart-clear="1">Clear</button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="text-center">Qty</th>
+                <th class="text-end">Rate</th>
+                <th class="text-end">Total</th>
+                <th class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody id="axtorBackendCartTbody">
+              <tr><td colspan="5" class="text-center py-3 text-muted">Cart empty. Add backend product first.</td></tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <th colspan="3" class="text-end">Grand Total</th>
+                <th id="axtorBackendCartTotal" class="text-end">QAR 0.00</th>
+                <th></th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    `;
+
+    const grid = document.getElementById("axtorBackendProductGrid");
+    if (grid) grid.insertAdjacentElement("afterend", card);
+    else root.appendChild(card);
   }
 
   function ensureBackendPanel() {
@@ -811,14 +945,12 @@
           <strong>Backend Saved Documents</strong>
           <div id="axtorSalesBackendStatus" class="small text-muted">Ready</div>
         </div>
-
         <div class="d-flex flex-wrap align-items-center gap-2">
           <span id="axtorSalesBackendCount" class="badge text-bg-light">0 shown</span>
           <input id="axtorSalesBackendSearch" type="search" class="form-control form-control-sm" style="max-width:220px" placeholder="Search INV / QUO / DN" />
           <button type="button" class="btn btn-sm btn-outline-success" data-sales-refresh="1">Refresh</button>
         </div>
       </div>
-
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle mb-0">
@@ -835,9 +967,7 @@
               </tr>
             </thead>
             <tbody id="axtorSalesBackendTbody">
-              <tr>
-                <td colspan="8" class="text-center py-4 text-muted">Waiting for backend data...</td>
-              </tr>
+              <tr><td colspan="8" class="text-center py-4 text-muted">Waiting for backend data...</td></tr>
             </tbody>
           </table>
         </div>
@@ -888,6 +1018,36 @@
     modal.classList.add("show");
     modal.style.display = "block";
     modal.removeAttribute("aria-hidden");
+  }
+
+  function removeOldLocalProductCards() {
+    const root = findNewSaleRoot() || document;
+    const headings = Array.from(root.querySelectorAll("h1,h2,h3,h4,h5,strong,b,div,span")).filter((el) =>
+      String(el.textContent || "").trim().toLowerCase().includes("product grid")
+    );
+
+    headings.forEach((heading) => {
+      const card = heading.closest(".card, .glass-card, section, .panel, .box");
+      if (card && !card.id) {
+        card.style.display = "none";
+        card.setAttribute("data-axtor-hidden-local-products", "1");
+      }
+    });
+  }
+
+  function setCreateStatus(message, type) {
+    const status = document.getElementById("axtorSalesCreateStatus");
+    if (!status) return;
+    status.className = "small text-" + (type || "muted");
+    status.innerHTML = message;
+  }
+
+  function setCreateButtonsDisabled(disabled) {
+    document
+      .querySelectorAll("[data-sales-create-backend], [data-sales-preview-payload]")
+      .forEach((btn) => {
+        btn.disabled = !!disabled;
+      });
   }
 
   function switchToNewSale() {
@@ -968,6 +1128,19 @@
     return document.querySelector("main") || document.body;
   }
 
+  function normalizeProduct(raw) {
+    const p = raw || {};
+    return {
+      id: p.id || p._id || p.productId,
+      name: p.name || p.productName || p.title || "Product",
+      sku: p.sku || p.code || "",
+      barcode: p.barcode || p.barCode || "",
+      price: toNumber(p.price ?? p.sellingPrice ?? p.salePrice ?? p.unitPrice ?? 0),
+      cost: toNumber(p.cost ?? p.costPrice ?? 0),
+      stock: toNumber(p.stock ?? p.openingStock ?? p.quantity ?? 0),
+    };
+  }
+
   function normalizeList(response) {
     const data = unwrapData(response);
     let list = [];
@@ -1023,7 +1196,8 @@
       poText: doc.customerPoNo || doc.poNo || "",
       amount,
       paidAmount,
-      statusText: doc.status || doc.paymentStatus || doc.documentStatus || (doc.isPosted ? "posted" : "draft"),
+      statusText:
+        doc.status || doc.paymentStatus || doc.documentStatus || (doc.isPosted ? "posted" : "draft"),
       lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
     };
   }
@@ -1079,16 +1253,23 @@
       const field = root.querySelector(selector);
       if (!field) continue;
 
-      if (field.tagName.toLowerCase() === "select") {
+      if (field.tagName && field.tagName.toLowerCase() === "select") {
         const option = field.options[field.selectedIndex];
         return {
-          customerId: option?.getAttribute("data-backend-id") || option?.getAttribute("data-customer-id") || field.value || "",
+          customerId:
+            option?.getAttribute("data-backend-id") ||
+            option?.getAttribute("data-customer-id") ||
+            field.value ||
+            "",
           customerName: option?.textContent?.trim() || "",
         };
       }
 
       return {
-        customerId: field.getAttribute("data-backend-id") || field.getAttribute("data-customer-id") || "",
+        customerId:
+          field.getAttribute("data-backend-id") ||
+          field.getAttribute("data-customer-id") ||
+          "",
         customerName: field.value || "",
       };
     }
@@ -1103,7 +1284,12 @@
 
       if (el.tagName && el.tagName.toLowerCase() === "select") {
         const option = el.options[el.selectedIndex];
-        return option?.getAttribute("data-backend-id") || el.value || option?.textContent?.trim() || "";
+        return (
+          option?.getAttribute("data-backend-id") ||
+          el.value ||
+          option?.textContent?.trim() ||
+          ""
+        );
       }
 
       if ("value" in el) return String(el.value || "").trim();
@@ -1111,35 +1297,6 @@
     }
 
     return "";
-  }
-
-  function readMoneyValue(root, selectors) {
-    return parseMoney(readFieldValue(root, selectors));
-  }
-
-  function guessCellText(row, index) {
-    const cells = Array.from(row.children || []);
-    return String(cells[index]?.textContent || "").trim();
-  }
-
-  function guessSku(row) {
-    const text = String(row.textContent || "");
-    const skuMatch = text.match(/\b[A-Z0-9][A-Z0-9-_]{2,}\b/);
-    return skuMatch ? skuMatch[0] : "";
-  }
-
-  function guessNumberFromCells(row, keywords, fallbackIndex) {
-    const cells = Array.from(row.children || []);
-
-    for (const cell of cells) {
-      const cls = String(cell.className || "").toLowerCase();
-      if (keywords.some((k) => cls.includes(k))) {
-        const value = parseMoney(cell.textContent);
-        if (value) return value;
-      }
-    }
-
-    return parseMoney(cells[fallbackIndex]?.textContent || "") || 0;
   }
 
   function normalizeDocumentType(value) {
@@ -1179,22 +1336,51 @@
   }
 
   function ensureStyles() {
-    if (document.getElementById("axtorSalesBackendProductIdFixStyles")) return;
+    if (document.getElementById("axtorSalesBackend2CStyles")) return;
 
     const style = document.createElement("style");
-    style.id = "axtorSalesBackendProductIdFixStyles";
+    style.id = "axtorSalesBackend2CStyles";
 
     style.textContent = `
       #axtorSalesBackendPanel,
-      #axtorSalesCreateToolbar {
+      #axtorSalesCreateToolbar,
+      #axtorBackendProductGrid,
+      #axtorBackendCart {
         border: 1px solid rgba(25, 135, 84, 0.24);
         background: rgba(255, 255, 255, 0.74);
         backdrop-filter: blur(10px);
       }
 
-      #axtorSalesBackendPanel .card-header {
+      #axtorSalesBackendPanel .card-header,
+      #axtorBackendProductGrid .card-header,
+      #axtorBackendCart .card-header {
         background: rgba(25, 135, 84, 0.08);
         border-bottom: 1px solid rgba(25, 135, 84, 0.16);
+      }
+
+      .axtor-backend-product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 1rem;
+      }
+
+      .axtor-backend-product-card {
+        border: 1px solid rgba(25, 135, 84, 0.18);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: rgba(255,255,255,0.8);
+      }
+
+      .axtor-product-icon {
+        height: 56px;
+        border-radius: 0.75rem;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(255,193,7,0.12));
+        color:#059669;
+        font-size:1.6rem;
+        margin-bottom:0.75rem;
       }
 
       .axtor-doc-grid {
@@ -1248,6 +1434,17 @@
         cursor: not-allowed !important;
       }
 
+      body.retro-theme #axtorSalesBackendPanel,
+      body.retro-theme #axtorSalesCreateToolbar,
+      body.retro-theme #axtorBackendProductGrid,
+      body.retro-theme #axtorBackendCart,
+      body.retro #axtorSalesBackendPanel,
+      body.retro #axtorSalesCreateToolbar,
+      body.retro #axtorBackendProductGrid,
+      body.retro #axtorBackendCart {
+        backdrop-filter: none;
+      }
+
       @media (max-width: 768px) {
         .axtor-doc-grid {
           grid-template-columns: 1fr;
@@ -1260,17 +1457,6 @@
 
   function toNumber(value) {
     const number = Number(value);
-    return Number.isFinite(number) ? number : 0;
-  }
-
-  function parseMoney(value) {
-    const cleaned = String(value || "")
-      .replace(/QAR/gi, "")
-      .replace(/,/g, "")
-      .replace(/[^\d.-]/g, "")
-      .trim();
-
-    const number = Number(cleaned);
     return Number.isFinite(number) ? number : 0;
   }
 
