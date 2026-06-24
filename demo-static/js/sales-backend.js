@@ -1,21 +1,7 @@
 /**
  * Axtor POS Cloud
  * Phase 3 — Sales Backend Integration
- * Sales Step 2B — Create New Backend Sales Document from Sales Page
- *
- * Includes Step 2A:
- * - Backend saved documents list
- * - View modal
- * - Edit Preview only
- *
- * New in Step 2B:
- * - Create backend Invoice / Quotation / DN using POST /api/v1/sales-documents
- *
- * Important:
- * - NO PATCH
- * - NO backend files touched
- * - NO Railway settings touched
- * - Products/Customers are NOT reconnected in this pass
+ * Sales Step 2B ProductId Fix
  */
 
 (function () {
@@ -38,7 +24,7 @@
 
   window.AxtorSalesBackend = {
     exists: true,
-    version: "20260624-phase3-sales2b",
+    version: "20260624-phase3-sales2b-productidfix-full",
     init,
     refresh: loadSavedDocuments,
     loadSavedDocuments,
@@ -47,17 +33,14 @@
     exitEditPreview,
     createBackendDocumentFromPage,
     buildCreatePayloadFromPage,
+    buildCreatePayloadFromPageWithProductIds,
     getState: () => state,
   };
 
-  ready(init);
-
-  function ready(fn) {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", fn);
-    } else {
-      fn();
-    }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
   }
 
   function init() {
@@ -87,13 +70,6 @@
       if (editBtn) {
         e.preventDefault();
         editPreviewDocument(editBtn.dataset.salesEditId);
-        return;
-      }
-
-      const printBtn = e.target.closest("[data-sales-print-id]");
-      if (printBtn) {
-        e.preventDefault();
-        alert("Print placeholder only. PDF/print backend is not enabled in this step.");
         return;
       }
 
@@ -144,30 +120,8 @@
   async function backendRequest(method, path, body) {
     const token = localStorage.getItem(TOKEN_KEY);
 
-    if (window.AxtorAPI) {
-      if (method === "GET" && typeof window.AxtorAPI.get === "function") {
-        return await window.AxtorAPI.get(path);
-      }
-
-      if (method === "POST" && typeof window.AxtorAPI.post === "function") {
-        return await window.AxtorAPI.post(path, body);
-      }
-
-      if (typeof window.AxtorAPI.request === "function") {
-        try {
-          return await window.AxtorAPI.request(path, {
-            method,
-            body,
-            data: body,
-          });
-        } catch (err1) {
-          try {
-            return await window.AxtorAPI.request(method, path, body);
-          } catch (err2) {
-            console.warn("AxtorAPI request fallback failed:", err1, err2);
-          }
-        }
-      }
+    if (!token) {
+      throw new Error("Authentication required. Please login again first.");
     }
 
     const res = await fetch(API_BASE_URL + path, {
@@ -175,7 +129,7 @@
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        ...(token ? { Authorization: "Bearer " + token } : {}),
+        Authorization: "Bearer " + token,
       },
       ...(method === "GET" ? {} : { body: JSON.stringify(body || {}) }),
     });
@@ -238,18 +192,14 @@
   }
 
   function renderSavedDocuments() {
-    ensureBackendPanel();
-
     const tbody = document.getElementById("axtorSalesBackendTbody");
     const count = document.getElementById("axtorSalesBackendCount");
-
     if (!tbody) return;
 
     const search = String(state.searchText || "").toLowerCase().trim();
 
     const docs = state.docs.filter((doc) => {
       if (!search) return true;
-
       return [
         doc.documentNoText,
         doc.typeText,
@@ -273,8 +223,8 @@
     }
 
     tbody.innerHTML = docs
-      .map((doc) => {
-        return `
+      .map(
+        (doc) => `
           <tr>
             <td><strong>${escapeHtml(doc.documentNoText)}</strong></td>
             <td>${escapeHtml(doc.typeText)}</td>
@@ -284,19 +234,13 @@
             <td class="text-end">${money(doc.paidAmount)}</td>
             <td>${statusBadge(doc.statusText)}</td>
             <td class="text-end text-nowrap">
-              <button type="button" class="btn btn-sm btn-outline-primary me-1" data-sales-view-id="${escapeAttr(
-                doc.id
-              )}">View</button>
-              <button type="button" class="btn btn-sm btn-outline-warning me-1" data-sales-edit-id="${escapeAttr(
-                doc.id
-              )}">Edit</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" data-sales-print-id="${escapeAttr(
-                doc.id
-              )}">Print</button>
+              <button type="button" class="btn btn-sm btn-outline-primary me-1" data-sales-view-id="${escapeAttr(doc.id)}">View</button>
+              <button type="button" class="btn btn-sm btn-outline-warning me-1" data-sales-edit-id="${escapeAttr(doc.id)}">Edit</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="alert('Print placeholder only')">Print</button>
             </td>
           </tr>
-        `;
-      })
+        `
+      )
       .join("");
   }
 
@@ -317,7 +261,6 @@
 
   async function viewDocument(id) {
     const modal = ensureModal();
-
     const title = document.getElementById("axtorSalesDocModalTitle");
     const body = document.getElementById("axtorSalesDocModalBody");
 
@@ -360,9 +303,7 @@
                   <th class="text-end">Total</th>
                 </tr>
               </thead>
-              <tbody>
-                ${renderLines(doc.lines)}
-              </tbody>
+              <tbody>${renderLines(doc.lines)}</tbody>
             </table>
           </div>
 
@@ -385,9 +326,7 @@
   async function editPreviewDocument(id) {
     try {
       const doc = await fetchDocumentDetail(id);
-
       state.activeEditPreview = doc;
-
       switchToNewSale();
       showEditPreview(doc);
       disableSaveButtons();
@@ -413,9 +352,7 @@
           <div class="fw-bold">Edit Preview Only — ${escapeHtml(doc.documentNoText)}</div>
           <div class="small">${escapeHtml(PATCH_DISABLED_MESSAGE)}</div>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-dark" data-exit-edit-preview="1">
-          Exit Preview
-        </button>
+        <button type="button" class="btn btn-sm btn-outline-dark" data-exit-edit-preview="1">Exit Preview</button>
       </div>
     `;
 
@@ -429,12 +366,9 @@
 
     panel.innerHTML = `
       <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <strong>Loaded from Backend: ${escapeHtml(doc.documentNoText)} / ${escapeHtml(
-      doc.typeText
-    )}</strong>
+        <strong>Loaded from Backend: ${escapeHtml(doc.documentNoText)} / ${escapeHtml(doc.typeText)}</strong>
         <span class="badge text-bg-warning">Read-only preview</span>
       </div>
-
       <div class="card-body">
         <div class="axtor-doc-grid mb-3">
           ${infoBox("Document No", doc.documentNoText)}
@@ -442,12 +376,10 @@
           ${infoBox("Customer", doc.customerText)}
           ${infoBox("Date", doc.dateText)}
           ${infoBox("LPO No", doc.lpoText || "-")}
-          ${infoBox("PO / Customer PO", doc.poText || "-")}
           ${infoBox("Amount", money(doc.amount))}
           ${infoBox("Paid Amount", money(doc.paidAmount))}
           ${infoBox("Status", doc.statusText || "-")}
         </div>
-
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle mb-0">
             <thead>
@@ -460,15 +392,11 @@
                 <th class="text-end">Total</th>
               </tr>
             </thead>
-            <tbody>
-              ${renderLines(doc.lines)}
-            </tbody>
+            <tbody>${renderLines(doc.lines)}</tbody>
           </table>
         </div>
       </div>
     `;
-
-    fillKnownFields(doc);
 
     setTimeout(() => {
       banner.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -483,26 +411,30 @@
       return;
     }
 
-    const payload = buildCreatePayloadFromPage();
-
-    if (!payload.items.length) {
-      alert("No sale line items found. Add at least one item in New Sale before creating backend document.");
-      return;
-    }
-
-    const ok = confirm(
-      "Create backend " +
-        documentTypeLabel(payload.documentType) +
-        " now?\n\nThis will use POST /api/v1/sales-documents.\nNo PATCH/update will run."
-    );
-
-    if (!ok) return;
-
     state.creating = true;
-    setCreateStatus("Creating backend document...", "muted");
+    setCreateStatus("Checking products and creating backend document...", "muted");
     setCreateButtonsDisabled(true);
 
     try {
+      const payload = await buildCreatePayloadFromPageWithProductIds();
+
+      if (!payload.items.length) {
+        throw new Error("No sale line items found. Add at least one item first.");
+      }
+
+      const ok = confirm(
+        "Create backend " +
+          documentTypeLabel(payload.documentType) +
+          " now?\n\nItems: " +
+          payload.items.length +
+          "\nTotal: QAR " +
+          toNumber(payload.grandTotal).toFixed(2)
+      );
+
+      if (!ok) return;
+
+      console.log("Axtor create payload:", payload);
+
       const response = await backendPost("/api/v1/sales-documents", payload);
       const created = normalizeDocument(unwrapData(response));
 
@@ -511,22 +443,18 @@
         "success"
       );
 
-      alert(
-        "Backend document created successfully: " +
-          (created.documentNoText || "New document")
-      );
+      alert("Backend document created successfully: " + (created.documentNoText || "New document"));
 
       await loadSavedDocuments();
       switchToSavedInvoices();
     } catch (err) {
       console.error("Create backend sales document failed:", err);
-
       setCreateStatus(err.message || "Create failed", "danger");
 
       alert(
         "Backend create failed:\n\n" +
           (err.message || "Unknown error") +
-          "\n\nCheck console payload with:\nAxtorSalesBackend.buildCreatePayloadFromPage()"
+          "\n\nCheck console payload with:\nAxtorSalesBackend.buildCreatePayloadFromPageWithProductIds()"
       );
     } finally {
       state.creating = false;
@@ -561,14 +489,6 @@
       '[name="customerPoNo"]',
     ]);
 
-    const poNo = readFieldValue(root, [
-      "#poNo",
-      "#salePoNo",
-      "#purchaseOrderNo",
-      '[name="poNo"]',
-      '[name="purchaseOrderNo"]',
-    ]);
-
     const documentDate =
       readFieldValue(root, [
         "#saleDate",
@@ -593,24 +513,20 @@
     ]);
 
     const paymentMethod =
-      readFieldValue(root, [
-        "#paymentMethod",
-        "#salePaymentMethod",
-        '[name="paymentMethod"]',
-      ]) || "cash";
+      readFieldValue(root, ["#paymentMethod", "#salePaymentMethod", '[name="paymentMethod"]']) ||
+      "cash";
 
     const items = collectSaleLines(root);
-
     const totalAmount = items.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
 
     return {
       documentType,
       documentDate,
       customerId: customerInfo.customerId || null,
-      customerName: customerInfo.customerName || null,
+      customerName: customerInfo.customerName || "Walk-in Customer",
       lpoNo: lpoNo || null,
-      customerPoNo: poNo || null,
-      poNo: poNo || null,
+      customerPoNo: lpoNo || null,
+      poNo: lpoNo || null,
       paidAmount: paidAmount || 0,
       paymentMethod,
       totalAmount,
@@ -630,9 +546,57 @@
     };
   }
 
+  async function buildCreatePayloadFromPageWithProductIds() {
+    const payload = buildCreatePayloadFromPage();
+
+    const productsResponse = await backendGet("/api/v1/products");
+    const productsData = unwrapData(productsResponse);
+
+    const products = Array.isArray(productsData)
+      ? productsData
+      : productsData?.items ||
+        productsData?.products ||
+        productsData?.rows ||
+        productsData?.results ||
+        [];
+
+    payload.items = payload.items.map((item) => {
+      if (item.productId) return item;
+
+      const itemSku = String(item.sku || "").toLowerCase().trim();
+      const itemName = String(item.productName || "").toLowerCase().trim();
+
+      const matched = products.find((p) => {
+        const pSku = String(p.sku || "").toLowerCase().trim();
+        const pName = String(p.name || p.productName || "").toLowerCase().trim();
+        const pBarcode = String(p.barcode || "").toLowerCase().trim();
+
+        return (
+          (itemSku && (pSku === itemSku || pBarcode === itemSku)) ||
+          (itemName && pName === itemName)
+        );
+      });
+
+      return {
+        ...item,
+        productId: matched?.id || null,
+      };
+    });
+
+    const missing = payload.items.find((item) => !item.productId);
+
+    if (missing) {
+      throw new Error(
+        "Product ID required. Product not matched from backend: " +
+          (missing.productName || missing.sku || "Unknown item")
+      );
+    }
+
+    return payload;
+  }
+
   function collectSaleLines(root) {
     const rows = Array.from(root.querySelectorAll("tbody tr"));
-
     const lines = [];
 
     rows.forEach((row) => {
@@ -718,24 +682,27 @@
     return lines;
   }
 
-  function previewCreatePayload() {
-    const payload = buildCreatePayloadFromPage();
+  async function previewCreatePayload() {
+    try {
+      const payload = await buildCreatePayloadFromPageWithProductIds();
+      console.log("Axtor Sales Step 2B payload with productId:", payload);
 
-    console.log("Axtor Sales Step 2B create payload:", payload);
-
-    alert(
-      "Payload preview printed in browser console.\n\nItems found: " +
-        payload.items.length +
-        "\nDocument type: " +
-        payload.documentType +
-        "\nTotal: QAR " +
-        toNumber(payload.grandTotal).toFixed(2)
-    );
+      alert(
+        "Payload preview printed in console.\n\nItems: " +
+          payload.items.length +
+          "\nDocument type: " +
+          payload.documentType +
+          "\nTotal: QAR " +
+          toNumber(payload.grandTotal).toFixed(2)
+      );
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Payload preview failed");
+    }
   }
 
   function ensureCreateToolbar() {
     const root = findNewSaleRoot() || document.querySelector("main") || document.body;
-
     if (document.getElementById("axtorSalesCreateToolbar")) return;
 
     const toolbar = document.createElement("div");
@@ -747,7 +714,7 @@
         <div>
           <strong>Backend Create — Sales Step 2B</strong>
           <div id="axtorSalesCreateStatus" class="small text-muted">
-            Ready. This creates new backend Invoice / Quotation / DN only.
+            Ready. ProductId auto-match enabled.
           </div>
         </div>
 
@@ -768,121 +735,27 @@
   function setCreateStatus(message, type) {
     const status = document.getElementById("axtorSalesCreateStatus");
     if (!status) return;
-
     status.className = "small text-" + (type || "muted");
     status.innerHTML = message;
   }
 
   function setCreateButtonsDisabled(disabled) {
-    document.querySelectorAll("[data-sales-create-backend], [data-sales-preview-payload]").forEach((btn) => {
-      btn.disabled = !!disabled;
-    });
-  }
-
-  function fillKnownFields(doc) {
-    setValue(
-      [
-        "#documentType",
-        "#salesDocumentType",
-        "#saleDocumentType",
-        "#newSaleDocumentType",
-        '[name="documentType"]',
-      ],
-      doc.rawType || doc.typeText
-    );
-
-    setValue(
-      [
-        "#customer",
-        "#customerName",
-        "#customerSelect",
-        "#salesCustomer",
-        '[name="customer"]',
-        '[name="customerName"]',
-        '[name="customerId"]',
-      ],
-      doc.customerId || doc.customerText
-    );
-
-    setValue(
-      [
-        "#lpoNo",
-        "#saleLpoNo",
-        "#customerPoNo",
-        '[name="lpoNo"]',
-        '[name="customerPoNo"]',
-      ],
-      doc.lpoText || doc.poText || ""
-    );
-
-    setValue(
-      [
-        "#saleDate",
-        "#documentDate",
-        "#invoiceDate",
-        '[name="saleDate"]',
-        '[name="documentDate"]',
-        '[name="invoiceDate"]',
-      ],
-      doc.inputDate || ""
-    );
-  }
-
-  function setValue(selectors, value) {
-    selectors.forEach((selector) => {
-      document.querySelectorAll(selector).forEach((field) => {
-        if (!field) return;
-
-        if (field.tagName.toLowerCase() === "select") {
-          let matched = false;
-          Array.from(field.options).forEach((option) => {
-            const optionValue = String(option.value || "").toLowerCase();
-            const optionText = String(option.textContent || "").toLowerCase();
-            const wanted = String(value || "").toLowerCase();
-
-            if (
-              optionValue === wanted ||
-              optionText === wanted ||
-              optionText.includes(wanted)
-            ) {
-              field.value = option.value;
-              matched = true;
-            }
-          });
-
-          if (!matched) {
-            field.setAttribute("data-preview-value", value || "");
-          }
-        } else {
-          field.value = value || "";
-        }
-
-        field.dispatchEvent(new Event("input", { bubbles: true }));
-        field.dispatchEvent(new Event("change", { bubbles: true }));
+    document
+      .querySelectorAll("[data-sales-create-backend], [data-sales-preview-payload]")
+      .forEach((btn) => {
+        btn.disabled = !!disabled;
       });
-    });
   }
 
   function disableSaveButtons() {
     const root = findNewSaleRoot() || document;
 
-    const buttons = root.querySelectorAll(
-      "button, input[type='button'], input[type='submit'], a.btn"
-    );
-
-    buttons.forEach((btn) => {
-      if (btn.closest("#axtorEditPreviewBanner") || btn.closest("#axtorEditPreviewPanel")) {
-        return;
-      }
+    root.querySelectorAll("button, input[type='button'], input[type='submit'], a.btn").forEach((btn) => {
+      if (btn.closest("#axtorEditPreviewBanner") || btn.closest("#axtorEditPreviewPanel")) return;
 
       const text = String(btn.textContent || btn.value || "").toLowerCase();
       const idClass = String((btn.id || "") + " " + (btn.className || "")).toLowerCase();
-      const dataText = Array.from(btn.attributes || [])
-        .map((a) => a.name + " " + a.value)
-        .join(" ")
-        .toLowerCase();
-
-      const all = text + " " + idClass + " " + dataText;
+      const all = text + " " + idClass;
 
       const shouldDisable =
         all.includes("save") ||
@@ -903,11 +776,6 @@
       btn.setAttribute("data-edit-preview-disabled", "true");
       btn.classList.add("axtor-disabled-preview");
       btn.setAttribute("title", PATCH_DISABLED_MESSAGE);
-
-      if (btn.tagName.toLowerCase() === "a") {
-        btn.classList.add("disabled");
-        btn.setAttribute("aria-disabled", "true");
-      }
     });
   }
 
@@ -916,24 +784,15 @@
 
     document.querySelectorAll("[data-edit-preview-disabled='true']").forEach((btn) => {
       const originalDisabled = btn.getAttribute("data-original-disabled") === "true";
-
       btn.disabled = originalDisabled;
       btn.classList.remove("axtor-disabled-preview");
       btn.removeAttribute("data-edit-preview-disabled");
       btn.removeAttribute("data-original-disabled");
       btn.removeAttribute("title");
-
-      if (btn.tagName.toLowerCase() === "a") {
-        btn.classList.remove("disabled");
-        btn.removeAttribute("aria-disabled");
-      }
     });
 
-    const banner = document.getElementById("axtorEditPreviewBanner");
-    const panel = document.getElementById("axtorEditPreviewPanel");
-
-    if (banner) banner.remove();
-    if (panel) panel.remove();
+    document.getElementById("axtorEditPreviewBanner")?.remove();
+    document.getElementById("axtorEditPreviewPanel")?.remove();
   }
 
   function ensureBackendPanel() {
@@ -955,16 +814,8 @@
 
         <div class="d-flex flex-wrap align-items-center gap-2">
           <span id="axtorSalesBackendCount" class="badge text-bg-light">0 shown</span>
-          <input
-            id="axtorSalesBackendSearch"
-            type="search"
-            class="form-control form-control-sm"
-            style="max-width:220px"
-            placeholder="Search INV / QUO / DN"
-          />
-          <button type="button" class="btn btn-sm btn-outline-success" data-sales-refresh="1">
-            Refresh
-          </button>
+          <input id="axtorSalesBackendSearch" type="search" class="form-control form-control-sm" style="max-width:220px" placeholder="Search INV / QUO / DN" />
+          <button type="button" class="btn btn-sm btn-outline-success" data-sales-refresh="1">Refresh</button>
         </div>
       </div>
 
@@ -985,9 +836,7 @@
             </thead>
             <tbody id="axtorSalesBackendTbody">
               <tr>
-                <td colspan="8" class="text-center py-4 text-muted">
-                  Waiting for backend data...
-                </td>
+                <td colspan="8" class="text-center py-4 text-muted">Waiting for backend data...</td>
               </tr>
             </tbody>
           </table>
@@ -1016,15 +865,11 @@
             <h5 id="axtorSalesDocModalTitle" class="modal-title">Sales Document</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-
           <div id="axtorSalesDocModalBody" class="modal-body">
             <div class="text-center py-5 text-muted">Loading...</div>
           </div>
-
           <div class="modal-footer">
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-              Close
-            </button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
           </div>
         </div>
       </div>
@@ -1051,8 +896,6 @@
       '[data-bs-target="#newSale"]',
       '[href="#new-sale"]',
       '[href="#newSale"]',
-      '[data-target="#new-sale"]',
-      '[data-target="#newSale"]',
     ];
 
     for (const selector of selectors) {
@@ -1066,13 +909,6 @@
         return;
       }
     }
-
-    const byText = Array.from(document.querySelectorAll("a, button")).find((el) => {
-      const text = String(el.textContent || "").toLowerCase();
-      return text.includes("new") && text.includes("sale");
-    });
-
-    if (byText) byText.click();
   }
 
   function switchToSavedInvoices() {
@@ -1081,8 +917,6 @@
       '[data-bs-target="#savedInvoices"]',
       '[href="#saved-invoices"]',
       '[href="#savedInvoices"]',
-      '[data-target="#saved-invoices"]',
-      '[data-target="#savedInvoices"]',
     ];
 
     for (const selector of selectors) {
@@ -1113,23 +947,6 @@
       if (el) return el;
     }
 
-    const tab = Array.from(document.querySelectorAll("a, button")).find((el) => {
-      const text = String(el.textContent || "").toLowerCase();
-      return text.includes("saved") && text.includes("invoice");
-    });
-
-    if (tab) {
-      const target =
-        tab.getAttribute("data-bs-target") ||
-        tab.getAttribute("href") ||
-        tab.getAttribute("data-target");
-
-      if (target && target.startsWith("#")) {
-        const pane = document.querySelector(target);
-        if (pane) return pane;
-      }
-    }
-
     return document.querySelector("main") || document.body;
   }
 
@@ -1148,29 +965,11 @@
       if (el) return el;
     }
 
-    const tab = Array.from(document.querySelectorAll("a, button")).find((el) => {
-      const text = String(el.textContent || "").toLowerCase();
-      return text.includes("new") && text.includes("sale");
-    });
-
-    if (tab) {
-      const target =
-        tab.getAttribute("data-bs-target") ||
-        tab.getAttribute("href") ||
-        tab.getAttribute("data-target");
-
-      if (target && target.startsWith("#")) {
-        const pane = document.querySelector(target);
-        if (pane) return pane;
-      }
-    }
-
     return document.querySelector("main") || document.body;
   }
 
   function normalizeList(response) {
     const data = unwrapData(response);
-
     let list = [];
 
     if (Array.isArray(data)) list = data;
@@ -1184,79 +983,29 @@
   }
 
   function unwrapData(response) {
-    if (response && typeof response === "object" && "data" in response) {
-      return response.data;
-    }
+    if (response && typeof response === "object" && "data" in response) return response.data;
     return response;
   }
 
   function normalizeDocument(raw) {
     const doc = raw || {};
-
-    const customer =
-      doc.customer ||
-      doc.customerSnapshot ||
-      doc.customerData ||
-      doc.client ||
-      doc.party ||
-      {};
-
-    const rawType =
-      doc.documentType ||
-      doc.documentTypeRaw ||
-      doc.type ||
-      doc.docType ||
-      doc.salesDocumentType ||
-      "";
-
-    const rawDate =
-      doc.documentDate ||
-      doc.date ||
-      doc.createdAt ||
-      doc.issueDate ||
-      doc.postedAt ||
-      doc.updatedAt ||
-      "";
-
-    const linesRaw =
-      doc.items ||
-      doc.lines ||
-      doc.documentItems ||
-      doc.saleDocumentItems ||
-      doc.salesDocumentItems ||
-      doc.details ||
-      [];
+    const customer = doc.customer || doc.customerSnapshot || doc.customerData || {};
+    const rawType = doc.documentType || doc.documentTypeRaw || doc.type || doc.docType || "";
+    const rawDate = doc.documentDate || doc.date || doc.createdAt || doc.issueDate || "";
+    const linesRaw = doc.items || doc.lines || doc.documentItems || doc.saleDocumentItems || [];
 
     const amount = toNumber(
-      doc.grandTotal ??
-        doc.totalAmount ??
-        doc.netAmount ??
-        doc.amount ??
-        doc.total ??
-        doc.payableAmount ??
-        0
+      doc.grandTotal ?? doc.totalAmount ?? doc.netAmount ?? doc.amount ?? doc.total ?? 0
     );
 
     const paidAmount = toNumber(
-      doc.paidAmount ??
-        doc.amountPaid ??
-        doc.receivedAmount ??
-        doc.cashAmount ??
-        doc.paymentAmount ??
-        0
+      doc.paidAmount ?? doc.amountPaid ?? doc.receivedAmount ?? doc.cashAmount ?? 0
     );
 
     return {
       ...doc,
       id: doc.id || doc._id || doc.documentId || doc.salesDocumentId,
-      documentNoText:
-        doc.documentNo ||
-        doc.docNo ||
-        doc.invoiceNo ||
-        doc.quotationNo ||
-        doc.deliveryNoteNo ||
-        doc.number ||
-        "N/A",
+      documentNoText: doc.documentNo || doc.docNo || doc.invoiceNo || doc.number || "N/A",
       rawType,
       typeText: documentTypeLabel(rawType),
       customerId: doc.customerId || customer.id || "",
@@ -1265,65 +1014,43 @@
         customer.name ||
         customer.displayName ||
         customer.companyName ||
-        customer.phone ||
         doc.customerId ||
         "Walk-in / Unknown",
       rawDate,
       dateText: formatDate(rawDate),
       inputDate: inputDate(rawDate),
-      lpoText: doc.lpoNo || doc.lpo || doc.LPONo || "",
-      poText: doc.customerPoNo || doc.poNo || doc.purchaseOrderNo || "",
+      lpoText: doc.lpoNo || doc.lpo || "",
+      poText: doc.customerPoNo || doc.poNo || "",
       amount,
       paidAmount,
-      statusText:
-        doc.status ||
-        doc.paymentStatus ||
-        doc.documentStatus ||
-        doc.postingStatus ||
-        (doc.isPosted ? "posted" : "draft"),
+      statusText: doc.status || doc.paymentStatus || doc.documentStatus || (doc.isPosted ? "posted" : "draft"),
       lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
     };
   }
 
   function normalizeLine(line, index) {
     const product = line.product || line.item || {};
-
-    const qty = toNumber(line.qty ?? line.quantity ?? line.qtySold ?? line.units ?? 0);
-    const rate = toNumber(
-      line.rate ?? line.unitPrice ?? line.price ?? line.sellingPrice ?? line.salePrice ?? 0
-    );
+    const qty = toNumber(line.qty ?? line.quantity ?? line.qtySold ?? 0);
+    const rate = toNumber(line.rate ?? line.unitPrice ?? line.price ?? 0);
 
     return {
       index: index + 1,
-      name:
-        line.productName ||
-        line.itemName ||
-        line.name ||
-        line.description ||
-        product.name ||
-        product.title ||
-        "Item",
+      name: line.productName || line.itemName || line.name || product.name || "Item",
       sku: line.sku || line.productSku || product.sku || product.barcode || "-",
       qty,
       rate,
-      total: toNumber(line.lineTotal ?? line.total ?? line.amount ?? line.netAmount ?? qty * rate),
+      total: toNumber(line.lineTotal ?? line.total ?? line.amount ?? qty * rate),
     };
   }
 
   function renderLines(lines) {
     if (!Array.isArray(lines) || !lines.length) {
-      return `
-        <tr>
-          <td colspan="6" class="text-center py-4 text-muted">
-            No line items returned by backend for this document.
-          </td>
-        </tr>
-      `;
+      return `<tr><td colspan="6" class="text-center py-4 text-muted">No line items returned by backend.</td></tr>`;
     }
 
     return lines
-      .map((line) => {
-        return `
+      .map(
+        (line) => `
           <tr>
             <td>${line.index}</td>
             <td>${escapeHtml(line.name)}</td>
@@ -1332,8 +1059,8 @@
             <td class="text-end">${money(line.rate)}</td>
             <td class="text-end"><strong>${money(line.total)}</strong></td>
           </tr>
-        `;
-      })
+        `
+      )
       .join("");
   }
 
@@ -1352,35 +1079,21 @@
       const field = root.querySelector(selector);
       if (!field) continue;
 
-      const tag = String(field.tagName || "").toLowerCase();
-
-      if (tag === "select") {
+      if (field.tagName.toLowerCase() === "select") {
         const option = field.options[field.selectedIndex];
-
         return {
-          customerId:
-            option?.getAttribute("data-backend-id") ||
-            option?.getAttribute("data-customer-id") ||
-            field.value ||
-            "",
+          customerId: option?.getAttribute("data-backend-id") || option?.getAttribute("data-customer-id") || field.value || "",
           customerName: option?.textContent?.trim() || "",
         };
       }
 
       return {
-        customerId:
-          field.getAttribute("data-backend-id") ||
-          field.getAttribute("data-customer-id") ||
-          field.value ||
-          "",
+        customerId: field.getAttribute("data-backend-id") || field.getAttribute("data-customer-id") || "",
         customerName: field.value || "",
       };
     }
 
-    return {
-      customerId: "",
-      customerName: "",
-    };
+    return { customerId: "", customerName: "" };
   }
 
   function readFieldValue(root, selectors) {
@@ -1388,21 +1101,12 @@
       const el = root.querySelector(selector);
       if (!el) continue;
 
-      const tag = String(el.tagName || "").toLowerCase();
-
-      if (tag === "select") {
+      if (el.tagName && el.tagName.toLowerCase() === "select") {
         const option = el.options[el.selectedIndex];
-        return (
-          option?.getAttribute("data-backend-id") ||
-          option?.getAttribute("data-value") ||
-          el.value ||
-          option?.textContent?.trim() ||
-          ""
-        );
+        return option?.getAttribute("data-backend-id") || el.value || option?.textContent?.trim() || "";
       }
 
       if ("value" in el) return String(el.value || "").trim();
-
       return String(el.textContent || "").trim();
     }
 
@@ -1410,8 +1114,7 @@
   }
 
   function readMoneyValue(root, selectors) {
-    const value = readFieldValue(root, selectors);
-    return parseMoney(value);
+    return parseMoney(readFieldValue(root, selectors));
   }
 
   function guessCellText(row, index) {
@@ -1430,46 +1133,27 @@
 
     for (const cell of cells) {
       const cls = String(cell.className || "").toLowerCase();
-      const data = Array.from(cell.attributes || [])
-        .map((a) => a.name + " " + a.value)
-        .join(" ")
-        .toLowerCase();
-
-      const haystack = cls + " " + data;
-
-      if (keywords.some((k) => haystack.includes(k))) {
+      if (keywords.some((k) => cls.includes(k))) {
         const value = parseMoney(cell.textContent);
         if (value) return value;
       }
     }
 
-    const fallback = parseMoney(cells[fallbackIndex]?.textContent || "");
-    return fallback || 0;
+    return parseMoney(cells[fallbackIndex]?.textContent || "") || 0;
   }
 
   function normalizeDocumentType(value) {
     const v = String(value || "").toLowerCase().trim();
-
-    if (v.includes("delivery") || v === "dn" || v.includes("delivery_note")) {
-      return "delivery_note";
-    }
-
-    if (v.includes("quotation") || v.includes("quote") || v.includes("quo")) {
-      return "quotation";
-    }
-
+    if (v.includes("delivery") || v === "dn") return "delivery_note";
+    if (v.includes("quotation") || v.includes("quote") || v.includes("quo")) return "quotation";
     return "invoice";
   }
 
   function documentTypeLabel(type) {
     const value = String(type || "").toLowerCase();
-
     if (value.includes("delivery") || value === "dn") return "Delivery Note";
-    if (value.includes("quotation") || value.includes("quote") || value.includes("quo")) {
-      return "Quotation";
-    }
+    if (value.includes("quotation") || value.includes("quote") || value.includes("quo")) return "Quotation";
     if (value.includes("invoice") || value.includes("sale")) return "Sales Invoice";
-
     return type ? titleCase(String(type).replaceAll("_", " ")) : "Sales Document";
   }
 
@@ -1485,25 +1169,20 @@
   function statusBadge(status) {
     const text = String(status || "-");
     const lower = text.toLowerCase();
-
     let cls = "axtor-status-badge";
 
-    if (lower.includes("paid") || lower.includes("posted") || lower.includes("complete")) {
-      cls += " success";
-    } else if (lower.includes("draft") || lower.includes("pending")) {
-      cls += " warning";
-    } else {
-      cls += " muted";
-    }
+    if (lower.includes("paid") || lower.includes("posted") || lower.includes("complete")) cls += " success";
+    else if (lower.includes("draft") || lower.includes("pending")) cls += " warning";
+    else cls += " muted";
 
     return `<span class="${cls}">${escapeHtml(titleCase(text))}</span>`;
   }
 
   function ensureStyles() {
-    if (document.getElementById("axtorSalesBackendStep2BStyles")) return;
+    if (document.getElementById("axtorSalesBackendProductIdFixStyles")) return;
 
     const style = document.createElement("style");
-    style.id = "axtorSalesBackendStep2BStyles";
+    style.id = "axtorSalesBackendProductIdFixStyles";
 
     style.textContent = `
       #axtorSalesBackendPanel,
@@ -1543,12 +1222,10 @@
 
       .axtor-status-badge {
         display: inline-flex;
-        align-items: center;
         border-radius: 999px;
         padding: 0.18rem 0.55rem;
         font-size: 0.78rem;
         font-weight: 700;
-        border: 1px solid rgba(0, 0, 0, 0.08);
       }
 
       .axtor-status-badge.success {
@@ -1566,37 +1243,14 @@
         background: rgba(108, 117, 125, 0.12);
       }
 
-      .axtor-edit-preview-banner {
-        border: 1px solid rgba(255, 193, 7, 0.5);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08);
-      }
-
       .axtor-disabled-preview {
         opacity: 0.55 !important;
         cursor: not-allowed !important;
       }
 
-      .axtor-sales-modal {
-        border-radius: 1rem;
-        overflow: hidden;
-      }
-
-      body.retro-theme #axtorSalesBackendPanel,
-      body.retro #axtorSalesBackendPanel,
-      .retro-theme #axtorSalesBackendPanel,
-      body.retro-theme #axtorSalesCreateToolbar,
-      body.retro #axtorSalesCreateToolbar,
-      .retro-theme #axtorSalesCreateToolbar {
-        backdrop-filter: none;
-      }
-
       @media (max-width: 768px) {
         .axtor-doc-grid {
           grid-template-columns: 1fr;
-        }
-
-        #axtorSalesBackendSearch {
-          max-width: 100% !important;
         }
       }
     `;
@@ -1631,28 +1285,22 @@
 
   function formatDate(value) {
     if (!value) return "-";
-
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
-
-    return date.toLocaleDateString("en-QA", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    });
+    return date.toLocaleDateString("en-QA", { year: "numeric", month: "short", day: "2-digit" });
   }
 
   function inputDate(value) {
     if (!value) return "";
-
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
-
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-
-    return y + "-" + m + "-" + d;
+    return (
+      date.getFullYear() +
+      "-" +
+      String(date.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(date.getDate()).padStart(2, "0")
+    );
   }
 
   function titleCase(value) {
