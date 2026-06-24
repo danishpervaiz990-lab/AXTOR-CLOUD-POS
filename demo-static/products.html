@@ -12,7 +12,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet">
-<link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet">
+  <link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet">
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#0f9f78">
 </head>
@@ -48,7 +48,9 @@
         <div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br><small>Local Browser Mode</small></div>
       </div>
     </aside>
+
     <div class="sidebar-backdrop"></div>
+
     <div class="main">
       <header class="topbar">
         <button class="btn-icon d-xl-none" data-sidebar-toggle aria-label="Toggle menu"><i class="bi bi-list"></i></button>
@@ -57,29 +59,154 @@
         <a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a>
         <div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div>
       </header>
+
       <main class="page">
-<ul class="nav nav-tabs mb-3"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#products-list">Products List</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#add-product">Add New Product</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stock-view">Stock View</button></li></ul>
-<div class="tab-content"><section class="tab-pane fade show active section-anchor" id="products-list"><div class="row g-3 mb-3"><div class="col-md-4"><div class="cardx"><div class="smallcaps">Active SKUs</div><div class="kpi-value">1,248</div></div></div><div class="col-md-4"><div class="cardx"><div class="smallcaps">Categories</div><div class="kpi-value">32</div></div></div><div class="col-md-4"><div class="cardx"><div class="smallcaps">Low stock</div><div class="kpi-value text-danger">8</div></div></div></div><div class="cardx"><h5 class="cardx-title mb-3">Products list</h5><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th></tr></thead><tbody id="productsTableBody"><tr><td>AX-2K-101</td><td>2K Solid Paint</td><td>Automotive</td><td>QAR 95</td><td>128</td><td><span class="badge-soft badge-paid">In stock</span></td></tr><tr><td>CC-HS-1L</td><td>HS Clear Coat 1L</td><td>Clear Coat</td><td>QAR 55</td><td>72</td><td><span class="badge-soft badge-paid">In stock</span></td></tr><tr><td>EP-PR-4L</td><td>Epoxy Primer 4L</td><td>Industrial</td><td>QAR 165</td><td>4</td><td><span class="badge-soft badge-danger-soft">Low</span></td></tr></tbody></table></div></div></section><section class="tab-pane fade section-anchor" id="add-product"><div class="cardx"><h5 class="cardx-title mb-3">Add New Product</h5><div class="row g-3"><div class="col-md-6"><label class="form-label">Product name</label><input id="productNameInput" class="form-control" autocomplete="off"></div><div class="col-md-3"><label class="form-label">SKU</label><input id="productSkuInput" class="form-control" autocomplete="off"></div><div class="col-md-3"><label class="form-label">Barcode</label><input id="productBarcodeInput" class="form-control" autocomplete="off"></div><div class="col-md-3"><label class="form-label">QR Code <span class="text-muted fw-normal">(optional)</span></label><input id="productQrCodeInput" class="form-control" placeholder="Usually same as SKU" autocomplete="off"></div><div class="col-md-3"><label class="form-label">Category</label><select id="productCategoryInput" class="form-select"><option>Automotive Paint</option><option>Industrial Coating</option><option>Wood Coating</option><option>Thinner</option></select></div><div class="col-md-4"><label class="form-label">Sale price</label><input id="productSalePriceInput" class="form-control" type="number" min="0" step="0.01" value="0.00"></div><div class="col-md-4"><label class="form-label">Opening stock</label><input id="productOpeningStockInput" class="form-control" type="number" min="0" step="1" value="0"></div><div class="col-12"><button id="saveProductBtn" class="btn btn-brand" type="button">Save Product</button></div></div></div></section><section class="tab-pane fade section-anchor" id="stock-view"><div class="row g-3"><div class="col-xl-7"><div class="cardx"><h5 class="cardx-title">Stock by product</h5><div style="height:330px"><canvas id="productsStockChart"></canvas></div></div></div><div class="col-xl-5"><div class="cardx"><h5 class="cardx-title mb-3">Stock alerts</h5><div class="table-wrap"><table class="table"><tbody><tr><td>Epoxy Primer 4L</td><td><span class="badge-soft badge-danger-soft">4 pcs</span></td></tr><tr><td>PU Wood Clear</td><td><span class="badge-soft badge-pending">9 pcs</span></td></tr><tr><td>Fiber Putty</td><td><span class="badge-soft badge-pending">12 pcs</span></td></tr></tbody></table></div></div></div></div></section></div>
-</main>
+        <ul class="nav nav-tabs mb-3">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#products-list">Products List</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#add-product">Add New Product</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stock-view">Stock View</button></li>
+        </ul>
+
+        <div class="tab-content">
+          <section class="tab-pane fade show active section-anchor" id="products-list">
+            <div class="row g-3 mb-3">
+              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Active SKUs</div><div class="kpi-value">0</div></div></div>
+              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Categories</div><div class="kpi-value">0</div></div></div>
+              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Low stock</div><div class="kpi-value text-danger">0</div></div></div>
+            </div>
+
+            <div class="cardx">
+              <h5 class="cardx-title mb-3">Products list</h5>
+              <div class="table-wrap">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>Name</th>
+                      <th>Category</th>
+                      <th>Price</th>
+                      <th>Stock</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="productsTableBody">
+                    <tr><td colspan="6" class="text-muted">Loading products...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab-pane fade section-anchor" id="add-product">
+            <div class="cardx">
+              <h5 class="cardx-title mb-3">Add New Product</h5>
+
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Product name</label>
+                  <input id="productNameInput" class="form-control" autocomplete="off">
+                </div>
+
+                <div class="col-md-3">
+                  <label class="form-label">SKU</label>
+                  <input id="productSkuInput" class="form-control" autocomplete="off">
+                </div>
+
+                <div class="col-md-3">
+                  <label class="form-label">Barcode</label>
+                  <input id="productBarcodeInput" class="form-control" autocomplete="off">
+                </div>
+
+                <div class="col-md-3">
+                  <label class="form-label">QR Code <span class="text-muted fw-normal">(optional)</span></label>
+                  <input id="productQrCodeInput" class="form-control" placeholder="Usually same as SKU" autocomplete="off">
+                </div>
+
+                <div class="col-md-3">
+                  <label class="form-label">Category</label>
+                  <select id="productCategoryInput" class="form-select">
+                    <option>Automotive Paint</option>
+                    <option>Industrial Coating</option>
+                    <option>Wood Coating</option>
+                    <option>Thinner</option>
+                    <option>General</option>
+                  </select>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Sale price</label>
+                  <input id="productSalePriceInput" class="form-control" type="number" min="0" step="0.01" value="0.00">
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Cost price</label>
+                  <input id="productCostPriceInput" class="form-control" type="number" min="0" step="0.01" value="0.00">
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Opening stock</label>
+                  <input id="productOpeningStockInput" class="form-control" type="number" min="0" step="1" value="0">
+                </div>
+
+                <div class="col-12">
+                  <button id="saveProductBtn" class="btn btn-brand" type="button">Save Product</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab-pane fade section-anchor" id="stock-view">
+            <div class="row g-3">
+              <div class="col-xl-7">
+                <div class="cardx">
+                  <h5 class="cardx-title">Stock by product</h5>
+                  <div style="height:330px"><canvas id="productsStockChart"></canvas></div>
+                </div>
+              </div>
+
+              <div class="col-xl-5">
+                <div class="cardx">
+                  <h5 class="cardx-title mb-3">Stock alerts</h5>
+                  <div class="table-wrap">
+                    <table class="table">
+                      <tbody>
+                        <tr><td>Epoxy Primer 4L</td><td><span class="badge-soft badge-danger-soft">4 pcs</span></td></tr>
+                        <tr><td>PU Wood Clear</td><td><span class="badge-soft badge-pending">9 pcs</span></td></tr>
+                        <tr><td>Fiber Putty</td><td><span class="badge-soft badge-pending">12 pcs</span></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
     </div>
   </div>
+
   <div class="search-overlay" id="globalSearch">
     <div class="search-box">
-      <div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off"><button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button></div>
+      <div class="search-head">
+        <i class="bi bi-search fs-4 text-brand"></i>
+        <input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off">
+        <button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button>
+      </div>
       <div class="search-results" id="globalSearchResults"></div>
     </div>
   </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="js/axtor-api.js?v=20260622-phase3b"></script>
   <script src="js/core-data.js?v=20260618-sales-qr1"></script>
-<script src="js/charts.js?v=20260618-sales-qr1"></script>
+  <script src="js/charts.js?v=20260618-sales-qr1"></script>
   <script src="js/main.js?v=20260618-sales-qr1"></script>
   <script src="js/theme-switcher.js?v=20260618-sales-qr1"></script>
   <script src="js/app-data.js?v=20260618-sales-qr1"></script>
   <script src="js/retail-advanced.js?v=20260618-sales-qr1"></script>
   <script src="js/invoice-templates.js?v=20260618-sales-qr1"></script>
   <script src="js/axtor-fixes.js?v=20260618-sales-qr1"></script>
-  <script src="js/products-backend.js?v=20260622-phase3c1"></script>
+  <script src="js/products-backend.js?v=20260622-phase3d1"></script>
 </body>
 </html>
