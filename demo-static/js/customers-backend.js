@@ -1,0 +1,561 @@
+(function () {
+  "use strict";
+
+  const CUSTOMERS_PATH = "/api/v1/customers";
+  let customersCache = [];
+  let searchTimer = null;
+
+  function onCustomersPage() {
+    return Boolean(document.getElementById("customersTableBody"));
+  }
+
+  function apiReady() {
+    return window.AxtorAPI &&
+      typeof window.AxtorAPI.apiGet === "function" &&
+      typeof window.AxtorAPI.apiPost === "function" &&
+      typeof window.AxtorAPI.apiPatch === "function" &&
+      typeof window.AxtorAPI.apiDelete === "function";
+  }
+
+  function esc(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function toNumber(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : (fallback || 0);
+  }
+
+  function toInt(value, fallback) {
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : (fallback || 0);
+  }
+
+  function money(value) {
+    return "QAR " + toNumber(value, 0).toFixed(2);
+  }
+
+  function input(id) {
+    const el = document.getElementById(id);
+    return el ? String(el.value || "").trim() : "";
+  }
+
+  function setInput(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value ?? "";
+  }
+
+  function message(text, type) {
+    let box = document.getElementById("customerBackendStatus");
+
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "customerBackendStatus";
+      box.className = "mb-3";
+
+      const target = document.querySelector(".tab-content") || document.querySelector("main.page");
+
+      if (target && target.parentNode) {
+        target.parentNode.insertBefore(box, target);
+      }
+    }
+
+    box.innerHTML =
+      '<div class="alert alert-' + esc(type || "info") + ' py-2 mb-0">' +
+      esc(text) +
+      "</div>";
+  }
+
+  function apiErrorText(error, fallback) {
+    if (error && error.message && error.message !== "API request failed") {
+      return error.message;
+    }
+
+    return fallback;
+  }
+
+  function setLoading(text, className) {
+    const body = document.getElementById("customersTableBody");
+
+    if (body) {
+      body.innerHTML =
+        '<tr><td colspan="7" class="' +
+        esc(className || "text-muted") +
+        '">' +
+        esc(text) +
+        "</td></tr>";
+    }
+  }
+
+  function normalizeCustomers(response) {
+    if (response && Array.isArray(response.customers)) return response.customers;
+    if (response && Array.isArray(response.data)) return response.data;
+    if (Array.isArray(response)) return response;
+    return [];
+  }
+
+  function customerBalance(customer) {
+    return toNumber(customer.balance ?? customer.openingBalance, 0);
+  }
+
+  function customerStatus(customer) {
+    const balance = customerBalance(customer);
+    const raw = String(customer.status || "").toLowerCase();
+
+    if (customer.active === false || raw === "inactive") {
+      return '<span class="badge-soft badge-danger-soft">Inactive</span>';
+    }
+
+    if (raw.includes("overdue")) {
+      return '<span class="badge-soft badge-danger-soft">Overdue</span>';
+    }
+
+    if (raw.includes("due") || balance > 0) {
+      return '<span class="badge-soft badge-pending">Due</span>';
+    }
+
+    return '<span class="badge-soft badge-paid">Clear</span>';
+  }
+
+  function updateKpis(customers) {
+    const values = document.querySelectorAll("#customers-list .kpi-value");
+    if (!values || values.length < 3) return;
+
+    const activeCustomers = customers.filter(function (customer) {
+      return customer.active !== false;
+    });
+
+    const receivable = activeCustomers.reduce(function (total, customer) {
+      const balance = customerBalance(customer);
+      return total + (balance > 0 ? balance : 0);
+    }, 0);
+
+    const overdue = activeCustomers.reduce(function (total, customer) {
+      const status = String(customer.status || "").toLowerCase();
+      const balance = customerBalance(customer);
+
+      if (status.includes("overdue") || status.includes("due")) {
+        return total + (balance > 0 ? balance : 0);
+      }
+
+      return total;
+    }, 0);
+
+    values[0].textContent = String(activeCustomers.length);
+    values[1].textContent = money(receivable);
+    values[2].textContent = money(overdue);
+  }
+
+  function renderCustomers(customers) {
+    const body = document.getElementById("customersTableBody");
+    if (!body) return;
+
+    customersCache = Array.isArray(customers) ? customers.slice() : [];
+
+    const table = body.closest("table");
+    const header = table ? table.querySelector("thead tr") : null;
+
+    if (header) {
+      header.innerHTML =
+        "<th>Name</th>" +
+        "<th>Phone</th>" +
+        "<th>Email</th>" +
+        "<th>Type</th>" +
+        "<th>Balance</th>" +
+        "<th>Status</th>" +
+        "<th>Actions</th>";
+    }
+
+    if (!customersCache.length) {
+      body.innerHTML = '<tr><td colspan="7" class="text-muted">No backend customers found.</td></tr>';
+      updateKpis(customersCache);
+      return;
+    }
+
+    body.innerHTML = customersCache.map(function (customer) {
+      const id = esc(customer.id || "");
+      const name = esc(customer.name || "-");
+
+      return (
+        "<tr>" +
+          "<td>" + name + "</td>" +
+          "<td>" + esc(customer.phone || "-") + "</td>" +
+          "<td>" + esc(customer.email || "-") + "</td>" +
+          "<td>" + esc(customer.type || "Retail") + "</td>" +
+          "<td>" + money(customerBalance(customer)) + "</td>" +
+          "<td>" + customerStatus(customer) + "</td>" +
+          "<td>" +
+            "<div class='d-flex gap-2 flex-wrap'>" +
+              "<button class='btn btn-sm btn-outline-primary' type='button' data-customer-edit='" + id + "'>Edit</button>" +
+              "<button class='btn btn-sm btn-outline-danger' type='button' data-customer-delete='" + id + "' data-customer-name='" + name + "'>Delete</button>" +
+            "</div>" +
+          "</td>" +
+        "</tr>"
+      );
+    }).join("");
+
+    updateKpis(customersCache);
+  }
+
+  function buildListPath() {
+    const search = input("customerSearchInput");
+
+    if (search) {
+      return CUSTOMERS_PATH + "?active=true&q=" + encodeURIComponent(search);
+    }
+
+    return CUSTOMERS_PATH + "?active=true";
+  }
+
+  async function loadCustomers() {
+    if (!onCustomersPage()) return null;
+
+    if (!apiReady()) {
+      console.error("AxtorAPI helper missing. Load js/axtor-api.js before customers-backend.js.");
+      setLoading("Backend API helper missing.", "text-danger");
+      message("Backend API helper missing. Check customer.html script order.", "danger");
+      return null;
+    }
+
+    try {
+      setLoading("Loading backend customers...", "text-muted");
+
+      const response = await window.AxtorAPI.apiGet(buildListPath());
+      const customers = normalizeCustomers(response);
+
+      renderCustomers(customers);
+
+      return response;
+    } catch (error) {
+      console.error("Customers GET failed:", error);
+      setLoading("Failed to load backend customers.", "text-danger");
+      message(apiErrorText(error, "Failed to load backend customers."), "danger");
+      return null;
+    }
+  }
+
+  function saveButton() {
+    return document.getElementById("saveCustomerBtn");
+  }
+
+  function addCustomerTabButton() {
+    return document.querySelector('[data-bs-target="#add-customer"]') || document.querySelector('[href="#add-customer"]');
+  }
+
+  function setTabLabel(text) {
+    const btn = addCustomerTabButton();
+    if (btn) btn.textContent = text;
+  }
+
+  function setFormTitle(text) {
+    const pane = document.getElementById("add-customer");
+    const title = pane ? pane.querySelector(".cardx-title, h5") : null;
+    if (title) title.textContent = text;
+  }
+
+  function openAddCustomerTab() {
+    const btn = addCustomerTabButton();
+
+    if (btn && window.bootstrap && window.bootstrap.Tab) {
+      window.bootstrap.Tab.getOrCreateInstance(btn).show();
+    } else if (btn) {
+      btn.click();
+    }
+  }
+
+  function ensureCancelButton() {
+    const btn = saveButton();
+
+    if (!btn || document.getElementById("cancelCustomerEditBtn")) return;
+
+    const cancel = document.createElement("button");
+    cancel.id = "cancelCustomerEditBtn";
+    cancel.type = "button";
+    cancel.className = "btn btn-outline-secondary ms-2 d-none";
+    cancel.textContent = "Cancel Edit";
+
+    btn.insertAdjacentElement("afterend", cancel);
+
+    cancel.addEventListener("click", function () {
+      clearEditMode();
+      clearForm();
+      message("Edit cancelled.", "info");
+    });
+  }
+
+  function setEditMode(customerId) {
+    const btn = saveButton();
+    const cancel = document.getElementById("cancelCustomerEditBtn");
+
+    if (btn) {
+      btn.dataset.editCustomerId = customerId;
+      btn.innerHTML = "Update Customer";
+    }
+
+    if (cancel) cancel.classList.remove("d-none");
+
+    setTabLabel("Edit Customer");
+    setFormTitle("Edit Customer");
+  }
+
+  function clearEditMode() {
+    const btn = saveButton();
+    const cancel = document.getElementById("cancelCustomerEditBtn");
+
+    if (btn) {
+      delete btn.dataset.editCustomerId;
+      btn.innerHTML = "Save Customer";
+    }
+
+    if (cancel) cancel.classList.add("d-none");
+
+    setTabLabel("Add New Customer");
+    setFormTitle("Add New Customer");
+  }
+
+  function clearForm() {
+    setInput("customerNameInput", "");
+    setInput("customerPhoneInput", "");
+    setInput("customerEmailInput", "");
+    setInput("customerTypeInput", "Retail");
+    setInput("customerOpeningBalanceInput", "0.00");
+    setInput("customerCreditLimitInput", "5000");
+    setInput("customerAddressInput", "");
+    setInput("customerCreditDaysInput", "30");
+  }
+
+  function fillForm(customer) {
+    setInput("customerNameInput", customer.name || "");
+    setInput("customerPhoneInput", customer.phone || "");
+    setInput("customerEmailInput", customer.email || "");
+    setInput("customerTypeInput", customer.type || "Retail");
+    setInput("customerOpeningBalanceInput", toNumber(customer.openingBalance, 0).toFixed(2));
+    setInput("customerCreditLimitInput", toNumber(customer.creditLimit, 0).toFixed(2));
+    setInput("customerAddressInput", customer.address || "");
+    setInput("customerCreditDaysInput", String(customer.creditDays || 30));
+  }
+
+  function getPayload(isEdit) {
+    const name = input("customerNameInput");
+
+    if (!name) {
+      message("Customer name is required.", "warning");
+      return null;
+    }
+
+    const openingBalance = toNumber(input("customerOpeningBalanceInput"), 0);
+
+    const payload = {
+      name: name,
+      phone: input("customerPhoneInput") || undefined,
+      email: input("customerEmailInput") || undefined,
+      type: input("customerTypeInput") || "Retail",
+      openingBalance: openingBalance,
+      creditLimit: toNumber(input("customerCreditLimitInput"), 0),
+      creditDays: toInt(input("customerCreditDaysInput"), 30),
+      address: input("customerAddressInput") || undefined,
+      status: openingBalance > 0 ? "due" : "active",
+      active: true
+    };
+
+    if (!isEdit) payload.balance = openingBalance;
+    if (isEdit) delete payload.active;
+
+    return payload;
+  }
+
+  async function saveCustomer(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (!apiReady()) {
+      message("Backend API helper missing. Check customer.html script order.", "danger");
+      return null;
+    }
+
+    const btn = saveButton();
+    const editId = btn ? btn.dataset.editCustomerId : "";
+    const isEdit = Boolean(editId);
+    const payload = getPayload(isEdit);
+
+    if (!payload) return null;
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = isEdit ? "Updating backend..." : "Saving to backend...";
+      }
+
+      const response = isEdit
+        ? await window.AxtorAPI.apiPatch(CUSTOMERS_PATH + "/" + encodeURIComponent(editId), payload)
+        : await window.AxtorAPI.apiPost(CUSTOMERS_PATH, payload);
+
+      message(isEdit ? "Customer updated in backend successfully." : "Customer saved to backend successfully.", "success");
+
+      clearEditMode();
+      clearForm();
+      await loadCustomers();
+
+      return response;
+    } catch (error) {
+      console.error(isEdit ? "Customer PATCH failed:" : "Customer POST failed:", error);
+      message(apiErrorText(error, isEdit ? "Customer update failed. Check console." : "Customer save failed. Check console."), "danger");
+      return null;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = btn.dataset.editCustomerId ? "Update Customer" : "Save Customer";
+      }
+    }
+  }
+
+  function editCustomer(customerId) {
+    const customer = customersCache.find(function (item) {
+      return String(item.id || "") === String(customerId || "");
+    });
+
+    if (!customer) {
+      message("Customer not found in current list. Reload page and try again.", "warning");
+      return;
+    }
+
+    ensureCancelButton();
+    fillForm(customer);
+    setEditMode(customerId);
+    openAddCustomerTab();
+
+    message("Editing customer: " + (customer.name || customer.phone || customerId), "info");
+  }
+
+  async function deleteCustomer(customerId, customerName, btn) {
+    if (!customerId) {
+      message("Customer id missing. Cannot delete.", "danger");
+      return null;
+    }
+
+    const ok = window.confirm("Delete this customer from backend?\n\n" + customerName);
+
+    if (!ok) return null;
+
+    if (!apiReady()) {
+      message("Backend API helper missing. Check customer.html script order.", "danger");
+      return null;
+    }
+
+    const oldText = btn ? btn.innerHTML : "Delete";
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "Deleting...";
+      }
+
+      const response = await window.AxtorAPI.apiDelete(CUSTOMERS_PATH + "/" + encodeURIComponent(customerId));
+
+      message("Customer deleted from backend successfully.", "success");
+
+      await loadCustomers();
+
+      return response;
+    } catch (error) {
+      console.error("Customer DELETE failed:", error);
+      message(apiErrorText(error, "Customer delete failed. Check console."), "danger");
+      return null;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = oldText;
+      }
+    }
+  }
+
+  function bindSaveButton() {
+    const oldBtn = saveButton();
+
+    if (!oldBtn || oldBtn.dataset.backendBound === "1") return;
+
+    const newBtn = oldBtn.cloneNode(true);
+    newBtn.dataset.backendBound = "1";
+
+    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+
+    newBtn.addEventListener("click", saveCustomer);
+
+    ensureCancelButton();
+  }
+
+  function bindSearch() {
+    const search = document.getElementById("customerSearchInput");
+
+    if (!search || search.dataset.backendBound === "1") return;
+
+    search.dataset.backendBound = "1";
+
+    search.addEventListener("input", function () {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(function () {
+        loadCustomers();
+      }, 250);
+    });
+  }
+
+  function bindActions() {
+    if (document.body.dataset.customersBackendActionsBound === "1") return;
+
+    document.body.dataset.customersBackendActionsBound = "1";
+
+    document.addEventListener("click", function (event) {
+      const editBtn = event.target.closest("[data-customer-edit]");
+
+      if (editBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        editCustomer(editBtn.getAttribute("data-customer-edit"));
+        return;
+      }
+
+      const delBtn = event.target.closest("[data-customer-delete]");
+
+      if (delBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        deleteCustomer(
+          delBtn.getAttribute("data-customer-delete"),
+          delBtn.getAttribute("data-customer-name") || "this customer",
+          delBtn
+        );
+      }
+    });
+  }
+
+  function boot() {
+    if (!onCustomersPage()) return;
+
+    bindSaveButton();
+    bindSearch();
+    bindActions();
+    loadCustomers();
+  }
+
+  window.AxtorCustomersBackend = {
+    loadCustomers: loadCustomers,
+    renderCustomers: renderCustomers,
+    saveCustomerToBackend: saveCustomer,
+    editCustomer: editCustomer,
+    deleteCustomerFromBackend: deleteCustomer
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
