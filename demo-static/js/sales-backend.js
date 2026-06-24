@@ -1,3 +1,13 @@
+/**
+ * Axtor POS Cloud
+ * Phase 3 — Sales Backend Integration
+ * Sales Step 2C — Backend Product Grid + Backend Cart + Create Sales Document
+ *
+ * Full replace file.
+ * No backend PATCH.
+ * No backend/Railway changes.
+ */
+
 (function () {
   "use strict";
 
@@ -21,7 +31,7 @@
 
   window.AxtorSalesBackend = {
     exists: true,
-    version: "20260624-phase3-sales2c-backend-products",
+    version: "20260624-phase3-sales2c-gridfix-full",
     init,
     refresh: loadSavedDocuments,
     refreshProducts: loadBackendProducts,
@@ -32,7 +42,9 @@
     exitEditPreview,
     createBackendDocumentFromPage,
     buildCreatePayloadFromPage,
-    getState: () => state,
+    getState: function () {
+      return state;
+    },
   };
 
   if (document.readyState === "loading") {
@@ -64,21 +76,24 @@
       const addBtn = e.target.closest("[data-backend-product-add]");
       if (addBtn) {
         e.preventDefault();
-        addProductToCart(addBtn.dataset.backendProductAdd);
+        addProductToCart(addBtn.getAttribute("data-backend-product-add"));
         return;
       }
 
       const qtyBtn = e.target.closest("[data-cart-qty]");
       if (qtyBtn) {
         e.preventDefault();
-        changeCartQty(qtyBtn.dataset.cartQty, Number(qtyBtn.dataset.delta || 0));
+        changeCartQty(
+          qtyBtn.getAttribute("data-cart-qty"),
+          Number(qtyBtn.getAttribute("data-delta") || 0)
+        );
         return;
       }
 
       const removeBtn = e.target.closest("[data-cart-remove]");
       if (removeBtn) {
         e.preventDefault();
-        removeCartItem(removeBtn.dataset.cartRemove);
+        removeCartItem(removeBtn.getAttribute("data-cart-remove"));
         return;
       }
 
@@ -87,20 +102,21 @@
         e.preventDefault();
         state.cart = [];
         renderCart();
+        setCreateStatus("Cart cleared.", "muted");
         return;
       }
 
       const viewBtn = e.target.closest("[data-sales-view-id]");
       if (viewBtn) {
         e.preventDefault();
-        viewDocument(viewBtn.dataset.salesViewId);
+        viewDocument(viewBtn.getAttribute("data-sales-view-id"));
         return;
       }
 
       const editBtn = e.target.closest("[data-sales-edit-id]");
       if (editBtn) {
         e.preventDefault();
-        editPreviewDocument(editBtn.dataset.salesEditId);
+        editPreviewDocument(editBtn.getAttribute("data-sales-edit-id"));
         return;
       }
 
@@ -150,6 +166,28 @@
         renderBackendProducts();
       }
     });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.target && e.target.id === "axtorBackendProductSearch" && e.key === "Enter") {
+        e.preventDefault();
+
+        const search = String(state.productSearch || "").toLowerCase().trim();
+        if (!search) return;
+
+        const matched = state.products.find(function (p) {
+          return productSearchText(p).includes(search);
+        });
+
+        if (matched) {
+          addProductToCart(matched.id);
+          e.target.value = "";
+          state.productSearch = "";
+          renderBackendProducts();
+        } else {
+          setCreateStatus("No product matched: " + escapeHtml(search), "danger");
+        }
+      }
+    });
   }
 
   async function backendGet(path) {
@@ -168,7 +206,7 @@
     }
 
     const res = await fetch(API_BASE_URL + path, {
-      method,
+      method: method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
@@ -177,7 +215,9 @@
       ...(method === "GET" ? {} : { body: JSON.stringify(body || {}) }),
     });
 
-    const data = await res.json().catch(() => null);
+    const data = await res.json().catch(function () {
+      return null;
+    });
 
     if (!res.ok) {
       throw new Error(data?.error?.message || data?.message || "Backend request failed");
@@ -209,13 +249,16 @@
         ? data
         : data?.products || data?.items || data?.rows || data?.results || [];
 
-      state.products = products.map(normalizeProduct);
+      state.products = products.map(normalizeProduct).filter(function (p) {
+        return !!p.id;
+      });
 
       renderBackendProducts();
 
       if (status) {
         status.className = "small text-success";
-        status.innerHTML = "Backend products loaded: <strong>" + state.products.length + "</strong>";
+        status.innerHTML =
+          "Backend products loaded: <strong>" + state.products.length + "</strong>";
       }
     } catch (err) {
       console.error("Backend products load failed:", err);
@@ -237,9 +280,9 @@
 
     const search = String(state.productSearch || "").toLowerCase().trim();
 
-    const products = state.products.filter((p) => {
+    const products = state.products.filter(function (p) {
       if (!search) return true;
-      return [p.name, p.sku, p.barcode].join(" ").toLowerCase().includes(search);
+      return productSearchText(p).includes(search);
     });
 
     if (!products.length) {
@@ -248,33 +291,44 @@
     }
 
     grid.innerHTML = products
-      .map(
-        (p) => `
-        <div class="axtor-backend-product-card" data-product-id="${escapeAttr(p.id)}">
-          <div class="axtor-product-icon">▣</div>
-          <div class="fw-bold">${escapeHtml(p.name)}</div>
-          <div class="small text-muted">SKU ${escapeHtml(p.sku || "-")}</div>
-          <div class="small text-muted">${escapeHtml(p.barcode || "")}</div>
-          <div class="d-flex justify-content-between align-items-center mt-2">
-            <strong>${money(p.price)}</strong>
-            <button type="button" class="btn btn-sm btn-success" data-backend-product-add="${escapeAttr(
-              p.id
-            )}">Add</button>
+      .map(function (p) {
+        return `
+          <div class="axtor-backend-product-card" data-product-id="${escapeAttr(p.id)}">
+            <div class="axtor-product-icon">▣</div>
+            <div class="fw-bold">${escapeHtml(p.name)}</div>
+            <div class="small text-muted">Item Code: ${escapeHtml(p.itemCode || "-")}</div>
+            <div class="small text-muted">SKU: ${escapeHtml(p.sku || "-")}</div>
+            <div class="small text-muted">Barcode/QR: ${escapeHtml(
+              p.barcode || p.qrCode || "-"
+            )}</div>
+            <div class="small text-success">ID: ${escapeHtml(p.id)}</div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <strong>${money(p.price)}</strong>
+              <button type="button" class="btn btn-sm btn-success" data-backend-product-add="${escapeAttr(
+                p.id
+              )}">
+                Add
+              </button>
+            </div>
           </div>
-        </div>
-      `
-      )
+        `;
+      })
       .join("");
   }
 
   function addProductToCart(productId) {
-    const product = state.products.find((p) => String(p.id) === String(productId));
+    const product = state.products.find(function (p) {
+      return String(p.id) === String(productId);
+    });
+
     if (!product) {
       alert("Backend product not found.");
       return;
     }
 
-    const existing = state.cart.find((item) => String(item.productId) === String(product.id));
+    const existing = state.cart.find(function (item) {
+      return String(item.productId) === String(product.id);
+    });
 
     if (existing) {
       existing.quantity += 1;
@@ -283,8 +337,10 @@
       state.cart.push({
         productId: product.id,
         productName: product.name,
+        itemCode: product.itemCode,
         sku: product.sku,
         barcode: product.barcode,
+        qrCode: product.qrCode,
         quantity: 1,
         unitPrice: product.price,
         lineTotal: product.price,
@@ -292,10 +348,14 @@
     }
 
     renderCart();
+    setCreateStatus("Added to backend cart: " + escapeHtml(product.name), "success");
   }
 
   function changeCartQty(productId, delta) {
-    const item = state.cart.find((x) => String(x.productId) === String(productId));
+    const item = state.cart.find(function (x) {
+      return String(x.productId) === String(productId);
+    });
+
     if (!item) return;
 
     item.quantity += delta;
@@ -310,7 +370,10 @@
   }
 
   function removeCartItem(productId) {
-    state.cart = state.cart.filter((x) => String(x.productId) !== String(productId));
+    state.cart = state.cart.filter(function (x) {
+      return String(x.productId) !== String(productId);
+    });
+
     renderCart();
   }
 
@@ -328,37 +391,42 @@
         '<tr><td colspan="5" class="text-center py-3 text-muted">Cart empty. Add backend product first.</td></tr>';
     } else {
       tbody.innerHTML = state.cart
-        .map(
-          (item) => `
-          <tr>
-            <td>
-              <strong>${escapeHtml(item.productName)}</strong>
-              <div class="small text-muted">${escapeHtml(item.sku || "")}</div>
-              <div class="small text-success">productId: ${escapeHtml(item.productId)}</div>
-            </td>
-            <td class="text-center">
-              <button class="btn btn-sm btn-outline-secondary" data-cart-qty="${escapeAttr(
-                item.productId
-              )}" data-delta="-1">−</button>
-              <span class="mx-2">${item.quantity}</span>
-              <button class="btn btn-sm btn-outline-secondary" data-cart-qty="${escapeAttr(
-                item.productId
-              )}" data-delta="1">+</button>
-            </td>
-            <td class="text-end">${money(item.unitPrice)}</td>
-            <td class="text-end"><strong>${money(item.lineTotal)}</strong></td>
-            <td class="text-end">
-              <button class="btn btn-sm btn-outline-danger" data-cart-remove="${escapeAttr(
-                item.productId
-              )}">Remove</button>
-            </td>
-          </tr>
-        `
-        )
+        .map(function (item) {
+          return `
+            <tr>
+              <td>
+                <strong>${escapeHtml(item.productName)}</strong>
+                <div class="small text-muted">SKU: ${escapeHtml(item.sku || "-")}</div>
+                <div class="small text-muted">Barcode/QR: ${escapeHtml(
+                  item.barcode || item.qrCode || "-"
+                )}</div>
+                <div class="small text-success">productId: ${escapeHtml(item.productId)}</div>
+              </td>
+              <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-cart-qty="${escapeAttr(
+                  item.productId
+                )}" data-delta="-1">−</button>
+                <span class="mx-2">${escapeHtml(item.quantity)}</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-cart-qty="${escapeAttr(
+                  item.productId
+                )}" data-delta="1">+</button>
+              </td>
+              <td class="text-end">${money(item.unitPrice)}</td>
+              <td class="text-end"><strong>${money(item.lineTotal)}</strong></td>
+              <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" data-cart-remove="${escapeAttr(
+                  item.productId
+                )}">Remove</button>
+              </td>
+            </tr>
+          `;
+        })
         .join("");
     }
 
-    const total = state.cart.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
+    const total = state.cart.reduce(function (sum, item) {
+      return sum + toNumber(item.lineTotal);
+    }, 0);
 
     if (totalBox) totalBox.textContent = money(total);
     if (countBox) countBox.textContent = state.cart.length + " item(s)";
@@ -379,9 +447,12 @@
         throw new Error("Cart empty. Add backend product first.");
       }
 
-      const missingProductId = payload.items.find((item) => !item.productId);
+      const missingProductId = payload.items.find(function (item) {
+        return !item.productId;
+      });
+
       if (missingProductId) {
-        throw new Error("Product ID missing. Add products only from backend product grid.");
+        throw new Error("Product ID missing. Add products only from Backend Product Grid.");
       }
 
       const ok = confirm(
@@ -465,36 +536,39 @@
       readFieldValue(root, ["#paymentMethod", "#salePaymentMethod", '[name="paymentMethod"]']) ||
       "cash";
 
-    const paidAmount = documentType === "invoice"
-      ? state.cart.reduce((sum, item) => sum + toNumber(item.lineTotal), 0)
-      : 0;
+    const totalAmount = state.cart.reduce(function (sum, item) {
+      return sum + toNumber(item.lineTotal);
+    }, 0);
 
-    const totalAmount = state.cart.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
+    const paidAmount = documentType === "invoice" ? totalAmount : 0;
 
     return {
-      documentType,
-      documentDate,
+      documentType: documentType,
+      documentDate: documentDate,
       customerId: customerInfo.customerId || null,
       customerName: customerInfo.customerName || "Walk-in Customer",
       lpoNo: lpoNo || null,
       customerPoNo: lpoNo || null,
       poNo: lpoNo || null,
-      paidAmount,
-      paymentMethod,
-      totalAmount,
+      paidAmount: paidAmount,
+      paymentMethod: paymentMethod,
+      totalAmount: totalAmount,
       grandTotal: totalAmount,
-      items: state.cart.map((item) => ({
-        productId: item.productId,
-        productName: item.productName,
-        sku: item.sku || null,
-        quantity: item.quantity,
-        qty: item.quantity,
-        unitPrice: item.unitPrice,
-        rate: item.unitPrice,
-        price: item.unitPrice,
-        lineTotal: item.lineTotal,
-        total: item.lineTotal,
-      })),
+      items: state.cart.map(function (item) {
+        return {
+          productId: item.productId,
+          productName: item.productName,
+          sku: item.sku || null,
+          barcode: item.barcode || null,
+          quantity: item.quantity,
+          qty: item.quantity,
+          unitPrice: item.unitPrice,
+          rate: item.unitPrice,
+          price: item.unitPrice,
+          lineTotal: item.lineTotal,
+          total: item.lineTotal,
+        };
+      }),
     };
   }
 
@@ -502,6 +576,7 @@
     try {
       const payload = buildCreatePayloadFromPage();
       console.log("Axtor Sales Step 2C payload:", payload);
+
       alert(
         "Payload printed in console.\n\nItems: " +
           payload.items.length +
@@ -536,7 +611,7 @@
       state.docs = docs;
       state.cache.clear();
 
-      docs.forEach((doc) => {
+      docs.forEach(function (doc) {
         if (doc.id) state.cache.set(String(doc.id), doc);
       });
 
@@ -568,7 +643,7 @@
 
     const search = String(state.searchText || "").toLowerCase().trim();
 
-    const docs = state.docs.filter((doc) => {
+    const docs = state.docs.filter(function (doc) {
       if (!search) return true;
       return [
         doc.documentNoText,
@@ -593,8 +668,8 @@
     }
 
     tbody.innerHTML = docs
-      .map(
-        (doc) => `
+      .map(function (doc) {
+        return `
           <tr>
             <td><strong>${escapeHtml(doc.documentNoText)}</strong></td>
             <td>${escapeHtml(doc.typeText)}</td>
@@ -604,13 +679,17 @@
             <td class="text-end">${money(doc.paidAmount)}</td>
             <td>${statusBadge(doc.statusText)}</td>
             <td class="text-end text-nowrap">
-              <button type="button" class="btn btn-sm btn-outline-primary me-1" data-sales-view-id="${escapeAttr(doc.id)}">View</button>
-              <button type="button" class="btn btn-sm btn-outline-warning me-1" data-sales-edit-id="${escapeAttr(doc.id)}">Edit</button>
+              <button type="button" class="btn btn-sm btn-outline-primary me-1" data-sales-view-id="${escapeAttr(
+                doc.id
+              )}">View</button>
+              <button type="button" class="btn btn-sm btn-outline-warning me-1" data-sales-edit-id="${escapeAttr(
+                doc.id
+              )}">Edit</button>
               <button type="button" class="btn btn-sm btn-outline-secondary" onclick="alert('Print placeholder only')">Print</button>
             </td>
           </tr>
-        `
-      )
+        `;
+      })
       .join("");
   }
 
@@ -736,7 +815,9 @@
 
     panel.innerHTML = `
       <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <strong>Loaded from Backend: ${escapeHtml(doc.documentNoText)} / ${escapeHtml(doc.typeText)}</strong>
+        <strong>Loaded from Backend: ${escapeHtml(doc.documentNoText)} / ${escapeHtml(
+      doc.typeText
+    )}</strong>
         <span class="badge text-bg-warning">Read-only preview</span>
       </div>
       <div class="card-body">
@@ -768,7 +849,7 @@
       </div>
     `;
 
-    setTimeout(() => {
+    setTimeout(function () {
       banner.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
   }
@@ -776,7 +857,7 @@
   function exitEditPreview() {
     state.activeEditPreview = null;
 
-    document.querySelectorAll("[data-edit-preview-disabled='true']").forEach((btn) => {
+    document.querySelectorAll("[data-edit-preview-disabled='true']").forEach(function (btn) {
       const originalDisabled = btn.getAttribute("data-original-disabled") === "true";
       btn.disabled = originalDisabled;
       btn.classList.remove("axtor-disabled-preview");
@@ -792,33 +873,37 @@
   function disableSaveButtons() {
     const root = findNewSaleRoot() || document;
 
-    root.querySelectorAll("button, input[type='button'], input[type='submit'], a.btn").forEach((btn) => {
-      if (btn.closest("#axtorEditPreviewBanner") || btn.closest("#axtorEditPreviewPanel")) return;
+    root
+      .querySelectorAll("button, input[type='button'], input[type='submit'], a.btn")
+      .forEach(function (btn) {
+        if (btn.closest("#axtorEditPreviewBanner") || btn.closest("#axtorEditPreviewPanel")) {
+          return;
+        }
 
-      const text = String(btn.textContent || btn.value || "").toLowerCase();
-      const idClass = String((btn.id || "") + " " + (btn.className || "")).toLowerCase();
-      const all = text + " " + idClass;
+        const text = String(btn.textContent || btn.value || "").toLowerCase();
+        const idClass = String((btn.id || "") + " " + (btn.className || "")).toLowerCase();
+        const all = text + " " + idClass;
 
-      const shouldDisable =
-        all.includes("save") ||
-        all.includes("complete") ||
-        all.includes("post") ||
-        all.includes("submit") ||
-        all.includes("finish") ||
-        all.includes("update") ||
-        all.includes("create backend");
+        const shouldDisable =
+          all.includes("save") ||
+          all.includes("complete") ||
+          all.includes("post") ||
+          all.includes("submit") ||
+          all.includes("finish") ||
+          all.includes("update") ||
+          all.includes("create backend");
 
-      if (!shouldDisable) return;
+        if (!shouldDisable) return;
 
-      if (!btn.hasAttribute("data-original-disabled")) {
-        btn.setAttribute("data-original-disabled", btn.disabled ? "true" : "false");
-      }
+        if (!btn.hasAttribute("data-original-disabled")) {
+          btn.setAttribute("data-original-disabled", btn.disabled ? "true" : "false");
+        }
 
-      btn.disabled = true;
-      btn.setAttribute("data-edit-preview-disabled", "true");
-      btn.classList.add("axtor-disabled-preview");
-      btn.setAttribute("title", PATCH_DISABLED_MESSAGE);
-    });
+        btn.disabled = true;
+        btn.setAttribute("data-edit-preview-disabled", "true");
+        btn.classList.add("axtor-disabled-preview");
+        btn.setAttribute("title", PATCH_DISABLED_MESSAGE);
+      });
   }
 
   function ensureCreateToolbar() {
@@ -848,10 +933,12 @@
   }
 
   function ensureBackendProductGrid() {
-    const root = findNewSaleRoot() || document.querySelector("main") || document.body;
     if (document.getElementById("axtorBackendProductGrid")) return;
 
     removeOldLocalProductCards();
+
+    const toolbar = document.getElementById("axtorSalesCreateToolbar");
+    const root = findNewSaleRoot() || document.querySelector("main") || document.body;
 
     const card = document.createElement("div");
     card.id = "axtorBackendProductGrid";
@@ -864,10 +951,18 @@
           <div id="axtorBackendProductStatus" class="small text-muted">Ready</div>
         </div>
         <div class="d-flex flex-wrap gap-2">
-          <input id="axtorBackendProductSearch" class="form-control form-control-sm" style="max-width:240px" placeholder="Search backend product / SKU">
-          <button type="button" class="btn btn-sm btn-outline-success" data-products-refresh="1">Refresh Products</button>
+          <input
+            id="axtorBackendProductSearch"
+            class="form-control form-control-sm"
+            style="max-width:280px"
+            placeholder="Search item code / name / SKU / barcode / QR"
+          >
+          <button type="button" class="btn btn-sm btn-outline-success" data-products-refresh="1">
+            Refresh Products
+          </button>
         </div>
       </div>
+
       <div class="card-body">
         <div id="axtorBackendProductGridBody" class="axtor-backend-product-grid">
           <div class="text-muted p-3">Waiting for backend products...</div>
@@ -875,7 +970,8 @@
       </div>
     `;
 
-    root.appendChild(card);
+    if (toolbar) toolbar.insertAdjacentElement("afterend", card);
+    else root.prepend(card);
   }
 
   function ensureBackendCart() {
@@ -926,7 +1022,7 @@
 
     const grid = document.getElementById("axtorBackendProductGrid");
     if (grid) grid.insertAdjacentElement("afterend", card);
-    else root.appendChild(card);
+    else root.prepend(card);
   }
 
   function ensureBackendPanel() {
@@ -1022,15 +1118,17 @@
 
   function removeOldLocalProductCards() {
     const root = findNewSaleRoot() || document;
-    const headings = Array.from(root.querySelectorAll("h1,h2,h3,h4,h5,strong,b,div,span")).filter((el) =>
-      String(el.textContent || "").trim().toLowerCase().includes("product grid")
-    );
 
-    headings.forEach((heading) => {
-      const card = heading.closest(".card, .glass-card, section, .panel, .box");
-      if (card && !card.id) {
-        card.style.display = "none";
-        card.setAttribute("data-axtor-hidden-local-products", "1");
+    const headings = Array.from(root.querySelectorAll("h1,h2,h3,h4,h5,strong,b,div,span"))
+      .filter(function (el) {
+        return String(el.textContent || "").trim().toLowerCase().includes("product grid");
+      });
+
+    headings.forEach(function (heading) {
+      const box = heading.closest(".card, .glass-card, section, .panel, .box, .col, .row, div");
+      if (box && !box.id && !box.closest("#axtorBackendProductGrid")) {
+        box.style.display = "none";
+        box.setAttribute("data-axtor-hidden-local-products", "1");
       }
     });
   }
@@ -1045,7 +1143,7 @@
   function setCreateButtonsDisabled(disabled) {
     document
       .querySelectorAll("[data-sales-create-backend], [data-sales-preview-payload]")
-      .forEach((btn) => {
+      .forEach(function (btn) {
         btn.disabled = !!disabled;
       });
   }
@@ -1130,15 +1228,31 @@
 
   function normalizeProduct(raw) {
     const p = raw || {};
+
     return {
       id: p.id || p._id || p.productId,
       name: p.name || p.productName || p.title || "Product",
-      sku: p.sku || p.code || "",
-      barcode: p.barcode || p.barCode || "",
+      itemCode: p.itemCode || p.code || p.productCode || p.sku || "",
+      sku: p.sku || p.code || p.itemCode || "",
+      barcode: p.barcode || p.barCode || p.qrCode || "",
+      qrCode: p.qrCode || p.qr || p.barcode || "",
       price: toNumber(p.price ?? p.sellingPrice ?? p.salePrice ?? p.unitPrice ?? 0),
       cost: toNumber(p.cost ?? p.costPrice ?? 0),
       stock: toNumber(p.stock ?? p.openingStock ?? p.quantity ?? 0),
     };
+  }
+
+  function productSearchText(p) {
+    return [
+      p.name,
+      p.itemCode,
+      p.sku,
+      p.barcode,
+      p.qrCode,
+      p.id,
+    ]
+      .join(" ")
+      .toLowerCase();
   }
 
   function normalizeList(response) {
@@ -1179,7 +1293,7 @@
       ...doc,
       id: doc.id || doc._id || doc.documentId || doc.salesDocumentId,
       documentNoText: doc.documentNo || doc.docNo || doc.invoiceNo || doc.number || "N/A",
-      rawType,
+      rawType: rawType,
       typeText: documentTypeLabel(rawType),
       customerId: doc.customerId || customer.id || "",
       customerText:
@@ -1189,13 +1303,13 @@
         customer.companyName ||
         doc.customerId ||
         "Walk-in / Unknown",
-      rawDate,
+      rawDate: rawDate,
       dateText: formatDate(rawDate),
       inputDate: inputDate(rawDate),
       lpoText: doc.lpoNo || doc.lpo || "",
       poText: doc.customerPoNo || doc.poNo || "",
-      amount,
-      paidAmount,
+      amount: amount,
+      paidAmount: paidAmount,
       statusText:
         doc.status || doc.paymentStatus || doc.documentStatus || (doc.isPosted ? "posted" : "draft"),
       lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
@@ -1211,8 +1325,8 @@
       index: index + 1,
       name: line.productName || line.itemName || line.name || product.name || "Item",
       sku: line.sku || line.productSku || product.sku || product.barcode || "-",
-      qty,
-      rate,
+      qty: qty,
+      rate: rate,
       total: toNumber(line.lineTotal ?? line.total ?? line.amount ?? qty * rate),
     };
   }
@@ -1223,8 +1337,8 @@
     }
 
     return lines
-      .map(
-        (line) => `
+      .map(function (line) {
+        return `
           <tr>
             <td>${line.index}</td>
             <td>${escapeHtml(line.name)}</td>
@@ -1233,8 +1347,8 @@
             <td class="text-end">${money(line.rate)}</td>
             <td class="text-end"><strong>${money(line.total)}</strong></td>
           </tr>
-        `
-      )
+        `;
+      })
       .join("");
   }
 
@@ -1284,12 +1398,7 @@
 
       if (el.tagName && el.tagName.toLowerCase() === "select") {
         const option = el.options[el.selectedIndex];
-        return (
-          option?.getAttribute("data-backend-id") ||
-          el.value ||
-          option?.textContent?.trim() ||
-          ""
-        );
+        return option?.getAttribute("data-backend-id") || el.value || option?.textContent?.trim() || "";
       }
 
       if ("value" in el) return String(el.value || "").trim();
@@ -1301,16 +1410,29 @@
 
   function normalizeDocumentType(value) {
     const v = String(value || "").toLowerCase().trim();
-    if (v.includes("delivery") || v === "dn") return "delivery_note";
-    if (v.includes("quotation") || v.includes("quote") || v.includes("quo")) return "quotation";
+
+    if (v.includes("delivery") || v === "dn" || v.includes("delivery_note")) {
+      return "delivery_note";
+    }
+
+    if (v.includes("quotation") || v.includes("quote") || v.includes("quo")) {
+      return "quotation";
+    }
+
     return "invoice";
   }
 
   function documentTypeLabel(type) {
     const value = String(type || "").toLowerCase();
+
     if (value.includes("delivery") || value === "dn") return "Delivery Note";
-    if (value.includes("quotation") || value.includes("quote") || value.includes("quo")) return "Quotation";
+
+    if (value.includes("quotation") || value.includes("quote") || value.includes("quo")) {
+      return "Quotation";
+    }
+
     if (value.includes("invoice") || value.includes("sale")) return "Sales Invoice";
+
     return type ? titleCase(String(type).replaceAll("_", " ")) : "Sales Document";
   }
 
@@ -1328,18 +1450,22 @@
     const lower = text.toLowerCase();
     let cls = "axtor-status-badge";
 
-    if (lower.includes("paid") || lower.includes("posted") || lower.includes("complete")) cls += " success";
-    else if (lower.includes("draft") || lower.includes("pending")) cls += " warning";
-    else cls += " muted";
+    if (lower.includes("paid") || lower.includes("posted") || lower.includes("complete")) {
+      cls += " success";
+    } else if (lower.includes("draft") || lower.includes("pending")) {
+      cls += " warning";
+    } else {
+      cls += " muted";
+    }
 
     return `<span class="${cls}">${escapeHtml(titleCase(text))}</span>`;
   }
 
   function ensureStyles() {
-    if (document.getElementById("axtorSalesBackend2CStyles")) return;
+    if (document.getElementById("axtorSalesBackend2CGridFixFullStyles")) return;
 
     const style = document.createElement("style");
-    style.id = "axtorSalesBackend2CStyles";
+    style.id = "axtorSalesBackend2CGridFixFullStyles";
 
     style.textContent = `
       #axtorSalesBackendPanel,
@@ -1360,7 +1486,7 @@
 
       .axtor-backend-product-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
         gap: 1rem;
       }
 
@@ -1449,6 +1575,10 @@
         .axtor-doc-grid {
           grid-template-columns: 1fr;
         }
+
+        .axtor-backend-product-grid {
+          grid-template-columns: 1fr;
+        }
       }
     `;
 
@@ -1471,15 +1601,23 @@
 
   function formatDate(value) {
     if (!value) return "-";
+
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
-    return date.toLocaleDateString("en-QA", { year: "numeric", month: "short", day: "2-digit" });
+
+    return date.toLocaleDateString("en-QA", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
   }
 
   function inputDate(value) {
     if (!value) return "";
+
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
+
     return (
       date.getFullYear() +
       "-" +
