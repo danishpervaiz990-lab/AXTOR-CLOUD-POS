@@ -1,14 +1,21 @@
 /**
  * Axtor POS Cloud
  * Phase 3 — Sales Backend Integration
- * Sales Step 2A — View Modal + Edit Preview for Saved Invoices / Quotations / DN
+ * Sales Step 2B — Create New Backend Sales Document from Sales Page
  *
- * Backend PATCH is NOT available yet.
- * This file only does:
- * - GET saved documents
+ * Includes Step 2A:
+ * - Backend saved documents list
  * - View modal
  * - Edit Preview only
- * - Save/Complete disabled in edit preview
+ *
+ * New in Step 2B:
+ * - Create backend Invoice / Quotation / DN using POST /api/v1/sales-documents
+ *
+ * Important:
+ * - NO PATCH
+ * - NO backend files touched
+ * - NO Railway settings touched
+ * - Products/Customers are NOT reconnected in this pass
  */
 
 (function () {
@@ -26,21 +33,32 @@
     cache: new Map(),
     activeEditPreview: null,
     searchText: "",
+    creating: false,
   };
 
   window.AxtorSalesBackend = {
     exists: true,
-    version: "20260624-phase3-sales2",
+    version: "20260624-phase3-sales2b",
     init,
     refresh: loadSavedDocuments,
     loadSavedDocuments,
     viewDocument,
     editPreviewDocument,
     exitEditPreview,
+    createBackendDocumentFromPage,
+    buildCreatePayloadFromPage,
     getState: () => state,
   };
 
-  document.addEventListener("DOMContentLoaded", init);
+  ready(init);
+
+  function ready(fn) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", fn);
+    } else {
+      fn();
+    }
+  }
 
   function init() {
     if (state.initialized) return;
@@ -49,6 +67,7 @@
     ensureStyles();
     ensureModal();
     ensureBackendPanel();
+    ensureCreateToolbar();
     bindEvents();
     loadSavedDocuments();
 
@@ -85,6 +104,20 @@
         return;
       }
 
+      const createBtn = e.target.closest("[data-sales-create-backend]");
+      if (createBtn) {
+        e.preventDefault();
+        createBackendDocumentFromPage();
+        return;
+      }
+
+      const previewBtn = e.target.closest("[data-sales-preview-payload]");
+      if (previewBtn) {
+        e.preventDefault();
+        previewCreatePayload();
+        return;
+      }
+
       const exitBtn = e.target.closest("[data-exit-edit-preview]");
       if (exitBtn) {
         e.preventDefault();
@@ -101,27 +134,50 @@
   }
 
   async function backendGet(path) {
+    return backendRequest("GET", path);
+  }
+
+  async function backendPost(path, body) {
+    return backendRequest("POST", path, body);
+  }
+
+  async function backendRequest(method, path, body) {
     const token = localStorage.getItem(TOKEN_KEY);
 
-    if (window.AxtorAPI && typeof window.AxtorAPI.get === "function") {
-      return await window.AxtorAPI.get(path);
-    }
+    if (window.AxtorAPI) {
+      if (method === "GET" && typeof window.AxtorAPI.get === "function") {
+        return await window.AxtorAPI.get(path);
+      }
 
-    if (window.AxtorAPI && typeof window.AxtorAPI.request === "function") {
-      try {
-        return await window.AxtorAPI.request(path, { method: "GET" });
-      } catch (err) {
-        return await window.AxtorAPI.request("GET", path);
+      if (method === "POST" && typeof window.AxtorAPI.post === "function") {
+        return await window.AxtorAPI.post(path, body);
+      }
+
+      if (typeof window.AxtorAPI.request === "function") {
+        try {
+          return await window.AxtorAPI.request(path, {
+            method,
+            body,
+            data: body,
+          });
+        } catch (err1) {
+          try {
+            return await window.AxtorAPI.request(method, path, body);
+          } catch (err2) {
+            console.warn("AxtorAPI request fallback failed:", err1, err2);
+          }
+        }
       }
     }
 
     const res = await fetch(API_BASE_URL + path, {
-      method: "GET",
+      method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
         ...(token ? { Authorization: "Bearer " + token } : {}),
       },
+      ...(method === "GET" ? {} : { body: JSON.stringify(body || {}) }),
     });
 
     const data = await res.json().catch(() => null);
@@ -134,6 +190,8 @@
   }
 
   async function loadSavedDocuments() {
+    ensureBackendPanel();
+
     const tbody = document.getElementById("axtorSalesBackendTbody");
     const status = document.getElementById("axtorSalesBackendStatus");
 
@@ -206,9 +264,7 @@
         .includes(search);
     });
 
-    if (count) {
-      count.textContent = docs.length + " shown";
-    }
+    if (count) count.textContent = docs.length + " shown";
 
     if (!docs.length) {
       tbody.innerHTML =
@@ -419,6 +475,310 @@
     }, 100);
   }
 
+  async function createBackendDocumentFromPage() {
+    if (state.creating) return;
+
+    if (state.activeEditPreview) {
+      alert(PATCH_DISABLED_MESSAGE);
+      return;
+    }
+
+    const payload = buildCreatePayloadFromPage();
+
+    if (!payload.items.length) {
+      alert("No sale line items found. Add at least one item in New Sale before creating backend document.");
+      return;
+    }
+
+    const ok = confirm(
+      "Create backend " +
+        documentTypeLabel(payload.documentType) +
+        " now?\n\nThis will use POST /api/v1/sales-documents.\nNo PATCH/update will run."
+    );
+
+    if (!ok) return;
+
+    state.creating = true;
+    setCreateStatus("Creating backend document...", "muted");
+    setCreateButtonsDisabled(true);
+
+    try {
+      const response = await backendPost("/api/v1/sales-documents", payload);
+      const created = normalizeDocument(unwrapData(response));
+
+      setCreateStatus(
+        "Created successfully: " + escapeHtml(created.documentNoText || "Backend document"),
+        "success"
+      );
+
+      alert(
+        "Backend document created successfully: " +
+          (created.documentNoText || "New document")
+      );
+
+      await loadSavedDocuments();
+      switchToSavedInvoices();
+    } catch (err) {
+      console.error("Create backend sales document failed:", err);
+
+      setCreateStatus(err.message || "Create failed", "danger");
+
+      alert(
+        "Backend create failed:\n\n" +
+          (err.message || "Unknown error") +
+          "\n\nCheck console payload with:\nAxtorSalesBackend.buildCreatePayloadFromPage()"
+      );
+    } finally {
+      state.creating = false;
+      setCreateButtonsDisabled(false);
+    }
+  }
+
+  function buildCreatePayloadFromPage() {
+    const root = findNewSaleRoot() || document;
+
+    const documentTypeRaw = readFieldValue(root, [
+      "#documentType",
+      "#salesDocumentType",
+      "#saleDocumentType",
+      "#newSaleDocumentType",
+      '[name="documentType"]',
+      '[name="salesDocumentType"]',
+      '[name="saleDocumentType"]',
+    ]);
+
+    const documentType = normalizeDocumentType(documentTypeRaw || "invoice");
+
+    const customerInfo = readCustomerInfo(root);
+
+    const lpoNo = readFieldValue(root, [
+      "#lpoNo",
+      "#saleLpoNo",
+      "#salesLpoNo",
+      "#customerPoNo",
+      '[name="lpoNo"]',
+      '[name="lpo"]',
+      '[name="customerPoNo"]',
+    ]);
+
+    const poNo = readFieldValue(root, [
+      "#poNo",
+      "#salePoNo",
+      "#purchaseOrderNo",
+      '[name="poNo"]',
+      '[name="purchaseOrderNo"]',
+    ]);
+
+    const documentDate =
+      readFieldValue(root, [
+        "#saleDate",
+        "#documentDate",
+        "#invoiceDate",
+        '[name="saleDate"]',
+        '[name="documentDate"]',
+        '[name="invoiceDate"]',
+        '[name="date"]',
+      ]) || new Date().toISOString().slice(0, 10);
+
+    const paidAmount = readMoneyValue(root, [
+      "#paidAmount",
+      "#amountPaid",
+      "#receivedAmount",
+      "#cashAmount",
+      "#paymentAmount",
+      '[name="paidAmount"]',
+      '[name="receivedAmount"]',
+      '[name="cashAmount"]',
+      '[name="paymentAmount"]',
+    ]);
+
+    const paymentMethod =
+      readFieldValue(root, [
+        "#paymentMethod",
+        "#salePaymentMethod",
+        '[name="paymentMethod"]',
+      ]) || "cash";
+
+    const items = collectSaleLines(root);
+
+    const totalAmount = items.reduce((sum, item) => sum + toNumber(item.lineTotal), 0);
+
+    return {
+      documentType,
+      documentDate,
+      customerId: customerInfo.customerId || null,
+      customerName: customerInfo.customerName || null,
+      lpoNo: lpoNo || null,
+      customerPoNo: poNo || null,
+      poNo: poNo || null,
+      paidAmount: paidAmount || 0,
+      paymentMethod,
+      totalAmount,
+      grandTotal: totalAmount,
+      items: items.map((item) => ({
+        productId: item.productId || null,
+        productName: item.productName || item.name || "Item",
+        sku: item.sku || null,
+        quantity: item.quantity,
+        qty: item.quantity,
+        unitPrice: item.unitPrice,
+        rate: item.unitPrice,
+        price: item.unitPrice,
+        lineTotal: item.lineTotal,
+        total: item.lineTotal,
+      })),
+    };
+  }
+
+  function collectSaleLines(root) {
+    const rows = Array.from(root.querySelectorAll("tbody tr"));
+
+    const lines = [];
+
+    rows.forEach((row) => {
+      if (
+        row.closest("#axtorSalesBackendPanel") ||
+        row.closest("#axtorEditPreviewPanel") ||
+        row.closest("#axtorSalesDocViewModal")
+      ) {
+        return;
+      }
+
+      const rowText = String(row.textContent || "").trim();
+      if (!rowText) return;
+
+      const productId =
+        row.getAttribute("data-product-id") ||
+        row.getAttribute("data-backend-product-id") ||
+        readFieldValue(row, [
+          '[name="productId"]',
+          '[name="backendProductId"]',
+          ".product-id",
+          ".backend-product-id",
+        ]);
+
+      const productName =
+        row.getAttribute("data-product-name") ||
+        readFieldValue(row, [
+          '[name="productName"]',
+          '[name="itemName"]',
+          ".product-name",
+          ".item-name",
+          ".name",
+        ]) ||
+        guessCellText(row, 0);
+
+      const sku =
+        row.getAttribute("data-sku") ||
+        readFieldValue(row, ['[name="sku"]', ".sku", ".product-sku"]) ||
+        guessSku(row);
+
+      const quantity =
+        readMoneyValue(row, [
+          '[name="quantity"]',
+          '[name="qty"]',
+          ".quantity",
+          ".qty",
+          ".item-qty",
+        ]) || guessNumberFromCells(row, ["qty", "quantity"], 1) || 1;
+
+      const unitPrice =
+        readMoneyValue(row, [
+          '[name="unitPrice"]',
+          '[name="rate"]',
+          '[name="price"]',
+          ".unit-price",
+          ".rate",
+          ".price",
+          ".item-price",
+        ]) || guessNumberFromCells(row, ["price", "rate"], 2) || 0;
+
+      const lineTotal =
+        readMoneyValue(row, [
+          '[name="lineTotal"]',
+          '[name="total"]',
+          ".line-total",
+          ".total",
+          ".amount",
+        ]) || quantity * unitPrice;
+
+      if (!productName && !sku && !productId) return;
+      if (!quantity || quantity <= 0) return;
+
+      lines.push({
+        productId,
+        productName,
+        sku,
+        quantity: toNumber(quantity),
+        unitPrice: toNumber(unitPrice),
+        lineTotal: toNumber(lineTotal),
+      });
+    });
+
+    return lines;
+  }
+
+  function previewCreatePayload() {
+    const payload = buildCreatePayloadFromPage();
+
+    console.log("Axtor Sales Step 2B create payload:", payload);
+
+    alert(
+      "Payload preview printed in browser console.\n\nItems found: " +
+        payload.items.length +
+        "\nDocument type: " +
+        payload.documentType +
+        "\nTotal: QAR " +
+        toNumber(payload.grandTotal).toFixed(2)
+    );
+  }
+
+  function ensureCreateToolbar() {
+    const root = findNewSaleRoot() || document.querySelector("main") || document.body;
+
+    if (document.getElementById("axtorSalesCreateToolbar")) return;
+
+    const toolbar = document.createElement("div");
+    toolbar.id = "axtorSalesCreateToolbar";
+    toolbar.className = "card my-3 axtor-sales-create-toolbar";
+
+    toolbar.innerHTML = `
+      <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <strong>Backend Create — Sales Step 2B</strong>
+          <div id="axtorSalesCreateStatus" class="small text-muted">
+            Ready. This creates new backend Invoice / Quotation / DN only.
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-sales-preview-payload="1">
+            Preview Payload
+          </button>
+          <button type="button" class="btn btn-sm btn-success" data-sales-create-backend="1">
+            Create Backend Document
+          </button>
+        </div>
+      </div>
+    `;
+
+    root.prepend(toolbar);
+  }
+
+  function setCreateStatus(message, type) {
+    const status = document.getElementById("axtorSalesCreateStatus");
+    if (!status) return;
+
+    status.className = "small text-" + (type || "muted");
+    status.innerHTML = message;
+  }
+
+  function setCreateButtonsDisabled(disabled) {
+    document.querySelectorAll("[data-sales-create-backend], [data-sales-preview-payload]").forEach((btn) => {
+      btn.disabled = !!disabled;
+    });
+  }
+
   function fillKnownFields(doc) {
     setValue(
       [
@@ -506,7 +866,9 @@
   function disableSaveButtons() {
     const root = findNewSaleRoot() || document;
 
-    const buttons = root.querySelectorAll("button, input[type='button'], input[type='submit'], a.btn");
+    const buttons = root.querySelectorAll(
+      "button, input[type='button'], input[type='submit'], a.btn"
+    );
 
     buttons.forEach((btn) => {
       if (btn.closest("#axtorEditPreviewBanner") || btn.closest("#axtorEditPreviewPanel")) {
@@ -515,7 +877,12 @@
 
       const text = String(btn.textContent || btn.value || "").toLowerCase();
       const idClass = String((btn.id || "") + " " + (btn.className || "")).toLowerCase();
-      const all = text + " " + idClass;
+      const dataText = Array.from(btn.attributes || [])
+        .map((a) => a.name + " " + a.value)
+        .join(" ")
+        .toLowerCase();
+
+      const all = text + " " + idClass + " " + dataText;
 
       const shouldDisable =
         all.includes("save") ||
@@ -523,7 +890,8 @@
         all.includes("post") ||
         all.includes("submit") ||
         all.includes("finish") ||
-        all.includes("update");
+        all.includes("update") ||
+        all.includes("create backend");
 
       if (!shouldDisable) return;
 
@@ -707,6 +1075,29 @@
     if (byText) byText.click();
   }
 
+  function switchToSavedInvoices() {
+    const selectors = [
+      '[data-bs-target="#saved-invoices"]',
+      '[data-bs-target="#savedInvoices"]',
+      '[href="#saved-invoices"]',
+      '[href="#savedInvoices"]',
+      '[data-target="#saved-invoices"]',
+      '[data-target="#savedInvoices"]',
+    ];
+
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el) {
+        if (window.bootstrap && window.bootstrap.Tab) {
+          window.bootstrap.Tab.getOrCreateInstance(el).show();
+        } else {
+          el.click();
+        }
+        return;
+      }
+    }
+  }
+
   function findSavedInvoicesRoot() {
     const selectors = [
       "#saved-invoices",
@@ -755,6 +1146,23 @@
     for (const selector of selectors) {
       const el = document.querySelector(selector);
       if (el) return el;
+    }
+
+    const tab = Array.from(document.querySelectorAll("a, button")).find((el) => {
+      const text = String(el.textContent || "").toLowerCase();
+      return text.includes("new") && text.includes("sale");
+    });
+
+    if (tab) {
+      const target =
+        tab.getAttribute("data-bs-target") ||
+        tab.getAttribute("href") ||
+        tab.getAttribute("data-target");
+
+      if (target && target.startsWith("#")) {
+        const pane = document.querySelector(target);
+        if (pane) return pane;
+      }
     }
 
     return document.querySelector("main") || document.body;
@@ -929,6 +1337,130 @@
       .join("");
   }
 
+  function readCustomerInfo(root) {
+    const selectors = [
+      "#customer",
+      "#customerName",
+      "#customerSelect",
+      "#salesCustomer",
+      '[name="customer"]',
+      '[name="customerName"]',
+      '[name="customerId"]',
+    ];
+
+    for (const selector of selectors) {
+      const field = root.querySelector(selector);
+      if (!field) continue;
+
+      const tag = String(field.tagName || "").toLowerCase();
+
+      if (tag === "select") {
+        const option = field.options[field.selectedIndex];
+
+        return {
+          customerId:
+            option?.getAttribute("data-backend-id") ||
+            option?.getAttribute("data-customer-id") ||
+            field.value ||
+            "",
+          customerName: option?.textContent?.trim() || "",
+        };
+      }
+
+      return {
+        customerId:
+          field.getAttribute("data-backend-id") ||
+          field.getAttribute("data-customer-id") ||
+          field.value ||
+          "",
+        customerName: field.value || "",
+      };
+    }
+
+    return {
+      customerId: "",
+      customerName: "",
+    };
+  }
+
+  function readFieldValue(root, selectors) {
+    for (const selector of selectors) {
+      const el = root.querySelector(selector);
+      if (!el) continue;
+
+      const tag = String(el.tagName || "").toLowerCase();
+
+      if (tag === "select") {
+        const option = el.options[el.selectedIndex];
+        return (
+          option?.getAttribute("data-backend-id") ||
+          option?.getAttribute("data-value") ||
+          el.value ||
+          option?.textContent?.trim() ||
+          ""
+        );
+      }
+
+      if ("value" in el) return String(el.value || "").trim();
+
+      return String(el.textContent || "").trim();
+    }
+
+    return "";
+  }
+
+  function readMoneyValue(root, selectors) {
+    const value = readFieldValue(root, selectors);
+    return parseMoney(value);
+  }
+
+  function guessCellText(row, index) {
+    const cells = Array.from(row.children || []);
+    return String(cells[index]?.textContent || "").trim();
+  }
+
+  function guessSku(row) {
+    const text = String(row.textContent || "");
+    const skuMatch = text.match(/\b[A-Z0-9][A-Z0-9-_]{2,}\b/);
+    return skuMatch ? skuMatch[0] : "";
+  }
+
+  function guessNumberFromCells(row, keywords, fallbackIndex) {
+    const cells = Array.from(row.children || []);
+
+    for (const cell of cells) {
+      const cls = String(cell.className || "").toLowerCase();
+      const data = Array.from(cell.attributes || [])
+        .map((a) => a.name + " " + a.value)
+        .join(" ")
+        .toLowerCase();
+
+      const haystack = cls + " " + data;
+
+      if (keywords.some((k) => haystack.includes(k))) {
+        const value = parseMoney(cell.textContent);
+        if (value) return value;
+      }
+    }
+
+    const fallback = parseMoney(cells[fallbackIndex]?.textContent || "");
+    return fallback || 0;
+  }
+
+  function normalizeDocumentType(value) {
+    const v = String(value || "").toLowerCase().trim();
+
+    if (v.includes("delivery") || v === "dn" || v.includes("delivery_note")) {
+      return "delivery_note";
+    }
+
+    if (v.includes("quotation") || v.includes("quote") || v.includes("quo")) {
+      return "quotation";
+    }
+
+    return "invoice";
+  }
+
   function documentTypeLabel(type) {
     const value = String(type || "").toLowerCase();
 
@@ -968,13 +1500,14 @@
   }
 
   function ensureStyles() {
-    if (document.getElementById("axtorSalesBackendStep2AStyles")) return;
+    if (document.getElementById("axtorSalesBackendStep2BStyles")) return;
 
     const style = document.createElement("style");
-    style.id = "axtorSalesBackendStep2AStyles";
+    style.id = "axtorSalesBackendStep2BStyles";
 
     style.textContent = `
-      #axtorSalesBackendPanel {
+      #axtorSalesBackendPanel,
+      #axtorSalesCreateToolbar {
         border: 1px solid rgba(25, 135, 84, 0.24);
         background: rgba(255, 255, 255, 0.74);
         backdrop-filter: blur(10px);
@@ -1050,7 +1583,10 @@
 
       body.retro-theme #axtorSalesBackendPanel,
       body.retro #axtorSalesBackendPanel,
-      .retro-theme #axtorSalesBackendPanel {
+      .retro-theme #axtorSalesBackendPanel,
+      body.retro-theme #axtorSalesCreateToolbar,
+      body.retro #axtorSalesCreateToolbar,
+      .retro-theme #axtorSalesCreateToolbar {
         backdrop-filter: none;
       }
 
@@ -1070,6 +1606,17 @@
 
   function toNumber(value) {
     const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  }
+
+  function parseMoney(value) {
+    const cleaned = String(value || "")
+      .replace(/QAR/gi, "")
+      .replace(/,/g, "")
+      .replace(/[^\d.-]/g, "")
+      .trim();
+
+    const number = Number(cleaned);
     return Number.isFinite(number) ? number : 0;
   }
 
