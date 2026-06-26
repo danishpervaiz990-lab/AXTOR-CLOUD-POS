@@ -7,6 +7,7 @@ import * as customersRoutesModule from "./routes/customers.routes.js";
 import * as productsRoutesModule from "./routes/products.routes.js";
 import * as salesDocumentsRoutesModule from "./routes/sales-documents.routes.js";
 import * as paymentsRoutesModule from "./routes/payments.routes.js";
+import * as salesReturnsRoutesModule from "./routes/sales-returns.routes.js";
 
 function getRouter(module: any, names: string[]) {
   for (const name of names) {
@@ -70,6 +71,13 @@ export function createApp() {
     "router",
   ]);
 
+  const salesReturnsRoutes = getRouter(salesReturnsRoutesModule, [
+    "default",
+    "salesReturnsRoutes",
+    "salesReturnsRouter",
+    "router",
+  ]);
+
   app.get("/", (_req: Request, res: Response) => {
     return res.json({
       ok: true,
@@ -84,6 +92,7 @@ export function createApp() {
         products: "/api/v1/products",
         salesDocuments: "/api/v1/sales-documents",
         payments: "/api/v1/payments",
+        salesReturns: "/api/v1/sales-returns",
       },
     });
   });
@@ -140,6 +149,7 @@ export function createApp() {
   app.use("/api/v1/products", productsRoutes);
   app.use("/api/v1/sales-documents", salesDocumentsRoutes);
   app.use("/api/v1/payments", paymentsRoutes);
+  app.use("/api/v1/sales-returns", salesReturnsRoutes);
 
   app.use((req: Request, res: Response) => {
     return res.status(404).json({
