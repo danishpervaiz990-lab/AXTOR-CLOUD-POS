@@ -1,7 +1,7 @@
 /**
  * Axtor POS Cloud
  * Phase 3 — Sales Backend Integration
- * Sales Step 2C — Backend Product Grid + Backend Cart + Create Sales Document
+ * Sales Step 3 — Production UX + Safe Create Flow
  *
  * Full replace file.
  * No backend PATCH.
@@ -27,11 +27,17 @@
     searchText: "",
     productSearch: "",
     creating: false,
+    loadingProducts: false,
+    loadingDocs: false,
+    lastCreatedId: "",
+    lastCreatedDocumentNo: "",
+    pendingAutoOpenId: "",
+    selectedTabSelector: "",
   };
 
   window.AxtorSalesBackend = {
     exists: true,
-    version: "20260624-phase3-sales2c-gridfix-full",
+    version: "20260626-phase3-sales-step3-production-ux-full",
     init,
     refresh: loadSavedDocuments,
     refreshProducts: loadBackendProducts,
@@ -58,6 +64,7 @@
     state.initialized = true;
 
     ensureStyles();
+    ensureToastContainer();
     ensureModal();
     ensureCreateToolbar();
     ensureBackendProductGrid();
@@ -65,8 +72,9 @@
     ensureBackendPanel();
     bindEvents();
 
+    rememberSelectedTab();
     loadBackendProducts();
-    loadSavedDocuments();
+    loadSavedDocuments({ preserveSearch: true, preserveTab: true });
 
     console.log("AxtorSalesBackend loaded:", window.AxtorSalesBackend.version);
   }
@@ -123,7 +131,7 @@
       const refreshBtn = e.target.closest("[data-sales-refresh]");
       if (refreshBtn) {
         e.preventDefault();
-        loadSavedDocuments();
+        loadSavedDocuments({ preserveSearch: true, preserveTab: true, manual: true });
         return;
       }
 
@@ -159,6 +167,7 @@
       if (e.target && e.target.id === "axtorSalesBackendSearch") {
         state.searchText = e.target.value || "";
         renderSavedDocuments();
+        syncSavedSearchInput();
       }
 
       if (e.target && e.target.id === "axtorBackendProductSearch") {
@@ -185,9 +194,12 @@
           renderBackendProducts();
         } else {
           setCreateStatus("No product matched: " + escapeHtml(search), "danger");
+          showToast("No product matched", "Search by item code, product name, SKU, barcode, or QR.", "warning");
         }
       }
     });
+
+    document.addEventListener("shown.bs.tab", rememberSelectedTab);
   }
 
   async function backendGet(path) {
@@ -433,12 +445,20 @@
   }
 
   async function createBackendDocumentFromPage() {
-    if (state.creating) return;
-
-    if (state.activeEditPreview) {
-      alert(PATCH_DISABLED_MESSAGE);
+    if (state.creating) {
+      showToast("Please wait", "Backend document is already being created.", "warning");
       return;
     }
+
+    if (state.activeEditPreview) {
+      showToast("Edit Preview is read-only", PATCH_DISABLED_MESSAGE, "warning");
+      return;
+    }
+
+    const activeBeforeCreate = getActiveTabSelector();
+    if (activeBeforeCreate) state.selectedTabSelector = activeBeforeCreate;
+
+    let created = null;
 
     try {
       const payload = buildCreatePayloadFromPage();
@@ -468,30 +488,98 @@
 
       state.creating = true;
       setCreateButtonsDisabled(true);
-      setCreateStatus("Creating backend document...", "muted");
+      setGlobalLoading(true, "Creating backend document...");
+      setCreateStatus(withSpinner("Creating backend document..."), "muted");
+      showToast("Creating document", "Please wait while backend saves this sale.", "info");
 
-      console.log("Axtor Step 2C create payload:", payload);
+      console.log("Axtor Step 3 create payload:", payload);
 
       const response = await backendPost("/api/v1/sales-documents", payload);
-      const created = normalizeDocument(unwrapData(response));
+      created = normalizeDocument(unwrapData(response));
+
+      state.lastCreatedId = created.id || "";
+            state.lastCreatedDocumentNo = created.documentNoText || "";
+      state.pendingAutoOpenId = created.id || "";
 
       setCreateStatus("Created successfully: " + escapeHtml(created.documentNoText), "success");
+      showToast(
+        "Document created",
+        created.documentNoText + " saved successfully.",
+        "success"
+      );
 
-      alert("Backend document created successfully: " + created.documentNoText);
+      clearBackendCart();
+      safelyClearSaleFormAfterCreate();
 
-      state.cart = [];
-      renderCart();
+      await loadSavedDocuments({
+        preserveSearch: true,
+        preserveTab: false,
+        highlightId: created.id,
+        autoOpenId: created.id,
+        afterCreate: true,
+      });
 
-      await loadSavedDocuments();
       switchToSavedInvoices();
+
+      setTimeout(function () {
+        highlightAndScrollToDocument(created.id);
+      }, 350);
+
+      setTimeout(function () {
+        if (created && created.id) {
+          viewDocument(created.id);
+        }
+      }, 650);
     } catch (err) {
       console.error("Create backend sales document failed:", err);
-      setCreateStatus(err.message || "Create failed", "danger");
-      alert("Backend create failed:\n\n" + (err.message || "Unknown error"));
+      setCreateStatus(escapeHtml(err.message || "Create failed"), "danger");
+      showToast("Create failed", err.message || "Unknown backend error", "danger");
     } finally {
       state.creating = false;
       setCreateButtonsDisabled(false);
+      setGlobalLoading(false);
     }
+  }
+
+  function clearBackendCart() {
+    state.cart = [];
+    renderCart();
+  }
+
+  function safelyClearSaleFormAfterCreate() {
+    const root = findNewSaleRoot() || document;
+
+    const selectors = [
+      "#lpoNo",
+      "#saleLpoNo",
+      "#salesLpoNo",
+      "#customerPoNo",
+      '[name="lpoNo"]',
+      '[name="lpo"]',
+      '[name="customerPoNo"]',
+      "#salePaymentMethod",
+      "#paymentMethod",
+      '[name="paymentMethod"]',
+    ];
+
+    selectors.forEach(function (selector) {
+      const el = root.querySelector(selector);
+      if (!el) return;
+
+      if (el.tagName && el.tagName.toLowerCase() === "select") {
+        el.selectedIndex = 0;
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+      }
+
+      if ("value" in el) {
+        el.value = "";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    setCreateStatus("Ready. Previous sale cleared safely.", "muted");
   }
 
   function buildCreatePayloadFromPage() {
@@ -575,7 +663,13 @@
   function previewCreatePayload() {
     try {
       const payload = buildCreatePayloadFromPage();
-      console.log("Axtor Sales Step 2C payload:", payload);
+      console.log("Axtor Sales Step 3 payload:", payload);
+
+      showToast(
+        "Payload ready",
+        "Payload printed in console. Items: " + payload.items.length + ", Total: " + money(payload.grandTotal),
+        "info"
+      );
 
       alert(
         "Payload printed in console.\n\nItems: " +
@@ -584,25 +678,38 @@
           money(payload.grandTotal)
       );
     } catch (err) {
+      showToast("Payload preview failed", err.message || "Unknown error", "danger");
       alert(err.message || "Payload preview failed");
     }
   }
 
-  async function loadSavedDocuments() {
+  async function loadSavedDocuments(options) {
+    const opts = options || {};
     ensureBackendPanel();
 
     const tbody = document.getElementById("axtorSalesBackendTbody");
     const status = document.getElementById("axtorSalesBackendStatus");
 
+    if (!opts.preserveSearch) {
+      state.searchText = "";
+      syncSavedSearchInput();
+    } else {
+      readSavedSearchInput();
+    }
+
     if (status) {
       status.className = "small text-muted";
-      status.textContent = "Loading backend saved documents...";
+      status.innerHTML = withSpinner("Loading backend saved documents...");
     }
 
     if (tbody) {
       tbody.innerHTML =
-        '<tr><td colspan="8" class="text-center py-4 text-muted">Loading...</td></tr>';
+        '<tr><td colspan="8" class="text-center py-4 text-muted">' +
+        inlineSpinner("Loading...") +
+        "</td></tr>";
     }
+
+    state.loadingDocs = true;
 
     try {
       const response = await backendGet("/api/v1/sales-documents");
@@ -615,11 +722,27 @@
         if (doc.id) state.cache.set(String(doc.id), doc);
       });
 
-      renderSavedDocuments();
+      renderSavedDocuments(opts.highlightId || state.lastCreatedId);
 
       if (status) {
         status.className = "small text-success";
         status.innerHTML = "Backend documents loaded: <strong>" + docs.length + "</strong>";
+      }
+
+      if (opts.manual) {
+        showToast("Saved documents refreshed", docs.length + " document(s) loaded.", "success");
+      }
+
+      if (opts.highlightId) {
+        setTimeout(function () {
+          highlightAndScrollToDocument(opts.highlightId);
+        }, 150);
+      }
+
+      if (opts.autoOpenId) {
+        setTimeout(function () {
+          viewDocument(opts.autoOpenId);
+        }, 500);
       }
     } catch (err) {
       console.error("Sales backend load error:", err);
@@ -633,10 +756,14 @@
         tbody.innerHTML =
           '<tr><td colspan="8" class="text-center py-4 text-danger">Failed to load backend saved documents.</td></tr>';
       }
+
+      showToast("Saved documents failed", err.message || "Unable to load backend saved documents.", "danger");
+    } finally {
+      state.loadingDocs = false;
     }
   }
 
-  function renderSavedDocuments() {
+  function renderSavedDocuments(highlightId) {
     const tbody = document.getElementById("axtorSalesBackendTbody");
     const count = document.getElementById("axtorSalesBackendCount");
     if (!tbody) return;
@@ -669,8 +796,9 @@
 
     tbody.innerHTML = docs
       .map(function (doc) {
+        const isNew = String(doc.id || "") === String(highlightId || state.lastCreatedId || "");
         return `
-          <tr>
+          <tr id="axtor-sales-doc-row-${escapeAttr(doc.id)}" class="${isNew ? "axtor-newly-created-row" : ""}" data-sales-doc-row="${escapeAttr(doc.id)}">
             <td><strong>${escapeHtml(doc.documentNoText)}</strong></td>
             <td>${escapeHtml(doc.typeText)}</td>
             <td>${escapeHtml(doc.customerText)}</td>
@@ -716,7 +844,9 @@
     if (title) title.textContent = "Loading document...";
     if (body) {
       body.innerHTML =
-        '<div class="text-center py-5 text-muted">Loading backend document details...</div>';
+        '<div class="text-center py-5 text-muted">' +
+        inlineSpinner("Loading backend document details...") +
+        "</div>";
     }
 
     showModal(modal);
@@ -769,6 +899,7 @@
           escapeHtml(err.message || "Unable to load document") +
           "</div>";
       }
+      showToast("Document load failed", err.message || "Unable to load document.", "danger");
     }
   }
 
@@ -779,12 +910,13 @@
       switchToNewSale();
       showEditPreview(doc);
       disableSaveButtons();
+      showToast("Edit Preview opened", "This document is read-only until backend PATCH is added.", "warning");
     } catch (err) {
+      showToast("Edit Preview failed", err.message || "Unknown error", "danger");
       alert("Unable to open Edit Preview: " + (err.message || "Unknown error"));
     }
   }
-
-  function showEditPreview(doc) {
+    function showEditPreview(doc) {
     const root = findNewSaleRoot() || document.querySelector("main") || document.body;
 
     let banner = document.getElementById("axtorEditPreviewBanner");
@@ -868,6 +1000,8 @@
 
     document.getElementById("axtorEditPreviewBanner")?.remove();
     document.getElementById("axtorEditPreviewPanel")?.remove();
+
+    showToast("Edit Preview closed", "Create flow is available again.", "info");
   }
 
   function disableSaveButtons() {
@@ -917,9 +1051,9 @@
     toolbar.innerHTML = `
       <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
-          <strong>Backend Create — Sales Step 2C</strong>
+          <strong>Backend Create — Sales Step 3</strong>
           <div id="axtorSalesCreateStatus" class="small text-muted">
-            Ready. Backend product grid enabled.
+            Ready. Production UX enabled.
           </div>
         </div>
         <div class="d-flex flex-wrap gap-2">
@@ -1071,6 +1205,7 @@
     `;
 
     root.appendChild(panel);
+    syncSavedSearchInput();
     return panel;
   }
 
@@ -1116,6 +1251,142 @@
     modal.removeAttribute("aria-hidden");
   }
 
+  function ensureToastContainer() {
+    if (document.getElementById("axtorToastContainer")) return;
+
+    const box = document.createElement("div");
+    box.id = "axtorToastContainer";
+    box.className = "toast-container position-fixed top-0 end-0 p-3";
+    box.style.zIndex = "1080";
+
+    document.body.appendChild(box);
+  }
+
+  function showToast(title, message, type) {
+    ensureToastContainer();
+
+    const container = document.getElementById("axtorToastContainer");
+    if (!container) return;
+
+    const id = "axtor-toast-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+    const safeType = type || "info";
+
+    const toast = document.createElement("div");
+    toast.id = id;
+    toast.className = "toast axtor-toast axtor-toast-" + safeType;
+    toast.setAttribute("role", "alert");
+    toast.setAttribute("aria-live", "assertive");
+    toast.setAttribute("aria-atomic", "true");
+
+    toast.innerHTML = `
+      <div class="toast-header">
+        <strong class="me-auto">${escapeHtml(title || "Axtor POS")}</strong>
+        <small>${escapeHtml(new Date().toLocaleTimeString("en-QA", { hour: "2-digit", minute: "2-digit" }))}</small>
+        <button type="button" class="btn-close ms-2 mb-1" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <div class="toast-body">${escapeHtml(message || "")}</div>
+    `;
+
+    container.appendChild(toast);
+
+    if (window.bootstrap && window.bootstrap.Toast) {
+      const instance = window.bootstrap.Toast.getOrCreateInstance(toast, {
+        autohide: true,
+        delay: safeType === "danger" ? 6500 : 3500,
+      });
+      instance.show();
+      toast.addEventListener("hidden.bs.toast", function () {
+        toast.remove();
+      });
+      return;
+    }
+
+    toast.style.display = "block";
+    setTimeout(function () {
+      toast.remove();
+    }, safeType === "danger" ? 6500 : 3500);
+  }
+
+  function setGlobalLoading(active, text) {
+    let overlay = document.getElementById("axtorGlobalLoadingOverlay");
+
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "axtorGlobalLoadingOverlay";
+      overlay.innerHTML = `
+        <div class="axtor-loading-box">
+          <div class="spinner-border text-success" role="status" aria-hidden="true"></div>
+          <div id="axtorGlobalLoadingText" class="mt-2 fw-bold">Loading...</div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    const label = document.getElementById("axtorGlobalLoadingText");
+    if (label) label.textContent = text || "Loading...";
+
+    overlay.classList.toggle("show", !!active);
+  }
+    function inlineSpinner(text) {
+    return (
+      '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>' +
+      escapeHtml(text || "Loading...")
+    );
+  }
+
+  function withSpinner(text) {
+    return inlineSpinner(text);
+  }
+
+  function highlightAndScrollToDocument(id) {
+    if (!id) return;
+
+    const row =
+      document.querySelector('[data-sales-doc-row="' + cssEscape(id) + '"]') ||
+      document.getElementById("axtor-sales-doc-row-" + id);
+
+    if (!row) return;
+
+    row.classList.add("axtor-newly-created-row");
+
+    setTimeout(function () {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+
+    setTimeout(function () {
+      row.classList.remove("axtor-newly-created-row");
+      row.classList.add("axtor-created-row-soft");
+    }, 6000);
+  }
+
+  function readSavedSearchInput() {
+    const input = document.getElementById("axtorSalesBackendSearch");
+    if (input) state.searchText = input.value || state.searchText || "";
+  }
+
+  function syncSavedSearchInput() {
+    const input = document.getElementById("axtorSalesBackendSearch");
+    if (input && input.value !== state.searchText) {
+      input.value = state.searchText || "";
+    }
+  }
+
+  function rememberSelectedTab() {
+    state.selectedTabSelector = getActiveTabSelector();
+  }
+
+  function getActiveTabSelector() {
+    const active =
+      document.querySelector(".nav-link.active[data-bs-target]") ||
+      document.querySelector(".nav-link.active[href^='#']") ||
+      document.querySelector("[data-bs-toggle='tab'].active[data-bs-target]") ||
+      document.querySelector("[data-bs-toggle='pill'].active[data-bs-target]");
+
+    if (!active) return "";
+
+    return active.getAttribute("data-bs-target") || active.getAttribute("href") || "";
+  }
+
   function removeOldLocalProductCards() {
     const root = findNewSaleRoot() || document;
 
@@ -1145,6 +1416,12 @@
       .querySelectorAll("[data-sales-create-backend], [data-sales-preview-payload]")
       .forEach(function (btn) {
         btn.disabled = !!disabled;
+
+        if (btn.hasAttribute("data-sales-create-backend")) {
+          btn.innerHTML = disabled
+            ? '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Creating...'
+            : "Create Backend Document";
+        }
       });
   }
 
@@ -1243,14 +1520,7 @@
   }
 
   function productSearchText(p) {
-    return [
-      p.name,
-      p.itemCode,
-      p.sku,
-      p.barcode,
-      p.qrCode,
-      p.id,
-    ]
+    return [p.name, p.itemCode, p.sku, p.barcode, p.qrCode, p.id]
       .join(" ")
       .toLowerCase();
   }
@@ -1462,10 +1732,10 @@
   }
 
   function ensureStyles() {
-    if (document.getElementById("axtorSalesBackend2CGridFixFullStyles")) return;
+    if (document.getElementById("axtorSalesBackendStep3ProductionStyles")) return;
 
     const style = document.createElement("style");
-    style.id = "axtorSalesBackend2CGridFixFullStyles";
+    style.id = "axtorSalesBackendStep3ProductionStyles";
 
     style.textContent = `
       #axtorSalesBackendPanel,
@@ -1560,14 +1830,72 @@
         cursor: not-allowed !important;
       }
 
+      .axtor-newly-created-row {
+        animation: axtorNewRowPulse 1.2s ease-in-out infinite alternate;
+        outline: 2px solid rgba(25, 135, 84, 0.75);
+        outline-offset: -2px;
+      }
+
+      .axtor-created-row-soft {
+        background: rgba(25, 135, 84, 0.08) !important;
+      }
+
+      @keyframes axtorNewRowPulse {
+        from { background: rgba(25, 135, 84, 0.10); }
+        to { background: rgba(255, 193, 7, 0.18); }
+      }
+
+      #axtorGlobalLoadingOverlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.45);
+        backdrop-filter: blur(2px);
+        z-index: 1075;
+      }
+
+      #axtorGlobalLoadingOverlay.show {
+        display: flex;
+      }
+
+      .axtor-loading-box {
+        min-width: 240px;
+        border-radius: 1rem;
+        border: 1px solid rgba(25, 135, 84, 0.22);
+        background: rgba(255,255,255,0.94);
+        padding: 1.25rem;
+        text-align: center;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+      }
+
+      .axtor-toast-success .toast-header {
+        background: rgba(25, 135, 84, 0.12);
+      }
+
+      .axtor-toast-danger .toast-header {
+        background: rgba(220, 53, 69, 0.12);
+      }
+
+      .axtor-toast-warning .toast-header {
+        background: rgba(255, 193, 7, 0.18);
+      }
+
+      .axtor-toast-info .toast-header {
+        background: rgba(13, 202, 240, 0.12);
+      }
+
       body.retro-theme #axtorSalesBackendPanel,
       body.retro-theme #axtorSalesCreateToolbar,
       body.retro-theme #axtorBackendProductGrid,
       body.retro-theme #axtorBackendCart,
+      body.retro-theme #axtorGlobalLoadingOverlay,
       body.retro #axtorSalesBackendPanel,
       body.retro #axtorSalesCreateToolbar,
       body.retro #axtorBackendProductGrid,
-      body.retro #axtorBackendCart {
+      body.retro #axtorBackendCart,
+      body.retro #axtorGlobalLoadingOverlay {
         backdrop-filter: none;
       }
 
@@ -1583,6 +1911,14 @@
     `;
 
     document.head.appendChild(style);
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === "function") {
+      return window.CSS.escape(String(value));
+    }
+
+    return String(value).replace(/["\\]/g, "\\$&");
   }
 
   function toNumber(value) {
