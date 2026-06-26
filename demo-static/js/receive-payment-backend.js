@@ -620,7 +620,11 @@
 
     const totalReceived = toNumber(document.getElementById("customerReceivedTotal")?.value || 0);
     const unallocated = Math.max(0, totalReceived - allocated);
-    const balanceAfter = Math.max(0, customerBalance - allocated);
+   const selectedBalance = Array.from(state.selected.values()).reduce(function (sum, row) {
+  return sum + toNumber(row.balance);
+}, 0);
+
+const balanceAfter = Math.max(0, selectedBalance - allocated);
 
     setText("customerCurrentBalance", money(customerBalance));
     setText("customerAllocatedTotal", money(allocated));
