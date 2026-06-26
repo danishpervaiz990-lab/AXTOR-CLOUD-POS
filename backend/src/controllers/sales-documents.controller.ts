@@ -142,6 +142,9 @@ function formatSalesDocument(document: any) {
   const total = Number(document.total || 0);
   const paid = Number(document.paid || 0);
   const balance = Number(document.balance || 0);
+  const returnedAmount = Number(document.returnedAmount || 0);
+  const returnCount = Number(document.returnCount || 0);
+  const returnStatus = document.returnStatus || (returnedAmount > 0 ? "partially_returned" : "not_returned");
 
   return {
     id: document.id,
@@ -180,6 +183,12 @@ function formatSalesDocument(document: any) {
 
     balance,
     balanceAmount: balance,
+
+    returnStatus,
+    returnedAmount,
+    returnCount,
+    isReturned: returnStatus === "fully_returned" || returnStatus === "partially_returned",
+
     creditAmount: Number(document.creditAmount),
 
     customerCreditApplied: document.customerCreditApplied,
