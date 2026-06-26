@@ -198,9 +198,21 @@
             balance: Math.max(0, toNumber(doc.amount) - toNumber(doc.paidAmount)),
           };
         })
-        .filter(function (doc) {
-          return doc.balance > 0.0001;
-        })
+       .filter(function (doc) {
+  const status = String(
+    doc.statusText ||
+    doc.status ||
+    doc.paymentStatus ||
+    doc.documentStatus ||
+    ""
+  ).toLowerCase();
+
+  if (status === "paid") {
+    return false;
+  }
+
+  return doc.balance > 0.0001;
+})
         .sort(function (a, b) {
           return new Date(a.rawDate || 0).getTime() - new Date(b.rawDate || 0).getTime();
         });
