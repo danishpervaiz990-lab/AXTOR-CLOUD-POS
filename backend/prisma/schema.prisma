@@ -88,6 +88,8 @@ model Business {
   stockMovements     StockMovement[]
   salesDocuments     SalesDocument[]
   salesDocumentItems SalesDocumentItem[]
+  salesReturns       SalesReturn[]
+  salesReturnItems   SalesReturnItem[]
   customerPayments   CustomerPayment[]
   purchases          Purchase[]
   purchaseItems      PurchaseItem[]
@@ -384,6 +386,7 @@ model SalesDocument {
 
   business              Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
   items                 SalesDocumentItem[]
+  returns               SalesReturn[]
 
   @@unique([businessId, documentNo])
   @@index([businessId])
@@ -420,6 +423,63 @@ model SalesDocumentItem {
   @@index([salesDocumentId])
   @@index([businessId, sku])
   @@map("sales_document_items")
+}
+
+
+model SalesReturn {
+  id                    String            @id @default(cuid())
+  businessId            String            @map("business_id")
+  branchId              String?           @map("branch_id")
+  returnNo              String            @map("return_no")
+  sourceSalesDocumentId String            @map("source_sales_document_id")
+  sourceDocumentNo      String?           @map("source_document_no")
+  customerId            String?           @map("customer_id")
+  customerName          String            @map("customer_name")
+  reason                String?
+  status                String            @default("POSTED")
+  subtotal              Decimal           @default(0) @db.Decimal(14, 2)
+  total                 Decimal           @default(0) @db.Decimal(14, 2)
+  refundAmount          Decimal           @default(0) @map("refund_amount") @db.Decimal(14, 2)
+  creditAmount          Decimal           @default(0) @map("credit_amount") @db.Decimal(14, 2)
+  returnDate            DateTime          @default(now()) @map("return_date")
+  metadata              Json?
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  business              Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sourceSalesDocument   SalesDocument     @relation(fields: [sourceSalesDocumentId], references: [id], onDelete: Cascade)
+  items                 SalesReturnItem[]
+
+  @@unique([businessId, returnNo])
+  @@index([businessId])
+  @@index([businessId, sourceSalesDocumentId])
+  @@index([businessId, customerId])
+  @@map("sales_returns")
+}
+
+model SalesReturnItem {
+  id              String      @id @default(cuid())
+  businessId      String      @map("business_id")
+  salesReturnId   String      @map("sales_return_id")
+  productId       String?     @map("product_id")
+  sku             String?
+  barcode         String?
+  qrCode          String?     @map("qr_code")
+  name            String
+  unit            String?     @default("PCS")
+  soldQty         Decimal     @default(0) @map("sold_qty") @db.Decimal(14, 3)
+  returnQty       Decimal     @map("return_qty") @db.Decimal(14, 3)
+  rate            Decimal     @default(0) @db.Decimal(14, 2)
+  total           Decimal     @default(0) @db.Decimal(14, 2)
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  business        Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  salesReturn     SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([salesReturnId])
+  @@index([businessId, sku])
+  @@map("sales_return_items")
 }
 
 model CustomerPayment {
