@@ -1,9 +1,9 @@
 /**
  * Axtor POS Cloud
  * Phase 5 — Sales Returns Backend Integration
- * Phase 5A — Backend Invoice Lookup + Return Preview
+ * Phase 5B — Real Backend Return Posting
  *
- * New file.
+ * Full replace file.
  * Frontend only.
  * No backend/Railway changes.
  * Green theme safe.
@@ -19,18 +19,23 @@
   const state = {
     initialized: false,
     loading: false,
+    posting: false,
     invoices: [],
+    returns: [],
     selectedInvoice: null,
     returnItems: new Map(),
     searchText: "",
+    lastReturnId: "",
+    lastReturnNo: "",
   };
 
   window.AxtorReturnsBackend = {
     exists: true,
-    version: "20260626-phase5a-returns-backend-foundation",
+    version: "20260626-phase5b-returns-backend-posting-full",
     init,
     refresh: loadBackendInvoices,
     loadBackendInvoices,
+    postBackendReturn,
     getState: function () {
       return state;
     },
@@ -51,6 +56,7 @@
     ensureReturnsPanel();
     bindEvents();
     loadBackendInvoices();
+    loadReturnHistory();
 
     console.log("AxtorReturnsBackend loaded:", window.AxtorReturnsBackend.version);
   }
@@ -80,6 +86,7 @@
       if (refreshBtn) {
         e.preventDefault();
         loadBackendInvoices(true);
+        loadReturnHistory();
         return;
       }
 
@@ -107,17 +114,21 @@
       const postBtn = e.target.closest("[data-returns-post]");
       if (postBtn) {
         e.preventDefault();
-        showToast(
-          "Phase 5A only",
-          "Return posting will be connected in Phase 5B after backend return endpoint is added.",
-          "warning"
-        );
+        postBackendReturn();
         return;
       }
     });
   }
 
   async function backendGet(path) {
+    return backendRequest("GET", path);
+  }
+
+  async function backendPost(path, body) {
+    return backendRequest("POST", path, body);
+  }
+
+  async function backendRequest(method, path, body) {
     const token = localStorage.getItem(TOKEN_KEY);
 
     if (!token) {
@@ -125,12 +136,13 @@
     }
 
     const res = await fetch(API_BASE_URL + path, {
-      method: "GET",
+      method: method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
         Authorization: "Bearer " + token,
       },
+      ...(method === "GET" ? {} : { body: JSON.stringify(body || {}) }),
     });
 
     const data = await res.json().catch(function () {
@@ -203,6 +215,29 @@
     }
   }
 
+  async function loadReturnHistory() {
+    const body = document.getElementById("axtorReturnHistoryTbody");
+    if (!body) return;
+
+    try {
+      const response = await backendGet("/api/v1/sales-returns");
+      const data = unwrapData(response);
+      const rows = Array.isArray(data)
+        ? data
+        : data?.items || data?.returns || data?.rows || data?.results || [];
+
+      state.returns = rows.map(normalizeReturn).filter(function (row) {
+        return !!row.id;
+      });
+
+      renderReturnHistory();
+    } catch (err) {
+      console.warn("Return history load skipped:", err);
+      body.innerHTML =
+        '<tr><td colspan="5" class="text-center py-3 text-muted">Return history unavailable or empty.</td></tr>';
+    }
+  }
+
   function renderInvoiceList() {
     const tbody = document.getElementById("axtorReturnInvoicesTbody");
     const count = document.getElementById("axtorReturnsCount");
@@ -250,7 +285,7 @@
             <td class="text-end">
               <button type="button" class="btn btn-sm btn-outline-success" data-return-select-invoice="${escapeAttr(
                 doc.id
-              )}">
+              )}" ${state.posting ? "disabled" : ""}>
                 Select
               </button>
             </td>
@@ -279,6 +314,7 @@
       state.returnItems.set(String(key), {
         key: String(key),
         productId: line.productId || "",
+        salesDocumentItemId: line.id || null,
         name: line.name || "Item",
         sku: line.sku || "-",
         soldQty: toNumber(line.qty || line.quantity),
@@ -292,7 +328,7 @@
     renderSelectedInvoice();
     updateSummary();
 
-    showToast("Invoice selected", doc.documentNoText + " loaded for return preview.", "success");
+    showToast("Invoice selected", doc.documentNoText + " loaded for return.", "success");
   }
 
   function renderSelectedInvoice() {
@@ -305,7 +341,7 @@
 
     if (!doc) {
       box.innerHTML =
-        '<div class="text-muted">Select backend invoice to preview return items.</div>';
+        '<div class="text-muted">Select backend invoice to return items.</div>';
       tbody.innerHTML =
         '<tr><td colspan="6" class="text-center py-4 text-muted">No invoice selected.</td></tr>';
       return;
@@ -345,10 +381,11 @@
               <input type="number" min="0" max="${escapeAttr(item.soldQty)}" step="0.01"
                 class="form-control form-control-sm text-end"
                 value="${toNumber(item.returnQty).toFixed(2)}"
-                data-return-qty="${escapeAttr(item.key)}">
+                data-return-qty="${escapeAttr(item.key)}"
+                ${state.posting ? "disabled" : ""}>
             </td>
             <td class="text-end"><strong>${money(item.total)}</strong></td>
-            <td class="text-muted">Preview only</td>
+            <td>${item.returnQty > 0 ? '<span class="badge text-bg-warning">Return</span>' : '<span class="text-muted">No return</span>'}</td>
           </tr>
         `;
       })
@@ -363,14 +400,8 @@
     item.returnQty = qty;
     item.total = roundMoney(qty * toNumber(item.rate));
 
-    updateSummary();
-    renderReturnTotalsOnly();
-  }
-
-  function renderReturnTotalsOnly() {
-    const tbody = document.getElementById("axtorReturnItemsTbody");
-    if (!tbody) return;
     renderSelectedInvoice();
+    updateSummary();
   }
 
   function updateSummary() {
@@ -392,17 +423,17 @@
     const postBtn = document.querySelector("[data-returns-post]");
     const previewBtn = document.querySelector("[data-returns-preview]");
 
-    if (previewBtn) previewBtn.disabled = !state.selectedInvoice || totalAmount <= 0;
+    if (previewBtn) previewBtn.disabled = !state.selectedInvoice || totalAmount <= 0 || state.posting;
     if (postBtn) {
-      postBtn.disabled = true;
-      postBtn.title = "Phase 5A preview only. Backend POST comes in Phase 5B.";
+      postBtn.disabled = !state.selectedInvoice || totalAmount <= 0 || state.posting;
+      postBtn.title = postBtn.disabled ? "Select invoice and return quantity first." : "Post return to backend.";
     }
   }
 
   function previewReturnPayload() {
     try {
       const payload = buildReturnPayload();
-      console.log("Axtor Return Phase 5A payload preview:", payload);
+      console.log("Axtor Return Phase 5B payload preview:", payload);
 
       showToast(
         "Return preview ready",
@@ -423,6 +454,66 @@
     }
   }
 
+  async function postBackendReturn() {
+    if (state.posting) {
+      showToast("Please wait", "Return is already being posted.", "warning");
+      return;
+    }
+
+    let payload;
+    try {
+      payload = buildReturnPayload();
+    } catch (err) {
+      showToast("Return invalid", err.message || "Check return details.", "danger");
+      return;
+    }
+
+    const ok = confirm(
+      "Post backend sales return now?\n\nInvoice: " +
+        payload.documentNo +
+        "\nItems: " +
+        payload.items.length +
+        "\nTotal: " +
+        money(payload.totalAmount)
+    );
+
+    if (!ok) return;
+
+    state.posting = true;
+    setPostButtonLoading(true);
+    updateSummary();
+    showToast("Posting return", "Saving return and increasing stock...", "info");
+
+    try {
+      console.log("Axtor Phase 5B return payload:", payload);
+      const response = await backendPost("/api/v1/sales-returns", payload);
+      const created = normalizeReturn(unwrapData(response));
+
+      state.lastReturnId = created.id || "";
+      state.lastReturnNo = created.returnNo || created.documentNo || "";
+
+      showToast(
+        "Return posted",
+        (state.lastReturnNo ? state.lastReturnNo + " posted. " : "") +
+          "Stock updated by backend.",
+        "success"
+      );
+
+      clearReturnPreview(false);
+      await loadBackendInvoices(false);
+      await loadReturnHistory();
+      refreshProductsIfAvailable();
+      refreshSalesBackendIfAvailable();
+    } catch (err) {
+      console.error("Post sales return failed:", err);
+      showToast("Return failed", err.message || "Unable to post return.", "danger");
+    } finally {
+      state.posting = false;
+      setPostButtonLoading(false);
+      updateSummary();
+    }
+  }
+
   function buildReturnPayload() {
     if (!state.selectedInvoice) {
       throw new Error("Select invoice first.");
@@ -434,13 +525,19 @@
       })
       .map(function (item) {
         return {
+          salesDocumentItemId: item.salesDocumentItemId || null,
           productId: item.productId || null,
           productName: item.name,
           sku: item.sku || null,
           soldQty: item.soldQty,
           returnQty: item.returnQty,
+          quantity: item.returnQty,
+          qty: item.returnQty,
           rate: item.rate,
+          unitPrice: item.rate,
+          price: item.rate,
           lineTotal: item.total,
+          total: item.total,
         };
       });
 
@@ -458,16 +555,37 @@
 
     return {
       sourceSalesDocumentId: state.selectedInvoice.id,
+      salesDocumentId: state.selectedInvoice.id,
       documentNo: state.selectedInvoice.documentNoText,
       customerId: state.selectedInvoice.customerId || null,
       customerName: state.selectedInvoice.customerText,
       reason: reason,
+      notes: reason,
       totalAmount: totalAmount,
+      grandTotal: totalAmount,
       items: items,
     };
   }
 
-  function clearReturnPreview() {
+  function setPostButtonLoading(active) {
+    const btn = document.querySelector("[data-returns-post]");
+    if (!btn) return;
+
+    btn.disabled = !!active;
+
+    if (active) {
+      btn.setAttribute("data-original-html", btn.innerHTML);
+      btn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Posting Return...';
+    } else {
+      btn.innerHTML =
+        btn.getAttribute("data-original-html") ||
+        "Post Backend Return";
+      btn.removeAttribute("data-original-html");
+    }
+  }
+
+  function clearReturnPreview(showMessage) {
     state.selectedInvoice = null;
     state.returnItems.clear();
 
@@ -478,7 +596,71 @@
     renderSelectedInvoice();
     updateSummary();
 
-    showToast("Return cleared", "Return preview has been cleared.", "info");
+    if (showMessage !== false) {
+      showToast("Return cleared", "Return preview has been cleared.", "info");
+    }
+  }
+
+  function refreshSalesBackendIfAvailable() {
+    try {
+      if (
+        window.AxtorSalesBackend &&
+        typeof window.AxtorSalesBackend.loadSavedDocuments === "function"
+      ) {
+        window.AxtorSalesBackend.loadSavedDocuments({
+          preserveSearch: true,
+          preserveTab: true,
+          manual: false,
+        });
+      } else if (
+        window.AxtorSalesBackend &&
+        typeof window.AxtorSalesBackend.refresh === "function"
+      ) {
+        window.AxtorSalesBackend.refresh();
+      }
+    } catch (err) {
+      console.warn("Sales backend refresh skipped:", err);
+    }
+  }
+
+  function refreshProductsIfAvailable() {
+    try {
+      if (
+        window.AxtorSalesBackend &&
+        typeof window.AxtorSalesBackend.loadBackendProducts === "function"
+      ) {
+        window.AxtorSalesBackend.loadBackendProducts();
+      }
+    } catch (err) {
+      console.warn("Products refresh skipped:", err);
+    }
+  }
+
+  function renderReturnHistory() {
+    const body = document.getElementById("axtorReturnHistoryTbody");
+    if (!body) return;
+
+    if (!state.returns.length) {
+      body.innerHTML =
+        '<tr><td colspan="5" class="text-center py-3 text-muted">No backend returns yet.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = state.returns
+      .slice(0, 10)
+      .map(function (row) {
+        const isNew = state.lastReturnId && String(row.id) === String(state.lastReturnId);
+        return `
+          <tr class="${isNew ? "axtor-return-selected-row" : ""}">
+            <td><strong>${escapeHtml(row.returnNo || row.documentNo || "-")}</strong></td>
+            <td>${escapeHtml(row.invoiceNo || row.sourceDocumentNo || "-")}</td>
+            <td>${escapeHtml(row.customerName || "-")}</td>
+            <td class="text-end"><strong>${money(row.totalAmount)}</strong></td>
+            <td>${escapeHtml(formatDate(row.createdAt || row.returnDate || new Date()))}</td>
+          </tr>
+        `;
+      })
+      .join("");
   }
 
   function ensureReturnsPanel() {
@@ -493,7 +675,7 @@
     panel.innerHTML = `
       <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
-          <strong>Backend Sales Returns — Phase 5A</strong>
+          <strong>Backend Sales Returns — Phase 5B</strong>
           <div id="axtorReturnsStatus" class="small text-muted">Ready</div>
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2">
@@ -524,18 +706,18 @@
           </table>
         </div>
 
-        <div class="card axtor-return-preview-card">
+        <div class="card axtor-return-preview-card mb-3">
           <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <strong>Return Preview</strong>
+            <strong>Return Posting</strong>
             <div class="d-flex flex-wrap gap-2">
               <button type="button" class="btn btn-sm btn-outline-secondary" data-returns-clear="1">Clear</button>
               <button type="button" class="btn btn-sm btn-outline-primary" data-returns-preview="1" disabled>Preview Payload</button>
-              <button type="button" class="btn btn-sm btn-success" data-returns-post="1" disabled>Post Return in Phase 5B</button>
+              <button type="button" class="btn btn-sm btn-success" data-returns-post="1" disabled>Post Backend Return</button>
             </div>
           </div>
           <div class="card-body">
             <div id="axtorReturnSelectedBox" class="mb-3">
-              <div class="text-muted">Select backend invoice to preview return items.</div>
+              <div class="text-muted">Select backend invoice to return items.</div>
             </div>
 
             <div class="mb-3">
@@ -570,8 +752,32 @@
               </table>
             </div>
 
-            <div class="alert alert-warning mt-3 mb-0">
-              <strong>Phase 5A Preview Only:</strong> Backend return posting, stock increase, and credit note will be added in Phase 5B.
+            <div class="alert alert-success mt-3 mb-0">
+              <strong>Phase 5B:</strong> Return posts to backend and stock is increased by backend.
+            </div>
+          </div>
+        </div>
+
+        <div class="card axtor-return-preview-card">
+          <div class="card-header">
+            <strong>Backend Return History</strong>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Return No</th>
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th class="text-end">Amount</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody id="axtorReturnHistoryTbody">
+                  <tr><td colspan="5" class="text-center py-3 text-muted">Loading return history...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -677,6 +883,28 @@
       rate: rate,
       unitPrice: rate,
       total: toNumber(line.lineTotal ?? line.total ?? line.amount ?? qty * rate),
+    };
+  }
+
+  function normalizeReturn(raw) {
+    const row = raw || {};
+    return {
+      ...row,
+      id: row.id || row._id || row.returnId || row.salesReturnId,
+      returnNo: row.returnNo || row.documentNo || row.number || "RET",
+      invoiceNo:
+        row.invoiceNo ||
+        row.sourceDocumentNo ||
+        row.originalInvoiceNo ||
+        row.salesDocument?.documentNo ||
+        "",
+      customerName:
+        row.customerName ||
+        row.customer?.name ||
+        row.salesDocument?.customerName ||
+        "",
+      totalAmount: toNumber(row.totalAmount ?? row.grandTotal ?? row.amount ?? row.total ?? 0),
+      createdAt: row.createdAt || row.returnDate || row.date || "",
     };
   }
 
