@@ -45,6 +45,36 @@ function roundQty(value: number) {
   return Math.round((value + Number.EPSILON) * 1000) / 1000;
 }
 
+function returnTrackingStatus(invoiceTotal: number, returnedAmount: number) {
+  if (returnedAmount <= 0) return "not_returned";
+  if (returnedAmount >= invoiceTotal) return "fully_returned";
+  return "partially_returned";
+}
+
+function returnLineKey(value: unknown) {
+  const text = cleanString(value);
+  return text ? text.toLowerCase() : "";
+}
+
+function addReturnedQty(map: Map<string, number>, key: string, qty: number) {
+  if (!key) return;
+  map.set(key, roundQty((map.get(key) || 0) + qty));
+}
+
+function getReturnedQty(map: Map<string, number>, sourceLine: any) {
+  const keys = [
+    returnLineKey(sourceLine?.id),
+    returnLineKey(sourceLine?.productId),
+    returnLineKey(sourceLine?.sku),
+  ].filter(Boolean);
+
+  let max = 0;
+  for (const key of keys) {
+    max = Math.max(max, map.get(key) || 0);
+  }
+  return max;
+}
+
 function toDate(value: unknown): Date {
   const text = cleanString(value);
   if (!text) return new Date();
@@ -250,7 +280,12 @@ export async function createSalesReturn(req: Request, res: Response) {
           businessId,
           documentType: "INVOICE",
         },
-        include: { items: true },
+        include: {
+          items: true,
+          returns: {
+            include: { items: true },
+          },
+        },
       });
 
       if (!sourceDoc) {
@@ -262,6 +297,19 @@ export async function createSalesReturn(req: Request, res: Response) {
         if (line.productId) sourceLines.set(String(line.productId), line);
         sourceLines.set(String(line.id), line);
         if (line.sku) sourceLines.set(String(line.sku).toLowerCase(), line);
+      }
+
+      const alreadyReturnedQty = new Map<string, number>();
+      const existingReturns = Array.isArray(sourceDoc.returns) ? sourceDoc.returns : [];
+
+      for (const previousReturn of existingReturns) {
+        if (String(previousReturn.status || "").toLowerCase() === "cancelled") continue;
+
+        for (const previousItem of previousReturn.items || []) {
+          const qty = roundQty(toNumber(previousItem.returnQty, 0));
+          addReturnedQty(alreadyReturnedQty, returnLineKey(previousItem.productId), qty);
+          addReturnedQty(alreadyReturnedQty, returnLineKey(previousItem.sku), qty);
+        }
       }
 
       const preparedItems = inputItems
@@ -276,8 +324,13 @@ export async function createSalesReturn(req: Request, res: Response) {
 
           if (returnQty <= 0) return null;
 
-          if (soldQty > 0 && returnQty > soldQty) {
-            throw new Error(`Return qty cannot exceed sold qty for ${sourceLine?.name || item.productName || item.name || sku || productId}`);
+          const alreadyReturned = sourceLine ? getReturnedQty(alreadyReturnedQty, sourceLine) : 0;
+          const remainingReturnable = roundQty(Math.max(0, soldQty - alreadyReturned));
+
+          if (soldQty > 0 && returnQty > remainingReturnable) {
+            throw new Error(
+              `Return qty cannot exceed remaining returnable qty for ${sourceLine?.name || item.productName || item.name || sku || productId}. Sold: ${soldQty}, Already returned: ${alreadyReturned}, Remaining: ${remainingReturnable}`
+            );
           }
 
           const rate = roundMoney(toNumber(item.rate ?? item.unitPrice ?? sourceLine?.rate, 0));
@@ -297,6 +350,8 @@ export async function createSalesReturn(req: Request, res: Response) {
             soldQty,
             returnQty,
             rate,
+            alreadyReturned,
+            remainingReturnable,
             total,
           };
         })
@@ -310,6 +365,8 @@ export async function createSalesReturn(req: Request, res: Response) {
           soldQty: number;
           returnQty: number;
           rate: number;
+          alreadyReturned: number;
+          remainingReturnable: number;
           total: number;
         }>;
 
@@ -414,6 +471,28 @@ export async function createSalesReturn(req: Request, res: Response) {
           },
         });
       }
+
+      const previousReturnedAmount = roundMoney(toNumber(sourceDoc.returnedAmount, 0));
+      const nextReturnedAmount = roundMoney(previousReturnedAmount + total);
+      const nextReturnCount = Number(sourceDoc.returnCount || 0) + 1;
+      const sourceTotal = roundMoney(toNumber(sourceDoc.total, 0));
+      const nextReturnStatus = returnTrackingStatus(sourceTotal, nextReturnedAmount);
+
+      await tx.salesDocument.update({
+        where: { id: sourceDoc.id },
+        data: {
+          returnStatus: nextReturnStatus,
+          returnedAmount: nextReturnedAmount,
+          returnCount: nextReturnCount,
+          metadata: {
+            ...(sourceDoc.metadata && typeof sourceDoc.metadata === "object" ? sourceDoc.metadata : {}),
+            lastReturnNo: returnNo,
+            lastReturnId: salesReturn.id,
+            lastReturnedAmount: total,
+            lastReturnedAt: new Date().toISOString(),
+          },
+        },
+      });
 
       return salesReturn;
     });
