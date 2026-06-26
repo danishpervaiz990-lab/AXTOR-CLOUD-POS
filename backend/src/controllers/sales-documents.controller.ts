@@ -62,9 +62,7 @@ function roundMoney(value: number) {
 function normalizeDocumentType(value: unknown): PrismaDocumentType | null {
   const text = cleanString(value);
 
-  if (!text) {
-    return null;
-  }
+  if (!text) return null;
 
   return documentTypeMap[text] ?? documentTypeMap[text.toLowerCase()] ?? null;
 }
@@ -78,9 +76,7 @@ function toApiDocumentType(documentType: PrismaDocumentType): ApiDocumentType {
 function normalizeStatus(value: unknown) {
   const text = cleanString(value);
 
-  if (!text) {
-    return undefined;
-  }
+  if (!text) return undefined;
 
   const status = text.toUpperCase();
   const allowed = [
@@ -99,15 +95,11 @@ function normalizeStatus(value: unknown) {
 function toDate(value: unknown): Date | undefined {
   const text = cleanString(value);
 
-  if (!text) {
-    return undefined;
-  }
+  if (!text) return undefined;
 
   const date = new Date(text);
 
-  if (Number.isNaN(date.getTime())) {
-    return undefined;
-  }
+  if (Number.isNaN(date.getTime())) return undefined;
 
   return date;
 }
@@ -131,18 +123,25 @@ function formatItem(item: any) {
     description: item.description,
     unit: item.unit,
     qty: Number(item.qty),
+    quantity: Number(item.qty),
     rate: Number(item.rate),
+    unitPrice: Number(item.rate),
     price: Number(item.price),
     discount: Number(item.discount),
     taxRate: Number(item.taxRate),
     tax: Number(item.tax),
     total: Number(item.total),
+    lineTotal: Number(item.total),
     createdAt: item.createdAt,
   };
 }
 
 function formatSalesDocument(document: any) {
   const documentType = String(document.documentType) as PrismaDocumentType;
+
+  const total = Number(document.total || 0);
+  const paid = Number(document.paid || 0);
+  const balance = Number(document.balance || 0);
 
   return {
     id: document.id,
@@ -167,17 +166,32 @@ function formatSalesDocument(document: any) {
     subtotal: Number(document.subtotal),
     discount: Number(document.discount),
     tax: Number(document.tax),
-    total: Number(document.total),
-    paid: Number(document.paid),
-    balance: Number(document.balance),
+
+    total,
+    amount: total,
+    totalAmount: total,
+    grandTotal: total,
+    netAmount: total,
+
+    paid,
+    paidAmount: paid,
+    amountPaid: paid,
+    receivedAmount: paid,
+
+    balance,
+    balanceAmount: balance,
     creditAmount: Number(document.creditAmount),
+
     customerCreditApplied: document.customerCreditApplied,
     dueDate: document.dueDate,
     issuedAt: document.issuedAt,
+    documentDate: document.issuedAt,
+    date: document.issuedAt,
     metadata: document.metadata,
     createdAt: document.createdAt,
     updatedAt: document.updatedAt,
     items: Array.isArray(document.items) ? document.items.map(formatItem) : [],
+    lines: Array.isArray(document.items) ? document.items.map(formatItem) : [],
   };
 }
 
@@ -192,36 +206,21 @@ export async function listSalesDocuments(req: Request, res: Response) {
       });
     }
 
-    const where: any = {
-      businessId,
-    };
+    const where: any = { businessId };
 
     const documentType = normalizeDocumentType(req.query.documentType);
-
-    if (documentType) {
-      where.documentType = documentType;
-    }
+    if (documentType) where.documentType = documentType;
 
     const customerId = cleanString(req.query.customerId);
-
-    if (customerId) {
-      where.customerId = customerId;
-    }
+    if (customerId) where.customerId = customerId;
 
     const status = normalizeStatus(req.query.status);
-
-    if (status) {
-      where.status = status;
-    }
+    if (status) where.status = status;
 
     const documents = await (prisma as any).salesDocument.findMany({
       where,
-      orderBy: {
-        createdAt: "desc",
-      },
-      include: {
-        items: true,
-      },
+      orderBy: { createdAt: "desc" },
+      include: { items: true },
       take: 100,
     });
 
@@ -260,13 +259,8 @@ export async function getSalesDocumentById(req: Request, res: Response) {
     }
 
     const document = await (prisma as any).salesDocument.findFirst({
-      where: {
-        id,
-        businessId,
-      },
-      include: {
-        items: true,
-      },
+      where: { id, businessId },
+      include: { items: true },
     });
 
     if (!document) {
@@ -327,6 +321,7 @@ export async function createSalesDocument(req: Request, res: Response) {
     const branchId = cleanString(req.body?.branchId);
     const warehouseId = cleanString(req.body?.warehouseId);
     const customerId = cleanString(req.body?.customerId);
+
     let customerName =
       cleanString(req.body?.customerName) ||
       cleanString(req.body?.customerNameSnapshot) ||
@@ -335,19 +330,11 @@ export async function createSalesDocument(req: Request, res: Response) {
     const result = await (prisma as any).$transaction(async (tx: any) => {
       if (customerId) {
         const customer = await tx.customer.findFirst({
-          where: {
-            id: customerId,
-            businessId,
-          },
-          select: {
-            id: true,
-            name: true,
-          },
+          where: { id: customerId, businessId },
+          select: { id: true, name: true },
         });
 
-        if (!customer) {
-          throw new Error("Invalid customer for this business");
-        }
+        if (!customer) throw new Error("Invalid customer for this business");
 
         customerName = customer.name;
       }
@@ -367,9 +354,7 @@ export async function createSalesDocument(req: Request, res: Response) {
       const products = await tx.product.findMany({
         where: {
           businessId,
-          id: {
-            in: productIds,
-          },
+          id: { in: productIds },
           deleted: false,
         },
       });
@@ -390,9 +375,7 @@ export async function createSalesDocument(req: Request, res: Response) {
         const productId = cleanString(item.productId) as string;
         const product = productById.get(productId);
 
-        if (!product) {
-          throw new Error(`Product not found: ${productId}`);
-        }
+        if (!product) throw new Error(`Product not found: ${productId}`);
 
         const qty = toNumber(item.qty);
 
@@ -404,6 +387,7 @@ export async function createSalesDocument(req: Request, res: Response) {
           item.unitPrice ?? item.rate ?? item.price,
           Number(product.price || 0)
         );
+
         const linePrice = roundMoney(qty * rate);
         const discount = toNumber(item.discountAmount ?? item.discount);
         const taxRate = toNumber(item.taxRate);
@@ -436,16 +420,22 @@ export async function createSalesDocument(req: Request, res: Response) {
 
       const headerDiscount = toNumber(req.body?.discount ?? req.body?.discountTotal);
       discountTotal = roundMoney(discountTotal + headerDiscount);
+
       const total = roundMoney(subtotal - discountTotal + taxTotal);
+
       const paid =
         documentType === "INVOICE"
           ? Math.min(Math.max(0, toNumber(req.body?.paid ?? req.body?.paidTotal)), total)
           : 0;
+
       const balance = documentType === "INVOICE" ? roundMoney(total - paid) : 0;
+
       const paymentStatus =
         documentType === "INVOICE" ? getPaymentStatus(total, paid) : "not_applicable";
+
       const stockStatus = documentType === "INVOICE" ? "posted" : "not_posted";
       const documentPrefix = getDocumentPrefix(documentType as any);
+
       const documentNo = await getNextDocumentNumber(
         tx,
         businessId,
@@ -518,9 +508,7 @@ export async function createSalesDocument(req: Request, res: Response) {
             })),
           },
         },
-        include: {
-          items: true,
-        },
+        include: { items: true },
       });
 
       if (documentType === "INVOICE") {
@@ -530,9 +518,7 @@ export async function createSalesDocument(req: Request, res: Response) {
           const afterQty = roundMoney(beforeQty - item.qty);
 
           await tx.product.update({
-            where: {
-              id: item.productId,
-            },
+            where: { id: item.productId },
             data: {
               currentStock: {
                 decrement: item.qty,
