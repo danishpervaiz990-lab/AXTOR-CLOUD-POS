@@ -37,7 +37,7 @@
 
   window.AxtorSalesBackend = {
     exists: true,
-    version: "20260626-phase3-sales-step3-production-ux-full",
+    version: "20260626-phase5c-sales-return-tracking-ui-full",
     init,
     refresh: loadSavedDocuments,
     refreshProducts: loadBackendProducts,
@@ -778,6 +778,9 @@
         doc.customerText,
         doc.dateText,
         doc.statusText,
+        doc.returnStatusText,
+        doc.returnedAmount,
+        doc.returnCount,
         doc.lpoText,
         doc.poText,
       ]
@@ -805,7 +808,10 @@
             <td>${escapeHtml(doc.dateText)}</td>
             <td class="text-end"><strong>${money(doc.amount)}</strong></td>
             <td class="text-end">${money(doc.paidAmount)}</td>
-            <td>${statusBadge(doc.statusText)}</td>
+            <td>
+              ${statusBadge(doc.statusText)}
+              ${returnBadge(doc)}
+            </td>
             <td class="text-end text-nowrap">
               <button type="button" class="btn btn-sm btn-outline-primary me-1" data-sales-view-id="${escapeAttr(
                 doc.id
@@ -868,6 +874,9 @@
             ${infoBox("Amount", money(doc.amount))}
             ${infoBox("Paid Amount", money(doc.paidAmount))}
             ${infoBox("Status", doc.statusText || "-")}
+            ${infoBox("Return Status", doc.returnStatusText || "Not Returned")}
+            ${infoBox("Returned Amount", money(doc.returnedAmount || 0))}
+            ${infoBox("Return Count", String(doc.returnCount || 0))}
           </div>
 
           <div class="table-responsive">
@@ -962,6 +971,9 @@
           ${infoBox("Amount", money(doc.amount))}
           ${infoBox("Paid Amount", money(doc.paidAmount))}
           ${infoBox("Status", doc.statusText || "-")}
+          ${infoBox("Return Status", doc.returnStatusText || "Not Returned")}
+          ${infoBox("Returned Amount", money(doc.returnedAmount || 0))}
+          ${infoBox("Return Count", String(doc.returnCount || 0))}
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle mb-0">
@@ -1582,6 +1594,13 @@
       paidAmount: paidAmount,
       statusText:
         doc.status || doc.paymentStatus || doc.documentStatus || (doc.isPosted ? "posted" : "draft"),
+      returnStatus:
+        doc.returnStatus || doc.return_status || doc.returnState || "not_returned",
+      returnStatusText: returnStatusLabel(
+        doc.returnStatus || doc.return_status || doc.returnState || "not_returned"
+      ),
+      returnedAmount: toNumber(doc.returnedAmount ?? doc.return_amount ?? doc.totalReturned ?? 0),
+      returnCount: toNumber(doc.returnCount ?? doc.returnsCount ?? doc.return_count ?? 0),
       lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
     };
   }
@@ -1711,6 +1730,46 @@
       <div class="axtor-info-box">
         <div class="axtor-info-label">${escapeHtml(label)}</div>
         <div class="axtor-info-value">${escapeHtml(value || "-")}</div>
+      </div>
+    `;
+  }
+
+
+  function returnStatusLabel(status) {
+    const value = String(status || "not_returned").toLowerCase();
+
+    if (value.includes("fully")) return "Fully Returned";
+    if (value.includes("partial")) return "Partially Returned";
+    if (value.includes("returned") && !value.includes("not")) return "Returned";
+
+    return "Not Returned";
+  }
+
+  function returnBadge(doc) {
+    const status = String(doc?.returnStatus || "").toLowerCase();
+    const amount = toNumber(doc?.returnedAmount || 0);
+    const count = toNumber(doc?.returnCount || 0);
+
+    if ((!status || status === "not_returned") && amount <= 0 && count <= 0) {
+      return "";
+    }
+
+    let cls = "axtor-return-mini-badge warning";
+    let label = doc.returnStatusText || "Returned";
+
+    if (status.includes("fully")) {
+      cls = "axtor-return-mini-badge danger";
+      label = "Fully Returned";
+    } else if (status.includes("partial")) {
+      cls = "axtor-return-mini-badge warning";
+      label = "Partially Returned";
+    }
+
+    return `
+      <div class="mt-1">
+        <span class="${cls}">
+          ${escapeHtml(label)} · ${money(amount)} · ${escapeHtml(count)} return(s)
+        </span>
       </div>
     `;
   }
@@ -1885,6 +1944,28 @@
       .axtor-toast-info .toast-header {
         background: rgba(13, 202, 240, 0.12);
       }
+
+
+      .axtor-return-mini-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.14rem 0.48rem;
+        font-size: 0.72rem;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      .axtor-return-mini-badge.warning {
+        color: #7a5b00;
+        background: rgba(255, 193, 7, 0.22);
+      }
+
+      .axtor-return-mini-badge.danger {
+        color: #842029;
+        background: rgba(220, 53, 69, 0.14);
+      }
+
 
       body.retro-theme #axtorSalesBackendPanel,
       body.retro-theme #axtorSalesCreateToolbar,
