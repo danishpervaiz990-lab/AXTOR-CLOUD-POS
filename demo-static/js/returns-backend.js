@@ -31,7 +31,7 @@
 
   window.AxtorReturnsBackend = {
     exists: true,
-    version: "20260626-phase5b-returns-backend-posting-full",
+    version: "20260626-phase5c-returns-return-tracking-ui-full",
     init,
     refresh: loadBackendInvoices,
     loadBackendInvoices,
@@ -252,6 +252,9 @@
         doc.customerText,
         doc.dateText,
         doc.statusText,
+        doc.returnStatusText,
+        doc.returnedAmount,
+        doc.returnCount,
         doc.lpoText,
         doc.poText,
         doc.amount,
@@ -281,12 +284,15 @@
             <td>${escapeHtml(doc.dateText)}</td>
             <td class="text-end"><strong>${money(doc.amount)}</strong></td>
             <td class="text-end">${money(doc.paidAmount)}</td>
-            <td>${statusBadge(doc.statusText)}</td>
+            <td>
+              ${statusBadge(doc.statusText)}
+              ${returnBadge(doc)}
+            </td>
             <td class="text-end">
-              <button type="button" class="btn btn-sm btn-outline-success" data-return-select-invoice="${escapeAttr(
+              <button type="button" class="btn btn-sm ${isFullyReturned(doc) ? "btn-outline-secondary" : "btn-outline-success"}" data-return-select-invoice="${escapeAttr(
                 doc.id
-              )}" ${state.posting ? "disabled" : ""}>
-                Select
+              )}" ${state.posting || isFullyReturned(doc) ? "disabled" : ""}>
+                ${isFullyReturned(doc) ? "Fully Returned" : "Select"}
               </button>
             </td>
           </tr>
@@ -302,6 +308,11 @@
 
     if (!doc) {
       showToast("Invoice not found", "Please refresh and try again.", "danger");
+      return;
+    }
+
+    if (isFullyReturned(doc)) {
+      showToast("Fully returned", "This invoice is already fully returned.", "warning");
       return;
     }
 
@@ -355,6 +366,9 @@
         ${infoBox("Amount", money(doc.amount))}
         ${infoBox("Paid", money(doc.paidAmount))}
         ${infoBox("Status", titleCase(doc.statusText))}
+        ${infoBox("Return Status", doc.returnStatusText || "Not Returned")}
+        ${infoBox("Returned Amount", money(doc.returnedAmount || 0))}
+        ${infoBox("Return Count", String(doc.returnCount || 0))}
       </div>
     `;
 
@@ -864,6 +878,13 @@
       paidAmount: paidAmount,
       statusText:
         doc.status || doc.paymentStatus || doc.documentStatus || (doc.isPosted ? "posted" : "draft"),
+      returnStatus:
+        doc.returnStatus || doc.return_status || doc.returnState || "not_returned",
+      returnStatusText: returnStatusLabel(
+        doc.returnStatus || doc.return_status || doc.returnState || "not_returned"
+      ),
+      returnedAmount: toNumber(doc.returnedAmount ?? doc.return_amount ?? doc.totalReturned ?? 0),
+      returnCount: toNumber(doc.returnCount ?? doc.returnsCount ?? doc.return_count ?? 0),
       lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
     };
   }
@@ -933,6 +954,51 @@
       <div class="axtor-return-info-box">
         <div class="axtor-return-info-label">${escapeHtml(label)}</div>
         <div class="axtor-return-info-value">${escapeHtml(value || "-")}</div>
+      </div>
+    `;
+  }
+
+
+  function returnStatusLabel(status) {
+    const value = String(status || "not_returned").toLowerCase();
+
+    if (value.includes("fully")) return "Fully Returned";
+    if (value.includes("partial")) return "Partially Returned";
+    if (value.includes("returned") && !value.includes("not")) return "Returned";
+
+    return "Not Returned";
+  }
+
+  function isFullyReturned(doc) {
+    const status = String(doc?.returnStatus || "").toLowerCase();
+    return status.includes("fully");
+  }
+
+  function returnBadge(doc) {
+    const status = String(doc?.returnStatus || "").toLowerCase();
+    const amount = toNumber(doc?.returnedAmount || 0);
+    const count = toNumber(doc?.returnCount || 0);
+
+    if ((!status || status === "not_returned") && amount <= 0 && count <= 0) {
+      return "";
+    }
+
+    let cls = "axtor-return-status-badge warning";
+    let label = doc.returnStatusText || "Returned";
+
+    if (status.includes("fully")) {
+      cls = "axtor-return-status-badge danger";
+      label = "Fully Returned";
+    } else if (status.includes("partial")) {
+      cls = "axtor-return-status-badge warning";
+      label = "Partially Returned";
+    }
+
+    return `
+      <div class="mt-1">
+        <span class="${cls}">
+          ${escapeHtml(label)} · ${money(amount)} · ${escapeHtml(count)} return(s)
+        </span>
       </div>
     `;
   }
@@ -1067,6 +1133,11 @@
       .axtor-return-status-badge.warning {
         color: #7a5b00;
         background: rgba(255, 193, 7, 0.2);
+      }
+
+      .axtor-return-status-badge.danger {
+        color: #842029;
+        background: rgba(220, 53, 69, 0.14);
       }
 
       .axtor-return-status-badge.muted {
