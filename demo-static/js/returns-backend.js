@@ -33,7 +33,7 @@
 
   window.AxtorReturnsBackend = {
     exists: true,
-    version: "20260710-phase5d-customer-refund-settlement-full",
+    version: "20260710-phase5d-customer-refund-button-handler-fix",
     init,
     refresh: loadBackendInvoices,
     loadBackendInvoices,
@@ -98,6 +98,21 @@
       if (selectBtn) {
         e.preventDefault();
         selectInvoice(selectBtn.getAttribute("data-return-select-invoice"));
+        return;
+      }
+
+      const refundBtn = e.target.closest("[data-refund-invoice]");
+      if (refundBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        openRefundModal(refundBtn.getAttribute("data-refund-invoice"));
+        return;
+      }
+
+      const refundSubmitBtn = e.target.closest("[data-refund-submit]");
+      if (refundSubmitBtn) {
+        e.preventDefault();
+        postCustomerRefund();
         return;
       }
 
