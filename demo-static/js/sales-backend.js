@@ -886,6 +886,9 @@
             ${infoBox("Status", doc.statusText || "-")}
             ${infoBox("Return Status", doc.returnStatusText || "Not Returned")}
             ${infoBox("Returned Amount", money(doc.returnedAmount || 0))}
+          ${infoBox("Refund Status", titleCase(String(doc.refundStatus || "not_refunded").replaceAll("_", " ")))}
+          ${infoBox("Refunded Amount", money(doc.refundedAmount || 0))}
+          ${infoBox("Refund Balance", money(doc.refundBalance || 0))}
             ${infoBox("Return Count", String(doc.returnCount || 0))}
           </div>
 
@@ -983,6 +986,9 @@
           ${infoBox("Status", doc.statusText || "-")}
           ${infoBox("Return Status", doc.returnStatusText || "Not Returned")}
           ${infoBox("Returned Amount", money(doc.returnedAmount || 0))}
+          ${infoBox("Refund Status", titleCase(String(doc.refundStatus || "not_refunded").replaceAll("_", " ")))}
+          ${infoBox("Refunded Amount", money(doc.refundedAmount || 0))}
+          ${infoBox("Refund Balance", money(doc.refundBalance || 0))}
           ${infoBox("Return Count", String(doc.returnCount || 0))}
         </div>
         <div class="table-responsive">
@@ -1611,6 +1617,9 @@
       ),
       returnedAmount: toNumber(doc.returnedAmount ?? doc.return_amount ?? doc.totalReturned ?? 0),
       returnCount: toNumber(doc.returnCount ?? doc.returnsCount ?? doc.return_count ?? 0),
+      refundedAmount: toNumber(doc.refundedAmount ?? doc.refund_amount ?? 0),
+      refundStatus: doc.refundStatus || doc.refund_status || "not_refunded",
+      refundBalance: toNumber(doc.refundBalance ?? 0),
       lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
     };
   }
