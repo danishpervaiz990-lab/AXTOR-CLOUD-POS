@@ -211,17 +211,21 @@
   }
 
   async function backendRequest(method, path, body) {
-    const token = localStorage.getItem(TOKEN_KEY);
+    if (window.AxtorAPI && typeof window.AxtorAPI.request === "function") {
+      return window.AxtorAPI.request(method, path, body);
+    }
 
+    const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
-      throw new Error("Authentication required. Please login again first.");
+      window.location.replace("login.html?reason=authentication-required");
+      throw new Error("Authentication required. Redirecting to login.");
     }
 
     const res = await fetch(API_BASE_URL + path, {
       method: method,
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        ...(method === "GET" ? {} : { "Content-Type": "application/json" }),
         Authorization: "Bearer " + token,
       },
       ...(method === "GET" ? {} : { body: JSON.stringify(body || {}) }),
@@ -230,6 +234,12 @@
     const data = await res.json().catch(function () {
       return null;
     });
+
+    if (res.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      window.location.replace("login.html?reason=session-expired");
+      throw new Error("Session expired. Redirecting to login.");
+    }
 
     if (!res.ok) {
       throw new Error(data?.error?.message || data?.message || "Backend request failed");
