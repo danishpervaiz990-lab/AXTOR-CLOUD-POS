@@ -37,7 +37,7 @@
 
   window.AxtorSalesBackend = {
     exists: true,
-    version: "20260626-phase5c-sales-return-tracking-ui-full",
+    version: "20260710-production-sales-core-compatible",
     init,
     refresh: loadSavedDocuments,
     refreshProducts: loadBackendProducts,
@@ -48,6 +48,12 @@
     exitEditPreview,
     createBackendDocumentFromPage,
     buildCreatePayloadFromPage,
+    renderCart,
+    renderBackendProducts,
+    setCart: function (items) {
+      state.cart = Array.isArray(items) ? items : [];
+      renderCart();
+    },
     getState: function () {
       return state;
     },
@@ -323,7 +329,8 @@
             <div class="small text-muted">Barcode/QR: ${escapeHtml(
               p.barcode || p.qrCode || "-"
             )}</div>
-            <div class="small text-success">ID: ${escapeHtml(p.id)}</div>
+            <div class="small text-success axtor-stock-available">Available Stock: <strong>${escapeHtml(formatQty(p.stock))}</strong></div>
+            <div class="small text-muted axtor-stock-location">Selected warehouse stock is validated again by the backend.</div>
             <div class="d-flex justify-content-between align-items-center mt-2">
               <strong>${money(p.price)}</strong>
               <button type="button" class="btn btn-sm btn-success" data-backend-product-add="${escapeAttr(
@@ -423,6 +430,7 @@
                   item.barcode || item.qrCode || "-"
                 )}</div>
                 <div class="small text-success">productId: ${escapeHtml(item.productId)}</div>
+                <div class="small text-muted axtor-cart-stock"></div>
               </td>
               <td class="text-center">
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-cart-qty="${escapeAttr(
@@ -806,7 +814,7 @@
 
     if (!docs.length) {
       tbody.innerHTML =
-        '<tr><td colspan="8" class="text-center py-4 text-muted">No backend saved documents found.</td></tr>';
+        '<tr><td colspan="9" class="text-center py-4 text-muted">No backend saved documents found.</td></tr>';
       return;
     }
 
@@ -819,6 +827,7 @@
             <td>${escapeHtml(doc.typeText)}</td>
             <td>${escapeHtml(doc.customerText)}</td>
             <td>${escapeHtml(doc.dateText)}</td>
+            <td><div><strong>LPO:</strong> ${escapeHtml(doc.lpoText || "-")}</div><div class="small text-muted"><strong>PO:</strong> ${escapeHtml(doc.poText || "-")}</div></td>
             <td class="text-end">
               <strong>${money(doc.amount)}</strong>
               ${toNumber(doc.refundedAmount) > 0 ? `<div class="small text-success mt-1">Net after refund: ${money(Math.max(0, toNumber(doc.amount) - toNumber(doc.refundedAmount)))}</div>` : ""}
@@ -836,7 +845,7 @@
               <button type="button" class="btn btn-sm btn-outline-warning me-1" data-sales-edit-id="${escapeAttr(
                 doc.id
               )}">Edit</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="alert('Print placeholder only')">Print</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-sales-view-id="${escapeAttr(doc.id)}">Print</button>
             </td>
           </tr>
         `;
@@ -1212,7 +1221,7 @@
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2">
           <span id="axtorSalesBackendCount" class="badge text-bg-light">0 shown</span>
-          <input id="axtorSalesBackendSearch" type="search" class="form-control form-control-sm" style="max-width:220px" placeholder="Search INV / QUO / DN" />
+          <input id="axtorSalesBackendSearch" type="search" class="form-control form-control-sm" style="max-width:220px" placeholder="Search no., customer, LPO, PO, status" />
           <button type="button" class="btn btn-sm btn-outline-success" data-sales-refresh="1">Refresh</button>
         </div>
       </div>
@@ -1225,6 +1234,7 @@
                 <th>Type</th>
                 <th>Customer</th>
                 <th>Date</th>
+                <th>LPO / PO</th>
                 <th class="text-end">Amount</th>
                 <th class="text-end">Paid</th>
                 <th>Status</th>
@@ -1232,7 +1242,7 @@
               </tr>
             </thead>
             <tbody id="axtorSalesBackendTbody">
-              <tr><td colspan="8" class="text-center py-4 text-muted">Waiting for backend data...</td></tr>
+              <tr><td colspan="9" class="text-center py-4 text-muted">Waiting for backend data...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1550,7 +1560,7 @@
       qrCode: p.qrCode || p.qr || p.barcode || "",
       price: toNumber(p.price ?? p.sellingPrice ?? p.salePrice ?? p.unitPrice ?? 0),
       cost: toNumber(p.cost ?? p.costPrice ?? 0),
-      stock: toNumber(p.stock ?? p.openingStock ?? p.quantity ?? 0),
+      stock: toNumber(p.currentStock ?? p.stock ?? p.openingStock ?? p.quantity ?? 0),
     };
   }
 
