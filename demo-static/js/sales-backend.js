@@ -791,6 +791,9 @@
         doc.returnStatusText,
         doc.returnedAmount,
         doc.returnCount,
+        doc.refundStatus,
+        doc.refundedAmount,
+        doc.refundBalance,
         doc.lpoText,
         doc.poText,
       ]
@@ -816,11 +819,15 @@
             <td>${escapeHtml(doc.typeText)}</td>
             <td>${escapeHtml(doc.customerText)}</td>
             <td>${escapeHtml(doc.dateText)}</td>
-            <td class="text-end"><strong>${money(doc.amount)}</strong></td>
+            <td class="text-end">
+              <strong>${money(doc.amount)}</strong>
+              ${toNumber(doc.refundedAmount) > 0 ? `<div class="small text-success mt-1">Net after refund: ${money(Math.max(0, toNumber(doc.amount) - toNumber(doc.refundedAmount)))}</div>` : ""}
+            </td>
             <td class="text-end">${money(doc.paidAmount)}</td>
             <td>
               ${statusBadge(doc.statusText)}
               ${returnBadge(doc)}
+              ${refundBadge(doc)}
             </td>
             <td class="text-end text-nowrap">
               <button type="button" class="btn btn-sm btn-outline-primary me-1" data-sales-view-id="${escapeAttr(
@@ -1788,6 +1795,28 @@
       <div class="mt-1">
         <span class="${cls}">
           ${escapeHtml(label)} · ${money(amount)} · ${escapeHtml(count)} return(s)
+        </span>
+      </div>
+    `;
+  }
+
+  function refundBadge(doc) {
+    const refunded = toNumber(doc?.refundedAmount || 0);
+    const balance = toNumber(doc?.refundBalance || 0);
+    const status = String(doc?.refundStatus || "not_refunded").toLowerCase();
+
+    if (refunded <= 0 && (!status || status === "not_refunded")) {
+      return "";
+    }
+
+    const fullyRefunded = status.includes("fully") || balance <= 0;
+    const label = fullyRefunded ? "Fully Refunded" : "Partially Refunded";
+    const cls = fullyRefunded ? "axtor-return-mini-badge success" : "axtor-return-mini-badge warning";
+
+    return `
+      <div class="mt-1">
+        <span class="${cls}">
+          ${escapeHtml(label)} · ${money(refunded)}${balance > 0 ? ` · Balance ${money(balance)}` : ""}
         </span>
       </div>
     `;
