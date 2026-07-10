@@ -27,15 +27,19 @@
     searchText: "",
     lastReturnId: "",
     lastReturnNo: "",
+    refundPosting: false,
+    refundInvoice: null,
   };
 
   window.AxtorReturnsBackend = {
     exists: true,
-    version: "20260626-phase5c-returns-return-tracking-ui-full",
+    version: "20260710-phase5d-customer-refund-settlement-full",
     init,
     refresh: loadBackendInvoices,
     loadBackendInvoices,
     postBackendReturn,
+    openRefundModal,
+    postCustomerRefund,
     getState: function () {
       return state;
     },
@@ -304,6 +308,7 @@
               )}" ${state.posting || isFullyReturned(doc) ? "disabled" : ""}>
                 ${isFullyReturned(doc) ? "Fully Returned" : "Select"}
               </button>
+              ${toNumber(doc.returnedAmount) > toNumber(doc.refundedAmount) && toNumber(doc.paidAmount) > toNumber(doc.refundedAmount) ? `<button type="button" class="btn btn-sm btn-warning ms-1" data-refund-invoice="${escapeAttr(doc.id)}">Refund Customer</button>` : ""}
             </td>
           </tr>
         `;
@@ -379,6 +384,9 @@
         ${infoBox("Return Status", doc.returnStatusText || "Not Returned")}
         ${infoBox("Returned Amount", money(doc.returnedAmount || 0))}
         ${infoBox("Return Count", String(doc.returnCount || 0))}
+        ${infoBox("Refund Status", refundStatusLabel(doc.refundStatus))}
+        ${infoBox("Refunded Amount", money(doc.refundedAmount || 0))}
+        ${infoBox("Refund Balance", money(doc.refundBalance || 0))}
       </div>
     `;
 
@@ -777,7 +785,7 @@
             </div>
 
             <div class="alert alert-success mt-3 mb-0">
-              <strong>Phase 5B:</strong> Return posts to backend and stock is increased by backend.
+              <strong>Phase 5D:</strong> Return posts to backend; customer refunds are recorded separately for audit accuracy.
             </div>
           </div>
         </div>
@@ -895,6 +903,9 @@
       ),
       returnedAmount: toNumber(doc.returnedAmount ?? doc.return_amount ?? doc.totalReturned ?? 0),
       returnCount: toNumber(doc.returnCount ?? doc.returnsCount ?? doc.return_count ?? 0),
+      refundedAmount: toNumber(doc.refundedAmount ?? doc.refund_amount ?? 0),
+      refundStatus: doc.refundStatus || doc.refund_status || "not_refunded",
+      refundBalance: toNumber(doc.refundBalance ?? Math.max(0, Math.min(doc.returnedAmount ?? 0, paidAmount) - (doc.refundedAmount ?? 0))),
       lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
     };
   }
@@ -1027,6 +1038,51 @@
     }
 
     return `<span class="${cls}">${escapeHtml(titleCase(text))}</span>`;
+  }
+
+
+  function refundStatusLabel(status) {
+    const value=String(status||"not_refunded").toLowerCase();
+    if(value.includes("fully")) return "Fully Refunded";
+    if(value.includes("partial")) return "Partially Refunded";
+    return "Not Refunded";
+  }
+
+  function ensureRefundModal() {
+    if(document.getElementById("axtorRefundModal")) return;
+    const wrap=document.createElement("div");
+    wrap.innerHTML=`<div class="modal fade" id="axtorRefundModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Refund Customer</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="axtorRefundInvoiceInfo" class="alert alert-light"></div><label class="form-label">Refund amount</label><input id="axtorRefundAmount" type="number" min="0.01" step="0.01" class="form-control"><label class="form-label mt-2">Refund method</label><select id="axtorRefundMethod" class="form-select"><option>Cash</option><option>Card reversal</option><option>Bank transfer</option><option>Store credit</option><option>Wallet</option></select><label class="form-label mt-2">Reference number</label><input id="axtorRefundReference" class="form-control"><label class="form-label mt-2">Notes</label><textarea id="axtorRefundNotes" class="form-control" rows="2"></textarea></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-warning" data-refund-submit>Post Refund</button></div></div></div></div>`;
+    document.body.appendChild(wrap.firstElementChild);
+  }
+
+  function openRefundModal(id) {
+    const doc=state.invoices.find(x=>String(x.id)===String(id));
+    if(!doc) return showToast("Invoice not found","Refresh and try again.","danger");
+    const max=roundMoney(Math.max(0,Math.min(toNumber(doc.returnedAmount),toNumber(doc.paidAmount))-toNumber(doc.refundedAmount)));
+    if(max<=0) return showToast("Nothing to refund","No refundable balance remains.","warning");
+    state.refundInvoice=doc; ensureRefundModal();
+    document.getElementById("axtorRefundInvoiceInfo").innerHTML=`<strong>${escapeHtml(doc.documentNoText)}</strong><br>Returned: ${money(doc.returnedAmount)} · Paid: ${money(doc.paidAmount)} · Already refunded: ${money(doc.refundedAmount)} · <strong>Maximum: ${money(max)}</strong>`;
+    document.getElementById("axtorRefundAmount").value=max.toFixed(2);
+    document.getElementById("axtorRefundAmount").max=max.toFixed(2);
+    document.getElementById("axtorRefundReference").value=""; document.getElementById("axtorRefundNotes").value="";
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("axtorRefundModal")).show();
+  }
+
+  async function postCustomerRefund() {
+    if(state.refundPosting||!state.refundInvoice) return;
+    const doc=state.refundInvoice; const amount=roundMoney(toNumber(document.getElementById("axtorRefundAmount")?.value));
+    const max=roundMoney(Math.max(0,Math.min(toNumber(doc.returnedAmount),toNumber(doc.paidAmount))-toNumber(doc.refundedAmount)));
+    if(amount<=0||amount>max) return showToast("Invalid refund",`Amount must be between QAR 0.01 and ${money(max)}.`,"danger");
+    state.refundPosting=true; const btn=document.querySelector("[data-refund-submit]"); if(btn){btn.disabled=true;btn.textContent="Posting...";}
+    try {
+      const payload={salesDocumentId:doc.id,amount,refundMethod:document.getElementById("axtorRefundMethod")?.value,referenceNo:document.getElementById("axtorRefundReference")?.value,notes:document.getElementById("axtorRefundNotes")?.value,refundDate:new Date().toISOString(),idempotencyKey:`refund-${doc.id}-${amount}-${Date.now()}`};
+      await backendPost("/api/v1/refunds",payload);
+      bootstrap.Modal.getInstance(document.getElementById("axtorRefundModal"))?.hide();
+      showToast("Refund posted",`${money(amount)} returned to customer via ${payload.refundMethod}.`,"success");
+      state.refundInvoice=null; await loadBackendInvoices(true); await loadReturnHistory();
+      if(window.AxtorSalesBackend&&typeof window.AxtorSalesBackend.loadBackendDocuments==="function") window.AxtorSalesBackend.loadBackendDocuments();
+    } catch(err){ showToast("Refund failed",err.message||"Unable to post refund.","danger"); }
+    finally {state.refundPosting=false;if(btn){btn.disabled=false;btn.textContent="Post Refund";}}
   }
 
   function ensureToastContainer() {
