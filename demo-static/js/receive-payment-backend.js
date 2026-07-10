@@ -26,11 +26,12 @@
     saving: false,
     lastReceiptNo: "",
     lastPaymentId: "",
+    paymentBatchKey: null,
   };
 
   window.AxtorReceivePaymentBackend = {
     exists: true,
-    version: "20260626-phase4b-receive-payment-posting-full",
+    version: "20260710-production-payment-idempotency",
     init,
     refresh: loadBackendInvoices,
     loadBackendInvoices,
@@ -475,6 +476,7 @@
 
     if (!ok) return;
 
+    state.paymentBatchKey = state.paymentBatchKey || createKey("payment-batch");
     state.saving = true;
     setSaveButtonLoading(true);
     showToast("Saving payment", "Posting payment to backend...", "info");
@@ -492,6 +494,7 @@
           depositAccount: depositAccount,
           referenceNo: referenceNo || null,
           notes: notes || null,
+          idempotencyKey: state.paymentBatchKey + ":" + String(row.salesDocumentId || row.id),
         };
 
         console.log("Axtor Phase 4B payment payload:", payload);
@@ -515,6 +518,7 @@
         "success"
       );
 
+      state.paymentBatchKey = null;
       clearPaymentAfterSave();
 
       await loadBackendInvoices(false);
@@ -529,6 +533,11 @@
       setSaveButtonLoading(false);
       updateSummary();
     }
+  }
+
+  function createKey(prefix) {
+    const random = window.crypto?.randomUUID ? window.crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2);
+    return String(prefix || "request") + "-" + random;
   }
 
   function setSaveButtonLoading(active) {
