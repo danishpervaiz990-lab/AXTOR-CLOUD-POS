@@ -29,11 +29,13 @@
     lastReturnNo: "",
     refundPosting: false,
     refundInvoice: null,
+    returnIdempotencyKey: null,
+    refundIdempotencyKey: null,
   };
 
   window.AxtorReturnsBackend = {
     exists: true,
-    version: "20260710-phase5d-customer-refund-button-handler-fix",
+    version: "20260710-production-returns-financial-summary",
     init,
     refresh: loadBackendInvoices,
     loadBackendInvoices,
@@ -200,7 +202,7 @@
 
     if (tbody) {
       tbody.innerHTML =
-        '<tr><td colspan="7" class="text-center py-4 text-muted">' +
+        '<tr><td colspan="11" class="text-center py-4 text-muted">' +
         inlineSpinner("Loading invoices...") +
         "</td></tr>";
     }
@@ -235,7 +237,7 @@
 
       if (tbody) {
         tbody.innerHTML =
-          '<tr><td colspan="7" class="text-center py-4 text-danger">Failed to load backend invoices.</td></tr>';
+          '<tr><td colspan="11" class="text-center py-4 text-danger">Failed to load backend invoices.</td></tr>';
       }
 
       showToast("Invoice load failed", err.message || "Unable to load backend invoices.", "danger");
@@ -282,6 +284,8 @@
         doc.dateText,
         doc.statusText,
         doc.returnStatusText,
+        doc.refundStatus,
+        doc.paymentStatus,
         doc.returnedAmount,
         doc.returnCount,
         doc.lpoText,
@@ -297,7 +301,7 @@
 
     if (!rows.length) {
       tbody.innerHTML =
-        '<tr><td colspan="7" class="text-center py-4 text-muted">No backend invoices found.</td></tr>';
+        '<tr><td colspan="11" class="text-center py-4 text-muted">No backend invoices found.</td></tr>';
       return;
     }
 
@@ -308,22 +312,29 @@
 
         return `
           <tr class="${active ? "axtor-return-selected-row" : ""}">
-            <td><strong>${escapeHtml(doc.documentNoText)}</strong></td>
+            <td class="axtor-return-sticky-invoice"><strong>${escapeHtml(doc.documentNoText)}</strong></td>
             <td>${escapeHtml(doc.customerText)}</td>
             <td>${escapeHtml(doc.dateText)}</td>
             <td class="text-end"><strong>${money(doc.amount)}</strong></td>
             <td class="text-end">${money(doc.paidAmount)}</td>
-            <td>
-              ${statusBadge(doc.statusText)}
-              ${returnBadge(doc)}
+            <td class="text-end">${money(doc.returnedAmount)}</td>
+            <td class="text-end">${money(doc.refundedAmount)}</td>
+            <td class="text-end ${doc.refundBalance > 0 ? "fw-bold text-warning" : "text-muted"}">${money(doc.refundBalance)}</td>
+            <td class="text-end"><strong>${money(doc.netRetained)}</strong></td>
+            <td class="axtor-financial-status-cell">
+              <div>${statusBadge(doc.paymentStatus || doc.statusText)}</div>
+              <div>${returnBadge(doc)}</div>
+              <div>${refundBadge(doc)}</div>
+              ${doc.refundBalance > 0 ? `<div><span class="badge text-bg-warning">Refund Balance · ${money(doc.refundBalance)}</span></div>` : ""}
             </td>
-            <td class="text-end">
-              <button type="button" class="btn btn-sm ${isFullyReturned(doc) ? "btn-outline-secondary" : "btn-outline-success"}" data-return-select-invoice="${escapeAttr(
-                doc.id
-              )}" ${state.posting || isFullyReturned(doc) ? "disabled" : ""}>
-                ${isFullyReturned(doc) ? "Fully Returned" : "Select"}
-              </button>
-              ${toNumber(doc.returnedAmount) > toNumber(doc.refundedAmount) && toNumber(doc.paidAmount) > toNumber(doc.refundedAmount) ? `<button type="button" class="btn btn-sm btn-warning ms-1" data-refund-invoice="${escapeAttr(doc.id)}">Refund Customer</button>` : ""}
+            <td class="text-end axtor-return-sticky-action">
+              <div class="d-flex flex-wrap justify-content-end gap-1">
+                <button type="button" class="btn btn-sm ${isFullyReturned(doc) ? "btn-outline-secondary" : "btn-outline-success"}" data-return-select-invoice="${escapeAttr(doc.id)}" ${state.posting || isFullyReturned(doc) ? "disabled" : ""}>
+                  ${isFullyReturned(doc) ? "Fully Returned" : "Select"}
+                </button>
+                ${doc.refundBalance > 0 ? `<button type="button" class="btn btn-sm btn-warning" data-refund-invoice="${escapeAttr(doc.id)}">Refund Customer</button>` : `<button type="button" class="btn btn-sm btn-outline-secondary" disabled>${toNumber(doc.returnedAmount) > 0 ? "Fully Refunded" : "No Refund"}</button>`}
+                <button type="button" class="btn btn-sm btn-outline-primary" data-sales-view-id="${escapeAttr(doc.id)}">View</button>
+              </div>
             </td>
           </tr>
         `;
@@ -347,6 +358,7 @@
     }
 
     state.selectedInvoice = doc;
+    state.returnIdempotencyKey = createKey("return", doc.id);
     state.returnItems.clear();
 
     const lines = Array.isArray(doc.lines) ? doc.lines : [];
@@ -608,6 +620,7 @@
       customerName: state.selectedInvoice.customerText,
       reason: reason,
       notes: reason,
+      idempotencyKey: state.returnIdempotencyKey || (state.returnIdempotencyKey = createKey("return", state.selectedInvoice.id)),
       totalAmount: totalAmount,
       grandTotal: totalAmount,
       items: items,
@@ -634,6 +647,7 @@
 
   function clearReturnPreview(showMessage) {
     state.selectedInvoice = null;
+    state.returnIdempotencyKey = null;
     state.returnItems.clear();
 
     const reason = document.getElementById("axtorReturnReason");
@@ -738,17 +752,21 @@
           <table class="table table-sm table-hover align-middle">
             <thead>
               <tr>
-                <th>Invoice</th>
+                <th class="axtor-return-sticky-invoice">Invoice</th>
                 <th>Customer</th>
                 <th>Date</th>
-                <th class="text-end">Amount</th>
-                <th class="text-end">Paid</th>
-                <th>Status</th>
-                <th class="text-end">Action</th>
+                <th class="text-end">Invoice Total</th>
+                <th class="text-end">Paid / Received</th>
+                <th class="text-end">Returned</th>
+                <th class="text-end">Refunded</th>
+                <th class="text-end">Refund Balance</th>
+                <th class="text-end">Net Retained</th>
+                <th>Return / Refund Status</th>
+                <th class="text-end axtor-return-sticky-action">Action</th>
               </tr>
             </thead>
             <tbody id="axtorReturnInvoicesTbody">
-              <tr><td colspan="7" class="text-center py-4 text-muted">Waiting for backend invoices...</td></tr>
+              <tr><td colspan="11" class="text-center py-4 text-muted">Waiting for backend invoices...</td></tr>
             </tbody>
           </table>
         </div>
@@ -919,8 +937,10 @@
       returnedAmount: toNumber(doc.returnedAmount ?? doc.return_amount ?? doc.totalReturned ?? 0),
       returnCount: toNumber(doc.returnCount ?? doc.returnsCount ?? doc.return_count ?? 0),
       refundedAmount: toNumber(doc.refundedAmount ?? doc.refund_amount ?? 0),
+      paymentStatus: doc.paymentStatus || doc.payment_status || doc.status || "unpaid",
       refundStatus: doc.refundStatus || doc.refund_status || "not_refunded",
       refundBalance: toNumber(doc.refundBalance ?? Math.max(0, Math.min(doc.returnedAmount ?? 0, paidAmount) - (doc.refundedAmount ?? 0))),
+      netRetained: toNumber(doc.netRetained ?? Math.max(0, paidAmount - (doc.refundedAmount ?? 0))),
       lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
     };
   }
@@ -1056,6 +1076,14 @@
   }
 
 
+  function refundBadge(doc) {
+    const status = String(doc?.refundStatus || "not_refunded").toLowerCase();
+    const amount = toNumber(doc?.refundedAmount || 0);
+    if (status === "fully_refunded") return `<span class="badge text-bg-success">Fully Refunded · ${money(amount)}</span>`;
+    if (status === "partially_refunded") return `<span class="badge text-bg-warning">Partially Refunded · ${money(amount)}</span>`;
+    return `<span class="badge text-bg-light">Not Refunded · ${money(0)}</span>`;
+  }
+
   function refundStatusLabel(status) {
     const value=String(status||"not_refunded").toLowerCase();
     if(value.includes("fully")) return "Fully Refunded";
@@ -1075,7 +1103,7 @@
     if(!doc) return showToast("Invoice not found","Refresh and try again.","danger");
     const max=roundMoney(Math.max(0,Math.min(toNumber(doc.returnedAmount),toNumber(doc.paidAmount))-toNumber(doc.refundedAmount)));
     if(max<=0) return showToast("Nothing to refund","No refundable balance remains.","warning");
-    state.refundInvoice=doc; ensureRefundModal();
+    state.refundInvoice=doc; state.refundIdempotencyKey=createKey("refund",doc.id); ensureRefundModal();
     document.getElementById("axtorRefundInvoiceInfo").innerHTML=`<strong>${escapeHtml(doc.documentNoText)}</strong><br>Returned: ${money(doc.returnedAmount)} · Paid: ${money(doc.paidAmount)} · Already refunded: ${money(doc.refundedAmount)} · <strong>Maximum: ${money(max)}</strong>`;
     document.getElementById("axtorRefundAmount").value=max.toFixed(2);
     document.getElementById("axtorRefundAmount").max=max.toFixed(2);
@@ -1090,14 +1118,19 @@
     if(amount<=0||amount>max) return showToast("Invalid refund",`Amount must be between QAR 0.01 and ${money(max)}.`,"danger");
     state.refundPosting=true; const btn=document.querySelector("[data-refund-submit]"); if(btn){btn.disabled=true;btn.textContent="Posting...";}
     try {
-      const payload={salesDocumentId:doc.id,amount,refundMethod:document.getElementById("axtorRefundMethod")?.value,referenceNo:document.getElementById("axtorRefundReference")?.value,notes:document.getElementById("axtorRefundNotes")?.value,refundDate:new Date().toISOString(),idempotencyKey:`refund-${doc.id}-${amount}-${Date.now()}`};
+      const payload={salesDocumentId:doc.id,amount,refundMethod:document.getElementById("axtorRefundMethod")?.value,referenceNo:document.getElementById("axtorRefundReference")?.value,notes:document.getElementById("axtorRefundNotes")?.value,refundDate:new Date().toISOString(),idempotencyKey:state.refundIdempotencyKey||(state.refundIdempotencyKey=createKey("refund",doc.id))};
       await backendPost("/api/v1/refunds",payload);
       bootstrap.Modal.getInstance(document.getElementById("axtorRefundModal"))?.hide();
       showToast("Refund posted",`${money(amount)} returned to customer via ${payload.refundMethod}.`,"success");
-      state.refundInvoice=null; await loadBackendInvoices(true); await loadReturnHistory();
+      state.refundInvoice=null; state.refundIdempotencyKey=null; await loadBackendInvoices(true); await loadReturnHistory();
       if(window.AxtorSalesBackend&&typeof window.AxtorSalesBackend.loadBackendDocuments==="function") window.AxtorSalesBackend.loadBackendDocuments();
     } catch(err){ showToast("Refund failed",err.message||"Unable to post refund.","danger"); }
     finally {state.refundPosting=false;if(btn){btn.disabled=false;btn.textContent="Post Refund";}}
+  }
+
+  function createKey(prefix, id) {
+    const random = window.crypto?.randomUUID ? window.crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2);
+    return String(prefix || "request") + "-" + String(id || "global") + "-" + random;
   }
 
   function ensureToastContainer() {
