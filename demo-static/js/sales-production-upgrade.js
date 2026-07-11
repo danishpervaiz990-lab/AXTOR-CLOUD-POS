@@ -18,6 +18,7 @@
     lastDocument: null,
     cartObserver: null,
     stockObserver: null,
+    suppressObservers: false,
   };
 
   window.AxtorSalesProduction = {
@@ -651,14 +652,39 @@
     box.textContent = `Current Balance: ${money(current)} · Credit Limit: ${money(limit)} · Projected Balance: ${money(projected)} · ${limit > 0 && projected > limit ? "CREDIT LIMIT EXCEEDED — override permission required" : "Available After Sale: " + money(Math.max(0, limit - projected))}`;
   }
 
+  // Both observers below call decorateStockDetails()/updatePaymentUI(), which write
+  // innerHTML/textContent back into the very elements being observed. Without a
+  // re-entrancy guard, each self-triggered write immediately re-fires the observer,
+  // creating an infinite MutationObserver loop that pegs the CPU and freezes the
+  // Sales page (the "stuck / unresponsive" bug). The suppressObservers flag breaks
+  // that loop: while a programmatic update is running (and until the resulting
+  // mutation records have been delivered) further observer callbacks are ignored.
+  function withObserversSuppressed(fn) {
+    if (state.suppressObservers) return;
+    state.suppressObservers = true;
+    try {
+      fn();
+    } finally {
+      // MutationObserver callbacks are delivered as microtasks; resetting the flag
+      // in a macrotask (setTimeout) guarantees any mutation records produced by fn()
+      // have already been processed (and skipped) before we allow new ones through.
+      setTimeout(function () {
+        state.suppressObservers = false;
+      }, 0);
+    }
+  }
+
   function observeCart() {
     const attach = function () {
       const target = document.getElementById("axtorBackendCartTbody");
       if (!target || state.cartObserver) return;
       state.cartObserver = new MutationObserver(function () {
-        updatePaymentUI();
-        decorateStockDetails();
-        if (cartSignature() !== state.originalCartSignature) markDirty();
+        if (state.suppressObservers) return;
+        withObserversSuppressed(function () {
+          updatePaymentUI();
+          decorateStockDetails();
+          if (cartSignature() !== state.originalCartSignature) markDirty();
+        });
       });
       state.cartObserver.observe(target, { childList: true, subtree: true, characterData: true });
     };
@@ -673,7 +699,10 @@
     const attach = function () {
       const grid = document.getElementById("axtorBackendProductGridBody");
       if (!grid || state.stockObserver) return;
-      state.stockObserver = new MutationObserver(decorateStockDetails);
+      state.stockObserver = new MutationObserver(function () {
+        if (state.suppressObservers) return;
+        withObserversSuppressed(decorateStockDetails);
+      });
       state.stockObserver.observe(grid, { childList: true, subtree: true });
       decorateStockDetails();
     };
@@ -702,12 +731,14 @@
       const reserved = stock ? number(stock.qtyReserved) : 0;
       const availableBox = card.querySelector(".axtor-stock-available");
       const locationBox = card.querySelector(".axtor-stock-location");
-      if (availableBox) availableBox.innerHTML = `Available Stock: <strong>${escapeHtml(formatQty(available))}</strong>`;
-      if (locationBox) locationBox.textContent = stock
+      const nextAvailableHtml = `Available Stock: <strong>${escapeHtml(formatQty(available))}</strong>`;
+      if (availableBox && availableBox.innerHTML !== nextAvailableHtml) availableBox.innerHTML = nextAvailableHtml;
+      const nextLocationText = stock
         ? `${warehouse?.name || "Selected warehouse"} · Reserved: ${formatQty(reserved)}`
         : hasAnyWarehouseStock
           ? `${warehouse?.name || "Selected warehouse"} · No stock allocated here`
           : `${warehouse?.name || "Selected warehouse"} · Legacy global stock will initialize this warehouse`;
+      if (locationBox && locationBox.textContent !== nextLocationText) locationBox.textContent = nextLocationText;
     });
 
     document.querySelectorAll("#axtorBackendCartTbody tr").forEach(function (row) {
@@ -722,11 +753,12 @@
       const hasAnyWarehouseStock = inventory.some(function (item) { return String(item.productId) === String(productId); });
       const available = stock ? number(stock.available) : (hasAnyWarehouseStock ? 0 : number(product?.stock));
       const reserved = stock ? number(stock.qtyReserved) : 0;
-      box.textContent = stock
+      const nextCartStockText = stock
         ? `${warehouse?.name || "Selected warehouse"}: available ${formatQty(available)}, reserved ${formatQty(reserved)}`
         : hasAnyWarehouseStock
           ? `${warehouse?.name || "Selected warehouse"}: available 0, no stock allocated`
           : `${warehouse?.name || "Selected warehouse"}: legacy available ${formatQty(available)}`;
+      if (box.textContent !== nextCartStockText) box.textContent = nextCartStockText;
     });
   }
 
