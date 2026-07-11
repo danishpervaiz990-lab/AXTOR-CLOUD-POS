@@ -1,4 +1,4 @@
-const CACHE_NAME = 'axtor-pos-cloud-sales-qr-camera-scan-v19-20260618';
+const CACHE_NAME = 'axtor-pos-cloud-auth-sales-v20-20260711';
 const ASSETS = [
   './',
   'index.html',
@@ -29,6 +29,10 @@ const ASSETS = [
   'communications.html',
   'css/style.css',
   'css/retro-pos-theme.css',
+  'js/axtor-api.js',
+  'js/sales-backend.js',
+  'js/receive-payment-backend.js',
+  'js/returns-backend.js',
   'js/core-data.js',
   'js/main.js',
   'js/theme-switcher.js',
