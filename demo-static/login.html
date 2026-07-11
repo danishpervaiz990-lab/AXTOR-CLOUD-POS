@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    try {
+      document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');
+      document.documentElement.classList.remove('theme-retro-pos');
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  </script>
+
+  <title>Login · Axtor POS Cloud</title>
+
+  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/style.css?v=20260620-backend-login1" rel="stylesheet">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f9f78">
+
+  <style>
+    :root {
+      --axtor-green: #0f9f78;
+      --axtor-green-dark: #08775b;
+      --axtor-mint: #4ee3b4;
+      --axtor-ink: #0f172a;
+      --axtor-soft: #f4fbf8;
+      --axtor-card: rgba(255, 255, 255, 0.82);
+      --axtor-border: rgba(15, 159, 120, 0.18);
+      --axtor-shadow: 0 28px 90px rgba(15, 23, 42, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body.axtor-login-page {
+      min-height: 100vh;
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--axtor-ink);
+      background:
+        radial-gradient(circle at 12% 15%, rgba(78, 227, 180, 0.28), transparent 30%),
+        radial-gradient(circle at 86% 20%, rgba(15, 159, 120, 0.20), transparent 28%),
+        linear-gradient(135deg, #f7fffb 0%, #eefbf6 45%, #ffffff 100%);
+      overflow-x: hidden;
+    }
+
+    .axtor-bg-grid {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(15, 159, 120, 0.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 159, 120, 0.055) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.72), transparent 78%);
+    }
+
+    .login-shell {
+      position: relative;
+      z-index: 2;
+      width: min(1180px, calc(100% - 32px));
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 34px;
+      align-items: center;
+      padding: 42px 0;
+    }
+
+    .hero-panel {
+      position: relative;
+      padding: 42px;
+      border: 1px solid rgba(15, 159, 120, 0.14);
+      border-radius: 34px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.76), rgba(255,255,255,0.50)),
+        linear-gradient(135deg, rgba(15,159,120,0.13), rgba(78,227,180,0.07));
+      box-shadow: var(--axtor-shadow);
+      backdrop-filter: blur(22px);
+      overflow: hidden;
+    }
+
+    .hero-panel::after {
+      content: "";
+      position: absolute;
+      right: -110px;
+      bottom: -130px;
+      width: 320px;
+      height: 320px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(15,159,120,0.18), transparent 66%);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 36px;
+    }
+
+    .brand-mark-modern {
+      width: 52px;
+      height: 52px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 900;
+      font-size: 26px;
+      background: linear-gradient(135deg, var(--axtor-green), var(--axtor-mint));
+      box-shadow: 0 14px 34px rgba(15,159,120,0.28);
+    }
+
+    .brand-row h1 {
+      font-size: 24px;
+      line-height: 1;
+      margin: 0;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+    }
+
+    .brand-row span {
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .hero-title {
+      max-width: 640px;
+      margin: 0;
+      font-size: clamp(38px, 5vw, 64px);
+      line-height: 0.95;
+      letter-spacing: -0.07em;
+      font-weight: 900;
+    }
+
+    .hero-title .accent {
+      color: var(--axtor-green);
+    }
+
+    .hero-copy {
+      max-width: 560px;
+      margin: 22px 0 0;
+      color: #475569;
+      font-size: 17px;
+      line-height: 1.75;
+      font-weight: 500;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 34px;
+    }
+
+    .feature-chip {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(15,159,120,0.14);
+    }
+
+    .feature-chip i {
+      color: var(--axtor-green);
+      font-size: 20px;
+    }
+
+    .feature-chip strong {
+      display: block;
+      margin-top: 7px;
+      font-size: 13px;
+      color: #0f172a;
+    }
+
+    .mini-dashboard {
+      margin-top: 34px;
+      padding: 18px;
+      border-radius: 24px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #fff;
+      box-shadow: 0 18px 48px rgba(15,23,42,0.26);
+    }
+
+    .mini-dashboard-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .mini-dashboard-top span {
+      font-size: 12px;
+      color: #a7f3d0;
+      font-weight: 700;
+    }
+
+    .status-pill {
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(15,159,120,0.20);
+      color: #a7f3d0;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .metric-card {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+
+    .metric-card small {
+      color: #94a3b8;
+      font-weight: 700;
+    }
+
+    .metric-card b {
+      display: block;
+      margin-top: 5px;
+      font-size: 18px;
+    }
+
+    .login-panel {
+      padding: 34px;
+      border: 1px solid var(--axtor-border);
+      border-radius: 34px;
+      background: var(--axtor-card);
+      box-shadow: var(--axtor-shadow);
+      backdrop-filter: blur(22px);
+    }
+
+    .login-panel h2 {
+      margin: 0;
+      font-size: 32px;
+      letter-spacing: -0.05em;
+      font-weight: 900;
+    }
+
+    .login-panel .subtitle {
+      color: #64748b;
+      margin: 10px 0 28px;
+      font-weight: 500;
+      line-height: 1.6;
+    }
+
+    .form-label {
+      color: #0f172a;
+      font-weight: 800;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .form-control {
+      min-height: 52px;
+      border-radius: 16px;
+      border: 1px solid rgba(15, 23, 42, 0.10);
+      background: rgba(255,255,255,0.88);
+      font-weight: 600;
+      box-shadow: none !important;
+    }
+
+    .form-control:focus {
+      border-color: rgba(15,159,120,0.52);
+      box-shadow: 0 0 0 4px rgba(15,159,120,0.11) !important;
+    }
+
+    .password-wrap {
+      position: relative;
+    }
+
+    .password-toggle {
+      position: absolute;
+      top: 50%;
+      right: 14px;
+      transform: translateY(-50%);
+      border: 0;
+      background: transparent;
+      color: #64748b;
+      font-size: 18px;
+    }
+
+    .btn-axtor-login {
+      min-height: 54px;
+      border: 0;
+      border-radius: 17px;
+      color: #fff;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--axtor-green), #16c79a);
+      box-shadow: 0 16px 34px rgba(15,159,120,0.28);
+    }
+
+    .btn-axtor-login:hover {
+      color: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 20px 44px rgba(15,159,120,0.34);
+    }
+
+    .btn-axtor-login:disabled {
+      opacity: 0.76;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .support-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 18px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .support-row a {
+      color: var(--axtor-green-dark);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .test-box {
+      margin-top: 22px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(15,159,120,0.08);
+      border: 1px dashed rgba(15,159,120,0.32);
+      color: #0f513c;
+      font-size: 13px;
+      line-height: 1.65;
+      font-weight: 600;
+    }
+
+    .test-box code {
+      color: #075e49;
+      font-weight: 900;
+    }
+
+    .alert {
+      border-radius: 16px;
+      border: 0;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    @media (max-width: 991px) {
+      .login-shell {
+        grid-template-columns: 1fr;
+        padding: 22px 0;
+      }
+
+      .hero-panel {
+        padding: 28px;
+      }
+
+      .feature-grid,
+      .metrics-row {
+        grid-template-columns: 1fr;
+      }
+
+      .login-panel {
+        padding: 26px;
+      }
+    }
+  </style>
+</head>
+
+<body class="axtor-login-page">
+  <div class="axtor-bg-grid"></div>
+
+  <main class="login-shell">
+    <section class="hero-panel">
+      <div class="brand-row">
+        <div class="brand-mark-modern">A</div>
+        <div>
+          <h1>Axtor POS Cloud</h1>
+          <span>Production backend connected POS workspace</span>
+        </div>
+      </div>
+
+      <h2 class="hero-title">
+        Cloud POS built for <span class="accent">modern counters.</span>
+      </h2>
+
+      <p class="hero-copy">
+        Manage sales, quotations, delivery notes, customers, products and stock from one clean workspace powered by your Railway PostgreSQL backend.
+      </p>
+
+      <div class="feature-grid">
+        <div class="feature-chip">
+          <i class="bi bi-shield-check"></i>
+          <strong>Secure login</strong>
+        </div>
+        <div class="feature-chip">
+          <i class="bi bi-database-check"></i>
+          <strong>Live database</strong>
+        </div>
+        <div class="feature-chip">
+          <i class="bi bi-receipt-cutoff"></i>
+          <strong>Sales documents</strong>
+        </div>
+      </div>
+
+      <div class="mini-dashboard">
+        <div class="mini-dashboard-top">
+          <span>Backend status</span>
+          <div class="status-pill"><i class="bi bi-cloud-check me-1"></i> Railway API</div>
+        </div>
+
+        <div class="metrics-row">
+          <div class="metric-card">
+            <small>Auth</small>
+            <b>Ready</b>
+          </div>
+          <div class="metric-card">
+            <small>Products</small>
+            <b>Live</b>
+          </div>
+          <div class="metric-card">
+            <small>Sales API</small>
+            <b>Tested</b>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="login-panel">
+      <h2>Welcome back</h2>
+      <p class="subtitle">
+        Sign in to your Axtor POS Cloud workspace using your backend owner account.
+      </p>
+
+      <form id="loginForm" novalidate>
+        <div id="loginError" class="alert alert-danger d-none" role="alert">
+          Login failed. Please check your details.
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="businessSlug">Workspace</label>
+          <input
+            id="businessSlug"
+            class="form-control"
+            type="text"
+            value="axtor-demo"
+            autocomplete="organization"
+            required
+          >
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="loginEmail">Email address</label>
+          <input
+            id="loginEmail"
+            class="form-control"
+            type="email"
+            autocomplete="username"
+            placeholder="owner@axtorpos.local"
+            required
+          >
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="loginPassword">Password</label>
+          <div class="password-wrap">
+            <input
+              id="loginPassword"
+              class="form-control pe-5"
+              type="password"
+              autocomplete="current-password"
+              placeholder="AxtorTemp12345"
+              required
+            >
+            <button class="password-toggle" id="passwordToggle" type="button" aria-label="Show password">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <label class="form-check">
+            <input class="form-check-input" type="checkbox" checked>
+            <span class="form-check-label fw-semibold">Remember this device</span>
+          </label>
+          <a class="fw-bold text-decoration-none" style="color:#08775b" href="#">Forgot password?</a>
+        </div>
+
+        <button class="btn btn-axtor-login w-100" id="loginButton" type="submit">
+          Login to dashboard
+        </button>
+      </form>
+
+      <div class="support-row">
+        <span><i class="bi bi-lock-fill me-1"></i> Token saved locally</span>
+        <a href="https://axtor-cloud-pos-production.up.railway.app/health" target="_blank" rel="noopener">API health</a>
+      </div>
+
+      <div class="test-box">
+        <div><strong>Production security</strong></div>
+        <div>Use credentials provided by your administrator.</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const API_BASE_URL = 'https://axtor-cloud-pos-production.up.railway.app';
+
+      const form = document.getElementById('loginForm');
+      const error = document.getElementById('loginError');
+      const businessSlugInput = document.getElementById('businessSlug');
+      const emailInput = document.getElementById('loginEmail');
+      const passwordInput = document.getElementById('loginPassword');
+      const loginButton = document.getElementById('loginButton');
+      const passwordToggle = document.getElementById('passwordToggle');
+
+      function showError(message) {
+        if (!error) return;
+        error.textContent = message || 'Login failed. Please check your details.';
+        error.classList.remove('d-none');
+      }
+
+      function hideError() {
+        if (!error) return;
+        error.classList.add('d-none');
+      }
+
+      const loginParams = new URLSearchParams(window.location.search);
+      if (loginParams.get('reason') === 'session-expired') {
+        window.setTimeout(function () {
+          showError('Your session expired. Please sign in again to continue.');
+        }, 0);
+      }
+
+      function setLoading(isLoading) {
+        if (!loginButton) return;
+        loginButton.disabled = isLoading;
+        loginButton.innerHTML = isLoading
+          ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Signing in...'
+          : 'Login to dashboard';
+      }
+
+      passwordToggle?.addEventListener('click', function () {
+        if (!passwordInput) return;
+
+        const isPassword = passwordInput.type === 'password';
+        passwordInput.type = isPassword ? 'text' : 'password';
+
+        passwordToggle.innerHTML = isPassword
+          ? '<i class="bi bi-eye-slash"></i>'
+          : '<i class="bi bi-eye"></i>';
+      });
+
+      form?.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        hideError();
+
+        const businessSlug = (businessSlugInput?.value || '').trim().toLowerCase();
+        const email = (emailInput?.value || '').trim().toLowerCase();
+        const password = passwordInput?.value || '';
+
+        if (!businessSlug || !email || !password) {
+          showError('Workspace, email, and password are required.');
+          return;
+        }
+
+        setLoading(true);
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              businessSlug,
+              email,
+              password
+            })
+          });
+
+          const result = await response.json().catch(function () {
+            return null;
+          });
+
+          if (!response.ok || !result?.ok || !result?.token) {
+            showError(result?.error?.message || 'Invalid business, email, or password.');
+            return;
+          }
+
+          const appUser = {
+            id: result.user?.id || null,
+            name: result.user?.name || 'User',
+            email: result.user?.email || email,
+            role: result.user?.role || 'User',
+            roles: result.user?.roles || [],
+            businessId: result.business?.id || null,
+            businessSlug: result.business?.slug || businessSlug,
+            salesmanId: null
+          };
+
+          localStorage.setItem('axtorApiBaseUrl', API_BASE_URL);
+          localStorage.setItem('axtorAuthToken', result.token);
+          localStorage.setItem('axtorTokenType', result.tokenType || 'Bearer');
+          localStorage.setItem('axtorTokenExpiresIn', String(result.expiresIn || 86400));
+          localStorage.setItem('axtorBusiness', JSON.stringify(result.business || null));
+          localStorage.setItem('currentUser', JSON.stringify(appUser));
+          localStorage.setItem('axtorCurrentUser', JSON.stringify(appUser));
+
+          const sessionCheck = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${result.token}`
+            }
+          });
+          const sessionResult = await sessionCheck.json().catch(function () { return null; });
+          if (!sessionCheck.ok || !sessionResult?.ok) {
+            localStorage.removeItem('axtorAuthToken');
+            showError(sessionResult?.error?.message || 'Login token could not be verified. Please try again.');
+            return;
+          }
+
+          sessionStorage.removeItem('axtorAuthRedirectInProgress');
+
+          const loginParams = new URLSearchParams(window.location.search);
+          const storedReturnUrl = sessionStorage.getItem('axtorAuthReturnUrl');
+          const requestedReturnUrl = loginParams.get('return') || storedReturnUrl || 'index.html';
+          sessionStorage.removeItem('axtorAuthReturnUrl');
+
+          const safeReturnUrl = /^(?![a-z]+:|\/\/)[A-Za-z0-9._~!$&'()*+,;=:@%?\/#-]+$/i.test(requestedReturnUrl)
+            ? requestedReturnUrl
+            : 'index.html';
+
+          window.location.href = safeReturnUrl;
+        } catch (err) {
+          console.error('Axtor backend login failed:', err);
+          showError('Cannot connect to backend API. Please check Railway API and try again.');
+        } finally {
+          setLoading(false);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
