@@ -5,6 +5,22 @@
   const TOKEN_KEY = "axtorAuthToken";
   const AUTH_REDIRECT_GUARD_KEY = "axtorAuthRedirectInProgress";
   const AUTH_RETURN_URL_KEY = "axtorAuthReturnUrl";
+  const inFlightGets = new Map();
+  const responseCache = new Map();
+
+  function getCacheTtl(path) {
+    const value = String(path || "");
+    if (value.includes("/api/v1/auth/me")) return 10000;
+    if (value.includes("/api/v1/products") || value.includes("/api/v1/customers")) return 30000;
+    if (value.includes("/api/v1/sales-documents/context")) return 30000;
+    if (value.includes("/api/v1/sales-documents")) return 2000;
+    return 0;
+  }
+
+  function clearResponseCache() {
+    responseCache.clear();
+    inFlightGets.clear();
+  }
 
   function cleanBaseUrl(value) {
     return String(value || "").trim().replace(/\/+$/, "");
@@ -64,43 +80,61 @@
   }
 
   async function apiRequest(method, path, body) {
+    const requestMethod = String(method || "GET").toUpperCase();
+    const requestPath = String(path || "");
     const token = getToken();
     if (!token) {
       goToLogin("authentication-required", { clearToken: false });
       throw createHttpError("Authentication required. Redirecting to login.", 401, null);
     }
 
-    const headers = { Accept: "application/json", Authorization: "Bearer " + token };
-    const options = { method: String(method || "GET").toUpperCase(), headers: headers, cache: "no-store" };
-    if (body !== undefined && options.method !== "GET" && options.method !== "HEAD") {
-      headers["Content-Type"] = "application/json";
-      options.body = JSON.stringify(body);
+    const cacheKey = requestMethod + " " + buildUrl(requestPath);
+    if (requestMethod === "GET") {
+      const ttl = getCacheTtl(requestPath);
+      const cached = responseCache.get(cacheKey);
+      if (ttl > 0 && cached && (Date.now() - cached.time) < ttl) return cached.data;
+      if (inFlightGets.has(cacheKey)) return inFlightGets.get(cacheKey);
     }
 
-    let response;
-    try {
-      response = await fetch(buildUrl(path), options);
-    } catch (networkError) {
-      throw createHttpError("Cannot connect to Axtor backend. Check your connection and retry.", 0, { cause: "network" });
-    }
+    const execute = async function () {
+      const headers = { Accept: "application/json", Authorization: "Bearer " + token };
+      const options = { method: requestMethod, headers: headers, cache: "no-store" };
+      if (body !== undefined && requestMethod !== "GET" && requestMethod !== "HEAD") {
+        headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
 
-    let data = null;
-    try { data = await response.json(); } catch (_) { data = null; }
+      let response;
+      try {
+        response = await fetch(buildUrl(requestPath), options);
+      } catch (networkError) {
+        throw createHttpError("Cannot connect to Axtor backend. Check your connection and retry.", 0, { cause: "network" });
+      }
 
-    if (response.status === 401) {
-      goToLogin("session-expired", { clearToken: true });
-      throw createHttpError(extractErrorMessage(data, "Session expired."), 401, data);
-    }
+      let data = null;
+      try { data = await response.json(); } catch (_) { data = null; }
 
-    if (response.status === 403) {
-      throw createHttpError(extractErrorMessage(data, "Permission denied."), 403, data);
-    }
+      if (response.status === 401) {
+        clearResponseCache();
+        goToLogin("session-expired", { clearToken: true });
+        throw createHttpError(extractErrorMessage(data, "Session expired."), 401, data);
+      }
+      if (response.status === 403) throw createHttpError(extractErrorMessage(data, "Permission denied."), 403, data);
+      if (!response.ok) throw createHttpError(extractErrorMessage(data, "Backend request failed"), response.status, data);
 
-    if (!response.ok) {
-      throw createHttpError(extractErrorMessage(data, "Backend request failed"), response.status, data);
-    }
+      if (requestMethod === "GET") {
+        const ttl = getCacheTtl(requestPath);
+        if (ttl > 0) responseCache.set(cacheKey, { time: Date.now(), data: data });
+      } else {
+        clearResponseCache();
+      }
+      return data;
+    };
 
-    return data;
+    if (requestMethod !== "GET") return execute();
+    const promise = execute().finally(function () { inFlightGets.delete(cacheKey); });
+    inFlightGets.set(cacheKey, promise);
+    return promise;
   }
 
   async function validateSession() {
@@ -125,6 +159,7 @@
     clearAuthSession: clearAuthSession,
     goToLogin: goToLogin,
     validateSession: validateSession,
+    clearResponseCache: clearResponseCache,
     request: apiRequest,
     apiGet: function (path) { return apiRequest("GET", path); },
     apiPost: function (path, body) { return apiRequest("POST", path, body); },
