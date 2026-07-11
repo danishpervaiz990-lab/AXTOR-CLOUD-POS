@@ -1,0 +1,412 @@
+/* =========================================================
+   AXTOR POS CLOUD — Optional Early 2000s Retro Mart POS Theme
+   Enabled only when html/body has: theme-retro-pos
+   LocalStorage key: axtorThemeStyle = "retro-pos"
+   ========================================================= */
+html.theme-retro-pos{
+  --brand:#315f45;
+  --brand-2:#476f56;
+  --brand-3:#223e32;
+  --accent:#b98735;
+  --danger:#b83b37;
+  --info:#2f5e86;
+  --bg:#d8d2c4;
+  --surface:#eee9da;
+  --surface-2:#dcd6c8;
+  --text:#1f241f;
+  --muted:#585f5b;
+  --border:#827d70;
+  --shadow:4px 4px 0 rgba(47,43,34,.22);
+  --shadow-sm:2px 2px 0 rgba(47,43,34,.18);
+  --sidebar:#cbc3b2;
+  --sidebar-strong:#aea696;
+  --sidebar-text:#1d241e;
+  --sidebar-active:#092f23;
+  --radius:4px;
+  --radius-sm:2px;
+}
+html.theme-retro-pos body{
+  font-family:Consolas,"Courier New",ui-monospace,monospace,system-ui,sans-serif;
+  background:
+    linear-gradient(90deg,rgba(70,66,56,.05) 1px,transparent 1px),
+    linear-gradient(0deg,rgba(70,66,56,.04) 1px,transparent 1px),
+    #d8d2c4;
+  background-size:22px 22px;
+  color:var(--text);
+}
+html.theme-retro-pos a,
+html.theme-retro-pos button,
+html.theme-retro-pos input,
+html.theme-retro-pos select,
+html.theme-retro-pos textarea{
+  font-family:inherit;
+}
+html.theme-retro-pos .mono,
+html.theme-retro-pos .kpi-value,
+html.theme-retro-pos .mini-stat strong,
+html.theme-retro-pos .table td:nth-last-child(-n+2),
+html.theme-retro-pos [id$="Total"],
+html.theme-retro-pos [id$="Grand"],
+html.theme-retro-pos [data-payment-total]{
+  font-family:Consolas,"Courier New",ui-monospace,monospace;
+  font-variant-numeric:tabular-nums;
+}
+html.theme-retro-pos .sidebar{
+  border-radius:6px;
+  background:linear-gradient(180deg,#d7d0bd 0%,#bab19d 100%);
+  border:2px outset #f3eedf;
+  box-shadow:5px 5px 0 rgba(61,55,43,.35);
+  backdrop-filter:none;
+}
+html.theme-retro-pos .sidebar:before{
+  background:linear-gradient(180deg,rgba(255,255,255,.22),transparent 18%);
+}
+html.theme-retro-pos .brand{
+  border-bottom:2px groove #948d7d;
+}
+html.theme-retro-pos .brand-mark{
+  border-radius:4px;
+  color:#fff;
+  background:linear-gradient(180deg,#315f45,#19382b);
+  border:2px outset #5e806b;
+  box-shadow:inset 1px 1px 0 rgba(255,255,255,.35),2px 2px 0 rgba(44,39,31,.3);
+}
+html.theme-retro-pos .brand h1,
+html.theme-retro-pos .brand span,
+html.theme-retro-pos .sidebar-footer{
+  color:#1f241f;
+}
+html.theme-retro-pos .nav-linkx{
+  color:#202820;
+  border-radius:3px;
+  border:1px solid transparent;
+  font-weight:800;
+}
+html.theme-retro-pos .nav-linkx:hover,
+html.theme-retro-pos .nav-linkx.active{
+  background:linear-gradient(180deg,#315f45,#214635);
+  color:#fff;
+  border:1px solid #0f2e22;
+  box-shadow:inset 1px 1px 0 rgba(255,255,255,.28),inset -1px -1px 0 rgba(0,0,0,.25);
+}
+html.theme-retro-pos .nav-linkx.active:after{
+  background:#b7ffbf;
+  border-radius:0;
+  height:14px;
+  width:6px;
+}
+html.theme-retro-pos .topbar{
+  background:#c6d0d7;
+  border-bottom:2px solid #62717b;
+  backdrop-filter:none;
+  box-shadow:0 2px 0 rgba(0,0,0,.18);
+}
+html.theme-retro-pos .page-title h2{
+  letter-spacing:0;
+  color:#14212c;
+  text-transform:uppercase;
+  font-size:1.2rem;
+}
+html.theme-retro-pos .page-title p{
+  color:#394650;
+}
+html.theme-retro-pos .search-pill,
+html.theme-retro-pos .user-chip,
+html.theme-retro-pos .btn-icon{
+  border-radius:3px;
+  border:2px inset #e9eef0;
+  background:#eef1ed;
+  box-shadow:none;
+}
+html.theme-retro-pos .page{
+  background:rgba(232,226,211,.52);
+}
+html.theme-retro-pos .hero{
+  border-radius:4px;
+  border:2px ridge #70828f;
+  background:linear-gradient(180deg,#3d668b,#27455f 52%,#20384d);
+  box-shadow:var(--shadow);
+  color:#fff;
+}
+html.theme-retro-pos .hero:before{
+  content:"Axtor POS Cloud :: Demo Workstation";
+  display:block;
+  margin:-18px -18px 14px;
+  padding:5px 9px;
+  background:linear-gradient(180deg,#244764,#17334a);
+  border-bottom:1px solid rgba(255,255,255,.22);
+  color:#dfefff;
+  font-size:.78rem;
+  font-weight:900;
+  letter-spacing:.03em;
+}
+html.theme-retro-pos .hero:after{display:none;}
+html.theme-retro-pos .hero h3{
+  font-size:1.45rem;
+  letter-spacing:0;
+}
+html.theme-retro-pos .cardx,
+html.theme-retro-pos .modal-content.cardx,
+html.theme-retro-pos .module-card,
+html.theme-retro-pos .hardware-card,
+html.theme-retro-pos .industry-card,
+html.theme-retro-pos .pos-product,
+html.theme-retro-pos .fast-product{
+  border-radius:4px;
+  background:#eee9da;
+  border:2px ridge #f6f1e3;
+  box-shadow:var(--shadow-sm);
+}
+html.theme-retro-pos .cardx-title{
+  margin:-12px -12px 12px;
+  padding:6px 9px;
+  background:linear-gradient(180deg,#4f6f8b,#30475e);
+  color:#fff;
+  border:1px solid #1b3145;
+  font-size:1rem;
+  letter-spacing:.02em;
+  text-transform:uppercase;
+}
+html.theme-retro-pos .mini-stat{
+  border-radius:3px;
+  background:#dcd6c8;
+  border:2px inset #f3eedf;
+}
+html.theme-retro-pos .kpi-card,
+html.theme-retro-pos .quick-card,
+html.theme-retro-pos .theme-tile{
+  border-radius:4px;
+  background:#eee9da;
+  border:2px ridge #f6f1e3;
+  box-shadow:var(--shadow-sm);
+}
+html.theme-retro-pos .theme-tile.active,
+html.theme-retro-pos .theme-style-tile.active{
+  border-color:#1e4b75;
+  box-shadow:0 0 0 3px rgba(47,94,134,.25), inset 0 0 0 1px #fff;
+}
+html.theme-retro-pos .btn,
+html.theme-retro-pos .btn-brand,
+html.theme-retro-pos .btn-soft{
+  border-radius:3px;
+  font-weight:900;
+  letter-spacing:.01em;
+  box-shadow:inset 1px 1px 0 rgba(255,255,255,.55),inset -1px -1px 0 rgba(0,0,0,.23),2px 2px 0 rgba(54,48,37,.25);
+}
+html.theme-retro-pos .btn-brand{
+  border:2px outset #5d7f6a;
+  background:linear-gradient(180deg,#3f7a58,#244f38);
+  color:#fff;
+}
+html.theme-retro-pos .btn-soft{
+  border:2px outset #ebe6d6;
+  background:linear-gradient(180deg,#f6f2e7,#c9c1b0);
+  color:#1f241f;
+}
+html.theme-retro-pos .btn:hover{
+  filter:contrast(1.04) brightness(.98);
+}
+html.theme-retro-pos .form-control,
+html.theme-retro-pos .form-select{
+  border-radius:2px;
+  border:2px inset #f1ecdd;
+  background:#fbf8ea;
+  color:#111b16;
+  box-shadow:none;
+}
+html.theme-retro-pos .form-control:focus,
+html.theme-retro-pos .form-select:focus{
+  border-color:#2f5e86;
+  box-shadow:0 0 0 2px rgba(47,94,134,.25);
+}
+html.theme-retro-pos .nav-tabs{
+  gap:2px;
+  border-bottom:2px solid #7a7568;
+}
+html.theme-retro-pos .nav-tabs .nav-link{
+  border-radius:3px 3px 0 0;
+  border:1px solid #7a7568;
+  background:#cfc7b7;
+  color:#202820;
+  font-weight:900;
+}
+html.theme-retro-pos .nav-tabs .nav-link.active{
+  background:#eee9da;
+  color:#183a2b;
+  box-shadow:none;
+  border-bottom-color:#eee9da;
+}
+html.theme-retro-pos .table-wrap{
+  border-radius:3px;
+  border:2px inset #f1ecdd;
+  background:#fbf8ea;
+}
+html.theme-retro-pos .table{
+  --bs-table-bg:transparent;
+  color:#101511;
+  font-size:.86rem;
+  border-collapse:collapse;
+}
+html.theme-retro-pos .table thead th{
+  background:#9fafbd;
+  color:#102233;
+  border:1px solid #617382;
+  font-size:.72rem;
+  letter-spacing:.04em;
+  padding:.42rem .5rem;
+}
+html.theme-retro-pos .table td{
+  border:1px solid #9a9586;
+  padding:.4rem .5rem;
+  background:#fbf8ea;
+}
+html.theme-retro-pos .table tbody tr:nth-child(even) td{
+  background:#eee8d7;
+}
+html.theme-retro-pos .badge-soft{
+  border-radius:2px;
+  border:1px solid rgba(0,0,0,.25);
+  font-weight:900;
+}
+html.theme-retro-pos .badge-paid{background:#d7f0d1;color:#173e20;}
+html.theme-retro-pos .badge-pending{background:#fff0bf;color:#644000;}
+html.theme-retro-pos .badge-draft{background:#e2e2df;color:#3e4143;}
+html.theme-retro-pos .badge-danger-soft{background:#ffd6d1;color:#741f1c;}
+html.theme-retro-pos .pos-img,
+html.theme-retro-pos .fast-product .product-icon,
+html.theme-retro-pos .quick-icon,
+html.theme-retro-pos .module-card .icon{
+  border-radius:3px;
+  background:#d3dccc;
+  border:2px inset #f1ecdd;
+  color:#315f45;
+}
+html.theme-retro-pos #new-sale .cardx,
+html.theme-retro-pos .terminal-cart .cardx{
+  background:#e8e1cf;
+}
+html.theme-retro-pos #newSaleMetaRow,
+html.theme-retro-pos .scan-box,
+html.theme-retro-pos .pay-grid,
+html.theme-retro-pos .pay-tile{
+  border-radius:3px;
+  border:2px ridge #f6f1e3;
+  background:#d6cfbd;
+  padding:10px;
+}
+html.theme-retro-pos #newSaleProductGrid .pos-product,
+html.theme-retro-pos .fast-grid .fast-product{
+  min-height:150px;
+  background:#f3eedf;
+}
+html.theme-retro-pos #posCartBody td,
+html.theme-retro-pos #terminalCartBody td{
+  font-size:.82rem;
+}
+html.theme-retro-pos #posTotal,
+html.theme-retro-pos #terminalGrand,
+html.theme-retro-pos [data-payment-total]{
+  display:inline-block;
+  min-width:120px;
+  text-align:right;
+  background:#10241b;
+  color:#b8ffc1;
+  border:2px inset #4a6355;
+  padding:2px 8px;
+  text-shadow:0 0 4px rgba(184,255,193,.45);
+}
+html.theme-retro-pos .terminal-shell{
+  gap:14px;
+}
+html.theme-retro-pos .terminal-cart{
+  border-left:4px solid #587085;
+}
+html.theme-retro-pos .terminal-table{
+  max-height:50vh;
+}
+html.theme-retro-pos .kbd-hint,
+html.theme-retro-pos .shortcut{
+  border-radius:2px;
+  background:#222;
+  color:#b8ffc1;
+  border:1px solid #4b4b4b;
+}
+html.theme-retro-pos .modal-content{
+  border-radius:4px;
+  border:2px ridge #f6f1e3;
+}
+html.theme-retro-pos .modal-header{
+  background:linear-gradient(180deg,#4f6f8b,#30475e);
+  color:#fff;
+  border-bottom:1px solid #1b3145;
+}
+html.theme-retro-pos .search-overlay{
+  background:rgba(27,32,28,.6);
+  backdrop-filter:none;
+}
+html.theme-retro-pos .search-box{
+  border-radius:4px;
+  border:2px ridge #f6f1e3;
+  background:#eee9da;
+}
+html.theme-retro-pos .invoice-paper,
+html.theme-retro-pos .print-area,
+html.theme-retro-pos .receipt-80,
+html.theme-retro-pos .invoice-paper .table,
+html.theme-retro-pos .invoice-paper .table td,
+html.theme-retro-pos .invoice-paper .table th{
+  font-family:Arial,Helvetica,sans-serif;
+  background:#fff;
+  color:#111;
+  box-shadow:none;
+}
+html.theme-retro-pos .invoice-paper{
+  border-radius:10px;
+  border:1px solid #e5e7eb;
+}
+html.theme-retro-pos .theme-style-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:12px;
+}
+html.theme-retro-pos .theme-style-tile{
+  border-radius:4px;
+}
+html.theme-retro-pos .retro-preview-bars{
+  display:flex;
+  gap:4px;
+  margin-top:10px;
+}
+html.theme-retro-pos .retro-preview-bars span{
+  display:block;
+  height:14px;
+  border:1px solid rgba(0,0,0,.3);
+  background:#9fafbd;
+}
+html.theme-retro-pos .retro-preview-bars span:nth-child(1){width:34%;background:#cfc7b7;}
+html.theme-retro-pos .retro-preview-bars span:nth-child(2){width:46%;background:#9fafbd;}
+html.theme-retro-pos .retro-preview-bars span:nth-child(3){width:20%;background:#315f45;}
+@media(max-width:720px){
+  html.theme-retro-pos .hero:before{margin:-12px -12px 12px;}
+  html.theme-retro-pos .cardx-title{margin:-8px -8px 10px;}
+  html.theme-retro-pos .terminal-cart{border-left:0;}
+}
+@media print{
+  html.theme-retro-pos body{
+    background:#fff!important;
+    font-family:Arial,Helvetica,sans-serif!important;
+  }
+  html.theme-retro-pos .invoice-paper,
+  html.theme-retro-pos .print-area,
+  html.theme-retro-pos .receipt-80,
+  html.theme-retro-pos .invoice-paper *{
+    box-shadow:none!important;
+    text-shadow:none!important;
+  }
+  html.theme-retro-pos .invoice-paper .table th,
+  html.theme-retro-pos .invoice-paper .table td{
+    background:#fff!important;
+    color:#111!important;
+    border-color:#d1d5db!important;
+  }
+}

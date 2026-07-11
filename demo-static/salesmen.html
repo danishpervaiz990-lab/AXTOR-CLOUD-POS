@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+  <title>Salesmen & Commission · Axtor POS Cloud</title>
+  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet">
+<link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f9f78">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-inner">
+        <a class="brand" href="index.html">
+          <div class="brand-mark">A</div>
+          <div><h1>Axtor POS Cloud</h1><span>Retail • Grocery • Pharmacy • Paint</span></div>
+        </a>
+        <nav class="nav-menu"><a class="nav-linkx" href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
+<a class="nav-linkx" href="terminal.html"><i class="bi bi-upc-scan"></i><span>Terminal</span></a>
+<a class="nav-linkx" href="sales.html"><i class="bi bi-cart-check"></i><span>Sales</span></a>
+<a class="nav-linkx" href="shifts.html"><i class="bi bi-clock-history"></i><span>Shifts / Closing</span></a>
+<a class="nav-linkx" href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
+<a class="nav-linkx active" href="salesmen.html"><i class="bi bi-trophy"></i><span>Salesmen & Commission</span></a>
+<a class="nav-linkx" href="products.html"><i class="bi bi-box-seam"></i><span>Products</span></a>
+<a class="nav-linkx" href="inventory.html"><i class="bi bi-boxes"></i><span>Inventory</span></a>
+<a class="nav-linkx" href="barcode-labels.html"><i class="bi bi-tags"></i><span>Barcode Labels</span></a>
+<a class="nav-linkx" href="purchase.html"><i class="bi bi-bag-plus"></i><span>Purchases</span></a>
+<a class="nav-linkx" href="branches.html"><i class="bi bi-building"></i><span>Branches</span></a>
+<a class="nav-linkx" href="promotions.html"><i class="bi bi-percent"></i><span>Promotions</span></a>
+<a class="nav-linkx" href="loyalty.html"><i class="bi bi-gem"></i><span>Loyalty</span></a>
+<a class="nav-linkx" href="approvals.html"><i class="bi bi-shield-check"></i><span>Approvals</span></a>
+<a class="nav-linkx" href="reports.html"><i class="bi bi-graph-up-arrow"></i><span>Reports</span></a>
+<a class="nav-linkx" href="accounts.html"><i class="bi bi-bank"></i><span>Accounts</span></a>
+<a class="nav-linkx" href="expenses.html"><i class="bi bi-wallet2"></i><span>Expenses</span></a>
+<a class="nav-linkx" href="setup.html"><i class="bi bi-magic"></i><span>Setup Wizard</span></a>
+<a class="nav-linkx" href="notifications.html"><i class="bi bi-bell"></i><span>Notifications</span></a>
+<a class="nav-linkx" href="invoice-designer.html"><i class="bi bi-file-earmark-richtext"></i><span>Invoice Designer</span></a>
+<a class="nav-linkx" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a></nav>
+        <div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br><small>Local Browser Mode</small></div>
+      </div>
+    </aside>
+
+    <div class="sidebar-backdrop"></div>
+    <div class="main">
+      <header class="topbar">
+        <button class="btn-icon d-xl-none" data-sidebar-toggle aria-label="Toggle menu"><i class="bi bi-list"></i></button>
+        <div class="page-title"><h2>Salesmen & Commission</h2><p>Targets, performance, incentives and payout approval.</p></div>
+        <button class="search-pill" data-search-open><i class="bi bi-search"></i><span>Search salesmen, targets, reports...</span><kbd class="shortcut">F8</kbd></button>
+        <a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a>
+        <div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div>
+      </header>
+      <main class="page">
+        <section class="hero mb-4">
+          <span class="smallcaps text-white-50">Sales Team Control</span>
+          <h3>Monthly targets, live achievement and commission payouts.</h3>
+          <p>Capture salesman on Terminal and New Sale invoices, then auto-calculate commission from completed sales.</p>
+          <div class="d-flex gap-2 flex-wrap"><button data-add-salesman class="btn btn-light fw-bold" data-bs-toggle="modal" data-bs-target="#addSalesmanModal"><i class="bi bi-person-plus"></i> Add Salesman</button><a class="btn btn-outline-light fw-bold" href="#performance"><i class="bi bi-graph-up-arrow"></i> View Performance</a></div>
+        </section>
+
+        <div class="d-flex gap-3 align-items-center mb-3 flex-wrap"><div class="d-flex align-items-center gap-2"><label class="form-label mb-0 fw-semibold text-nowrap">Branch:</label><select id="salesmanBranchFilter" class="form-select form-select-sm" style="min-width:160px"><option value="">All Branches</option></select></div></div>
+
+        <ul class="nav nav-tabs mb-3" role="tablist">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#list" type="button"><i class="bi bi-people"></i> Salesmen List</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#targets" type="button"><i class="bi bi-bullseye"></i> Targets & Commission Setup</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#performance" type="button"><i class="bi bi-graph-up-arrow"></i> Performance Dashboard</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#payouts" type="button"><i class="bi bi-cash-coin"></i> Commission Payouts</button></li>
+        </ul>
+
+        <div class="tab-content">
+          <section class="tab-pane fade show active section-anchor" id="list">
+            <div class="cardx">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div><h5 class="cardx-title">Salesmen List</h5><p class="text-muted mb-0">This month sales and target achievement.</p></div>
+                <div class="d-flex gap-2"><input id="salesmenMonth" type="month" class="form-control"><button data-add-salesman class="btn btn-brand" data-bs-toggle="modal" data-bs-target="#addSalesmanModal"><i class="bi bi-plus-lg"></i> Add Salesman</button></div>
+              </div>
+              <div class="table-wrap"><table class="table"><thead><tr><th>ID</th><th>Name</th><th>Branch</th><th>Phone</th><th>This Month Sales</th><th>This Month Target</th><th>Achievement</th><th>Status</th><th>Actions</th></tr></thead><tbody id="salesmenListBody"></tbody></table></div>
+            </div>
+          </section>
+
+          <section class="tab-pane fade section-anchor" id="targets">
+            <div class="cardx">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div><h5 class="cardx-title">Targets & Commission Setup</h5><p class="text-muted mb-0">Set monthly targets and tier-based commission rates.</p></div>
+                <div class="d-flex gap-2"><input id="targetMonth" type="month" class="form-control" style="max-width:180px"><button id="copyTargetsNextMonthBtn" class="btn btn-soft"><i class="bi bi-arrow-right-circle me-1"></i>Copy to Next Month</button></div>
+              </div>
+              <div class="table-wrap"><table class="table"><thead><tr><th>Salesman</th><th>Target Amount</th><th>Target Invoices</th><th>Commission Tiers</th><th>Bonus on Target</th><th>Actions</th></tr></thead><tbody id="targetRowsBody"></tbody></table></div>
+            </div>
+          </section>
+
+          <section class="tab-pane fade section-anchor" id="performance">
+            <div class="row g-3 mb-3">
+              <div class="col-md-3"><div class="mini-stat"><span>Total Team Sales</span><h4 id="teamSales" class="mb-0">QAR 0</h4></div></div>
+              <div class="col-md-3"><div class="mini-stat"><span>Avg Achievement</span><h4 id="avgAchievement" class="mb-0">0%</h4></div></div>
+              <div class="col-md-3"><div class="mini-stat"><span>Commissions Due</span><h4 id="commissionsDue" class="mb-0">QAR 0</h4></div></div>
+              <div class="col-md-3"><div class="mini-stat"><span>Top Performer</span><h4 id="topPerformer" class="mb-0">-</h4></div></div>
+            </div>
+            <div class="cardx mb-3">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="cardx-title">Performance Dashboard</h5><p class="text-muted mb-0">Auto-calculated from completed invoices.</p></div><input id="performanceMonth" type="month" class="form-control" style="max-width:180px"></div>
+              <div class="table-wrap"><table class="table"><thead><tr><th>Salesman</th><th>Target</th><th>Actual Sales</th><th>Achievement</th><th>Invoices</th><th>Rate</th><th>Commission</th><th>Bonus</th><th>Total Due</th></tr></thead><tbody id="performanceBody"></tbody></table></div>
+            </div>
+            <div class="cardx"><h5 class="cardx-title">Target vs Actual Sales</h5><div style="height:340px"><canvas id="salesmanPerformanceChart"></canvas></div></div>
+          </section>
+
+          <section class="tab-pane fade section-anchor" id="payouts">
+            <div class="cardx">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="cardx-title">Commission Payouts</h5><p class="text-muted mb-0">Approve, mark paid, and print commission slips.</p></div><input id="payoutMonth" type="month" class="form-control" style="max-width:180px"></div>
+              <div class="table-wrap"><table class="table"><thead><tr><th>Salesman</th><th>Month</th><th>Sales</th><th>Achievement</th><th>Commission</th><th>Bonus</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="payoutBody"></tbody></table></div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal fade" id="addSalesmanModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content cardx"><div class="modal-header"><h5 class="modal-title fw-bold">Add Salesman</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="editSalesmanId"><div class="row g-3"><div class="col-md-6"><label class="form-label">Name</label><input id="salesmanName" class="form-control" placeholder="Salesman name"></div><div class="col-md-6"><label class="form-label">Phone</label><input id="salesmanPhone" class="form-control"></div><div class="col-md-6"><label class="form-label">Email</label><input id="salesmanEmail" class="form-control" type="email"></div><div class="col-md-6"><label class="form-label">Branch</label><input id="salesmanBranch" class="form-control" value="Main Branch"></div><div class="col-md-6"><label class="form-label">Join Date</label><input id="salesmanJoinDate" class="form-control" type="date"></div></div></div><div class="modal-footer"><button class="btn btn-soft" data-bs-dismiss="modal">Cancel</button><button id="saveSalesmanBtn" class="btn btn-brand">Save Salesman</button></div></div></div></div>
+
+  <div class="modal fade" id="targetModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content cardx"><div class="modal-header"><h5 class="modal-title fw-bold">Set / Edit Sales Target</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="targetId"><div class="row g-3"><div class="col-md-6"><label class="form-label">Salesman</label><select id="targetSalesman" class="form-select"></select></div><div class="col-md-6"><label class="form-label">Month</label><input id="targetMonthInput" type="month" class="form-control"></div><div class="col-md-4"><label class="form-label">Target Amount</label><input id="targetAmount" type="number" class="form-control"></div><div class="col-md-4"><label class="form-label">Target Invoice Count</label><input id="targetInvoices" type="number" class="form-control"></div><div class="col-md-4"><label class="form-label">Bonus on 100%</label><input id="bonusOnTarget" type="number" class="form-control"></div><div class="col-12"><div class="d-flex justify-content-between align-items-center mb-2"><label class="form-label mb-0">Commission Tiers</label><button id="addTierBtn" type="button" class="btn btn-sm btn-soft"><i class="bi bi-plus"></i> Add Tier</button></div><div class="table-wrap"><table class="table"><thead><tr><th>From %</th><th>To %</th><th>Commission Rate %</th><th></th></tr></thead><tbody id="targetTierBody"></tbody></table></div></div><div class="col-12"><label class="form-label">Notes</label><textarea id="targetNotes" class="form-control" rows="2"></textarea></div></div></div><div class="modal-footer"><button class="btn btn-soft" data-bs-dismiss="modal">Cancel</button><button id="saveTargetBtn" class="btn btn-brand">Save Target</button></div></div></div></div>
+
+  <div class="modal fade" id="paidPayoutModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content cardx"><div class="modal-header"><h5 class="modal-title fw-bold">Mark Commission as Paid</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="payoutIndex"><div class="row g-3"><div class="col-md-6"><label class="form-label">Paid Date</label><input id="payoutPaidDate" type="date" class="form-control"></div><div class="col-md-6"><label class="form-label">Payment Method</label><select id="payoutMethod" class="form-select"><option>Cash</option><option>Bank Transfer</option><option>Cheque</option></select></div><div class="col-12"><label class="form-label">Notes</label><textarea id="payoutNotes" class="form-control" rows="2"></textarea></div></div></div><div class="modal-footer"><button class="btn btn-soft" data-bs-dismiss="modal">Cancel</button><button id="confirmPaidBtn" class="btn btn-brand">Save Paid Status</button></div></div></div></div>
+
+
+  <div class="modal fade" id="salesmanHistoryModal" tabindex="-1"><div class="modal-dialog modal-xl"><div class="modal-content cardx"><div class="modal-header"><h5 class="modal-title fw-bold"><i class="bi bi-graph-up-arrow me-2 text-brand"></i><span id="historyModalName">Salesman</span> — Commission History</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="row g-3 mb-4" id="historyStats"></div><div style="height:300px"><canvas id="salesmanHistoryChart"></canvas></div><div class="table-wrap mt-4"><table class="table"><thead><tr><th>Month</th><th>Target</th><th>Actual Sales</th><th>Achievement</th><th>Commission</th><th>Bonus</th><th>Total</th><th>Status</th></tr></thead><tbody id="historyTableBody"></tbody></table></div></div></div></div></div>
+
+  <div class="modal fade" id="disputePayoutModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content cardx"><div class="modal-header"><h5 class="modal-title fw-bold"><i class="bi bi-flag text-warning me-2"></i>Flag Commission Dispute</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="disputePayoutId"><p class="text-muted">Describe the issue with this commission record. This will be sent to the Owner for review.</p><label class="form-label fw-semibold">Dispute Reason</label><textarea id="disputeReason" class="form-control" rows="3" placeholder="e.g. Invoice INV-1045 was assigned to wrong salesman..."></textarea></div><div class="modal-footer"><button class="btn btn-soft" data-bs-dismiss="modal">Cancel</button><button id="submitDisputeBtn" class="btn btn-warning text-white fw-bold">Submit Dispute</button></div></div></div></div>
+
+  <div class="search-overlay" id="globalSearch"><div class="search-box"><div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off"><button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button></div><div class="search-results" id="globalSearchResults"></div></div></div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="js/core-data.js?v=20260618-sales-qr1"></script>
+  <script src="js/charts.js?v=20260618-sales-qr1"></script>
+  <script src="js/main.js?v=20260618-sales-qr1"></script>
+  <script src="js/theme-switcher.js?v=20260618-sales-qr1"></script>
+  <script src="js/app-data.js?v=20260618-sales-qr1"></script>
+  <script src="js/retail-advanced.js?v=20260618-sales-qr1"></script>
+  <script src="js/invoice-templates.js?v=20260618-sales-qr1"></script>
+  <script src="js/axtor-fixes.js?v=20260618-sales-qr1"></script>
+</body>
+</html>
