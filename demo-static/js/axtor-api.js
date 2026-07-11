@@ -1,44 +1,44 @@
 (function () {
   "use strict";
 
-  const API_BASE_URL = "https://axtor-cloud-pos-production.up.railway.app";
+  const DEFAULT_API_BASE_URL = "https://axtor-cloud-pos-production.up.railway.app";
   const TOKEN_KEY = "axtorAuthToken";
   const AUTH_REDIRECT_GUARD_KEY = "axtorAuthRedirectInProgress";
   const AUTH_RETURN_URL_KEY = "axtorAuthReturnUrl";
 
+  function cleanBaseUrl(value) {
+    return String(value || "").trim().replace(/\/+$/, "");
+  }
+
+  function getApiBaseUrl() {
+    const configured = cleanBaseUrl(localStorage.getItem("axtorApiBaseUrl"));
+    return configured || DEFAULT_API_BASE_URL;
+  }
+
   function getToken() {
-    return localStorage.getItem(TOKEN_KEY);
+    const token = String(localStorage.getItem(TOKEN_KEY) || "").trim();
+    return token || null;
   }
 
   function buildUrl(path) {
     const value = String(path || "");
     if (/^https?:\/\//i.test(value)) return value;
-    return API_BASE_URL + (value.startsWith("/") ? value : "/" + value);
+    return getApiBaseUrl() + (value.startsWith("/") ? value : "/" + value);
   }
 
   function clearAuthSession() {
-    [
-      TOKEN_KEY,
-      "axtorTokenType",
-      "axtorTokenExpiresIn",
-      "axtorBusiness",
-      "currentUser",
-      "axtorCurrentUser"
-    ].forEach(function (key) {
-      localStorage.removeItem(key);
-    });
+    [TOKEN_KEY, "axtorTokenType", "axtorTokenExpiresIn", "axtorBusiness", "currentUser", "axtorCurrentUser"]
+      .forEach(function (key) { localStorage.removeItem(key); });
   }
 
   function safeReturnUrl() {
     const file = window.location.pathname.split("/").pop() || "index.html";
-    const query = window.location.search || "";
-    const hash = window.location.hash || "";
-    return file + query + hash;
+    return file + (window.location.search || "") + (window.location.hash || "");
   }
 
-  function goToLogin(reason) {
-    clearAuthSession();
-
+  function goToLogin(reason, options) {
+    const settings = options || {};
+    if (settings.clearToken !== false) clearAuthSession();
     if (window.location.pathname.endsWith("login.html")) return;
     if (sessionStorage.getItem(AUTH_REDIRECT_GUARD_KEY) === "1") return;
 
@@ -53,32 +53,25 @@
   }
 
   function extractErrorMessage(data, fallback) {
-    return (
-      data?.error?.message ||
-      data?.message ||
-      fallback ||
-      "Backend request failed"
-    );
+    return data?.error?.message || data?.message || fallback || "Backend request failed";
+  }
+
+  function createHttpError(message, status, data) {
+    const error = new Error(message);
+    error.status = status;
+    error.data = data;
+    return error;
   }
 
   async function apiRequest(method, path, body) {
     const token = getToken();
-
     if (!token) {
-      goToLogin("authentication-required");
-      throw new Error("Authentication required. Redirecting to login.");
+      goToLogin("authentication-required", { clearToken: false });
+      throw createHttpError("Authentication required. Redirecting to login.", 401, null);
     }
 
-    const headers = {
-      Accept: "application/json",
-      Authorization: "Bearer " + token
-    };
-
-    const options = {
-      method: String(method || "GET").toUpperCase(),
-      headers: headers
-    };
-
+    const headers = { Accept: "application/json", Authorization: "Bearer " + token };
+    const options = { method: String(method || "GET").toUpperCase(), headers: headers, cache: "no-store" };
     if (body !== undefined && options.method !== "GET" && options.method !== "HEAD") {
       headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(body);
@@ -87,63 +80,55 @@
     let response;
     try {
       response = await fetch(buildUrl(path), options);
-    } catch (error) {
-      throw new Error("Cannot connect to Axtor backend. Check your internet connection and try again.");
+    } catch (networkError) {
+      throw createHttpError("Cannot connect to Axtor backend. Check your connection and retry.", 0, { cause: "network" });
     }
 
     let data = null;
-    try {
-      data = await response.json();
-    } catch (error) {
-      data = null;
-    }
+    try { data = await response.json(); } catch (_) { data = null; }
 
     if (response.status === 401) {
-      goToLogin("session-expired");
-      throw new Error("Session expired. Redirecting to login.");
+      goToLogin("session-expired", { clearToken: true });
+      throw createHttpError(extractErrorMessage(data, "Session expired."), 401, data);
+    }
+
+    if (response.status === 403) {
+      throw createHttpError(extractErrorMessage(data, "Permission denied."), 403, data);
     }
 
     if (!response.ok) {
-      const error = new Error(extractErrorMessage(data, "Backend request failed"));
-      error.status = response.status;
-      error.data = data;
-      throw error;
+      throw createHttpError(extractErrorMessage(data, "Backend request failed"), response.status, data);
     }
 
     return data;
   }
 
-  function apiGet(path) {
-    return apiRequest("GET", path);
+  async function validateSession() {
+    if (!getToken()) return { ok: false, status: 401, reason: "missing-token" };
+    try {
+      const result = await apiRequest("GET", "/api/v1/auth/me");
+      return { ok: true, status: 200, data: result };
+    } catch (error) {
+      return { ok: false, status: Number(error?.status || 0), error: error };
+    }
   }
 
-  function apiPost(path, body) {
-    return apiRequest("POST", path, body);
-  }
-
-  function apiPatch(path, body) {
-    return apiRequest("PATCH", path, body);
-  }
-
-  function apiDelete(path) {
-    return apiRequest("DELETE", path);
-  }
-
-  // A successful page load/login may safely clear the one-time redirect guard.
   if (!window.location.pathname.endsWith("login.html") && getToken()) {
     sessionStorage.removeItem(AUTH_REDIRECT_GUARD_KEY);
   }
 
   window.AxtorAPI = {
-    API_BASE_URL: API_BASE_URL,
+    API_BASE_URL: DEFAULT_API_BASE_URL,
     TOKEN_KEY: TOKEN_KEY,
+    getApiBaseUrl: getApiBaseUrl,
     getToken: getToken,
     clearAuthSession: clearAuthSession,
     goToLogin: goToLogin,
+    validateSession: validateSession,
     request: apiRequest,
-    apiGet: apiGet,
-    apiPost: apiPost,
-    apiPatch: apiPatch,
-    apiDelete: apiDelete
+    apiGet: function (path) { return apiRequest("GET", path); },
+    apiPost: function (path, body) { return apiRequest("POST", path, body); },
+    apiPatch: function (path, body) { return apiRequest("PATCH", path, body); },
+    apiDelete: function (path) { return apiRequest("DELETE", path); }
   };
 })();
