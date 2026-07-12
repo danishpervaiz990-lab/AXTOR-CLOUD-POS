@@ -163,6 +163,7 @@
     request: apiRequest,
     apiGet: function (path) { return apiRequest("GET", path); },
     apiPost: function (path, body) { return apiRequest("POST", path, body); },
+    apiPut: function (path, body) { return apiRequest("PUT", path, body); },
     apiPatch: function (path, body) { return apiRequest("PATCH", path, body); },
     apiDelete: function (path) { return apiRequest("DELETE", path); }
   };

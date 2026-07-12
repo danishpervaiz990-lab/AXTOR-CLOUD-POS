@@ -189,13 +189,14 @@
 
   function readSearchDb(){
     try{
+      if(localStorage.getItem('axtorAuthToken')) return {};
       if(window.AxtorCoreData?.db) return window.AxtorCoreData.db() || {};
       return JSON.parse(localStorage.getItem('axtorAdvancedDemoDB') || '{}') || {};
     }catch(e){ return {}; }
   }
   function searchEsc(v){ return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c])); }
   function searchNum(v){ const n=Number(v||0); return isNaN(n)?0:n; }
-  function searchMoney(v){ return 'QAR ' + searchNum(v).toLocaleString(undefined,{minimumFractionDigits:searchNum(v)%1?2:0,maximumFractionDigits:2}); }
+  function searchMoney(v){ if(window.AxtorPlatform?.formatMoney) return window.AxtorPlatform.formatMoney(searchNum(v)); return 'QAR ' + searchNum(v).toLocaleString(undefined,{minimumFractionDigits:searchNum(v)%1?2:0,maximumFractionDigits:2}); }
   function searchDocNo(inv){ return String(inv?.no||inv?.invoiceNo||inv?.documentNo||inv?.id||''); }
   function normalizeSearchDocType(inv){
     const no=searchDocNo(inv);
@@ -317,6 +318,7 @@
   }
 
   function initAccessControl(){
+    if(localStorage.getItem('axtorAuthToken')) return true;
     const pageAccess = {
       'settings.html': ['Owner', 'Manager'],
       'reports.html': ['Owner', 'Manager', 'Accountant'],
@@ -352,6 +354,7 @@
   function initDateYear(){ qsa('[data-year]').forEach(el => el.textContent = new Date().getFullYear()); }
 
   function initToasts(){
+    if(localStorage.getItem('axtorAuthToken')) return;
     qsa('[data-demo-action]').forEach(btn => btn.addEventListener('click', () => {
       const msg = btn.dataset.demoAction || 'Action saved in local mode';
       try{
@@ -373,6 +376,7 @@
     }));
   }
 
-  function init(){ if(initAccessControl() === false) return; initBootstrapFallback(); initTheme(); initSidebar(); initSearch(); initHashTabs(); initDashboardScrollTop(); initDateYear(); initToasts(); }
+  function initPlatformRuntime(){ if(document.querySelector('script[data-axtor-platform]')) return; const script=document.createElement('script'); script.src='js/platform-runtime.js?v=20260712-global-saas1'; script.defer=true; script.dataset.axtorPlatform='1'; document.body.appendChild(script); }
+  function init(){ if(initAccessControl() === false) return; initBootstrapFallback(); initTheme(); initSidebar(); initSearch(); initHashTabs(); initDashboardScrollTop(); initDateYear(); initToasts(); initPlatformRuntime(); }
   document.addEventListener('DOMContentLoaded', init);
 })();

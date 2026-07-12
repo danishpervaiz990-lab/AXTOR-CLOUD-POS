@@ -1,0 +1,133 @@
+AXTOR POS CLOUD — FULL BACKEND BUILD-OUT
+Generated: 2026-07-12
+Comparison base: the two latest project ZIPs supplied by the user
+
+[FRONTEND]
+Added: 23
+Modified: 25
+Deleted: 0
+
+ADDED FILES
+  + demo-static/js/accounts-backend.js
+  + demo-static/js/approvals-backend.js
+  + demo-static/js/backend-page-utils.js
+  + demo-static/js/barcode-labels-backend.js
+  + demo-static/js/branches-backend.js
+  + demo-static/js/communications-backend.js
+  + demo-static/js/dashboard-backend.js
+  + demo-static/js/delivery-backend.js
+  + demo-static/js/expenses-backend.js
+  + demo-static/js/inventory-backend.js
+  + demo-static/js/invoice-designer-backend.js
+  + demo-static/js/invoice-view-backend.js
+  + demo-static/js/loyalty-backend.js
+  + demo-static/js/notifications-backend.js
+  + demo-static/js/promotions-backend.js
+  + demo-static/js/purchase-backend.js
+  + demo-static/js/quotations-backend.js
+  + demo-static/js/reports-backend.js
+  + demo-static/js/salesmen-backend.js
+  + demo-static/js/settings-backend.js
+  + demo-static/js/setup-backend.js
+  + demo-static/js/shifts-backend.js
+  + demo-static/js/terminal-backend.js
+
+MODIFIED FILES
+  * demo-static/accounts.html
+  * demo-static/approvals.html
+  * demo-static/barcode-labels.html
+  * demo-static/branches.html
+  * demo-static/communications.html
+  * demo-static/delivery.html
+  * demo-static/expenses.html
+  * demo-static/index.html
+  * demo-static/inventory.html
+  * demo-static/invoice-designer.html
+  * demo-static/invoice-view.html
+  * demo-static/js/axtor-api.js
+  * demo-static/loyalty.html
+  * demo-static/notifications.html
+  * demo-static/promotions.html
+  * demo-static/purchase.html
+  * demo-static/quotations.html
+  * demo-static/reports.html
+  * demo-static/sales.html
+  * demo-static/salesmen.html
+  * demo-static/settings.html
+  * demo-static/setup.html
+  * demo-static/shifts.html
+  * demo-static/sw.js
+  * demo-static/terminal.html
+
+DELETED FILES
+
+[BACKEND]
+Added: 55
+Modified: 5
+Deleted: 0
+
+ADDED FILES
+  + backend/.env.example
+  + backend/package-lock.json
+  + backend/prisma/migrations/20260709000000_initial_full_schema/migration.sql
+  + backend/prisma/migrations/20260712090000_full_backend_buildout/migration.sql
+  + backend/prisma/migrations/migration_lock.toml
+  + backend/src/controllers/accounts.controller.ts
+  + backend/src/controllers/approvals.controller.ts
+  + backend/src/controllers/branches.controller.ts
+  + backend/src/controllers/communications.controller.ts
+  + backend/src/controllers/dashboard.controller.ts
+  + backend/src/controllers/expenses.controller.ts
+  + backend/src/controllers/inventory.controller.ts
+  + backend/src/controllers/loyalty.controller.ts
+  + backend/src/controllers/notifications.controller.ts
+  + backend/src/controllers/promotions.controller.ts
+  + backend/src/controllers/purchases.controller.ts
+  + backend/src/controllers/reports.controller.ts
+  + backend/src/controllers/salesmen.controller.ts
+  + backend/src/controllers/settings.controller.ts
+  + backend/src/controllers/shifts.controller.ts
+  + backend/src/controllers/suppliers.controller.ts
+  + backend/src/routes/accounts.routes.ts
+  + backend/src/routes/approvals.routes.ts
+  + backend/src/routes/branches.routes.ts
+  + backend/src/routes/communications.routes.ts
+  + backend/src/routes/dashboard.routes.ts
+  + backend/src/routes/expenses.routes.ts
+  + backend/src/routes/inventory.routes.ts
+  + backend/src/routes/loyalty.routes.ts
+  + backend/src/routes/notifications.routes.ts
+  + backend/src/routes/promotions.routes.ts
+  + backend/src/routes/purchases.routes.ts
+  + backend/src/routes/reports.routes.ts
+  + backend/src/routes/salesmen.routes.ts
+  + backend/src/routes/settings.routes.ts
+  + backend/src/routes/shifts.routes.ts
+  + backend/src/routes/suppliers.routes.ts
+  + backend/src/services/accounts.service.ts
+  + backend/src/services/approvals.service.ts
+  + backend/src/services/branches.service.ts
+  + backend/src/services/communications.service.ts
+  + backend/src/services/dashboard.service.ts
+  + backend/src/services/expenses.service.ts
+  + backend/src/services/inventory.service.ts
+  + backend/src/services/loyalty.service.ts
+  + backend/src/services/notifications.service.ts
+  + backend/src/services/numbering.service.ts
+  + backend/src/services/promotions.service.ts
+  + backend/src/services/purchases.service.ts
+  + backend/src/services/reports.service.ts
+  + backend/src/services/salesmen.service.ts
+  + backend/src/services/settings.service.ts
+  + backend/src/services/shifts.service.ts
+  + backend/src/services/suppliers.service.ts
+  + backend/src/utils/http.ts
+
+MODIFIED FILES
+  * backend/package.json
+  * backend/prisma/schema.prisma
+  * backend/railway.toml
+  * backend/src/app.ts
+  * backend/src/controllers/sales-documents.controller.ts
+
+DELETED FILES

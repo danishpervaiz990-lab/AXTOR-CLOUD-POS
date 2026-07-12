@@ -1,87 +1,25 @@
-<!doctype html>
-<html lang="en" data-theme="light">
+<!DOCTYPE html>
+<html data-theme="light" lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
-  <title>Setup Wizard · Axtor POS Cloud</title>
-  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet">
-<link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet">
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#0f9f78">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('axtorTheme')||'light')}catch(e){}</script>
+  <title>Customer Setup · Axtor POS Cloud</title>
+  <link href="assets/images/logo.svg" rel="icon" type="image/svg+xml"><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet"><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"><link href="css/style.css?v=20260712-global-saas1" rel="stylesheet"><link href="css/retro-pos-theme.css?v=20260712-global-saas1" rel="stylesheet"><link href="manifest.webmanifest" rel="manifest"><meta name="theme-color" content="#0f9f78">
+  <style>.setup-step{display:none}.setup-step.active{display:block}.setup-progress{height:9px}.choice-card{border:1px solid rgba(15,159,120,.18);border-radius:16px;padding:16px;cursor:pointer;height:100%}.choice-card.selected{border-color:#0f9f78;box-shadow:0 0 0 3px rgba(15,159,120,.12)}.review-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.review-item{padding:13px;border-radius:14px;background:rgba(15,159,120,.07)}@media(max-width:575px){.setup-actions .btn{flex:1}}</style>
 </head>
-<body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="sidebar-inner">
-        <a class="brand" href="index.html">
-          <div class="brand-mark">A</div>
-          <div><h1>Axtor POS Cloud</h1><span>Retail • Grocery • Pharmacy • Paint</span></div>
-        </a>
-        <nav class="nav-menu"><a class="nav-linkx" href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
-<a class="nav-linkx" href="terminal.html"><i class="bi bi-upc-scan"></i><span>Terminal</span></a>
-<a class="nav-linkx" href="sales.html"><i class="bi bi-cart-check"></i><span>Sales</span></a>
-<a class="nav-linkx" href="shifts.html"><i class="bi bi-clock-history"></i><span>Shifts / Closing</span></a>
-<a class="nav-linkx" href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
-<a class="nav-linkx" href="salesmen.html"><i class="bi bi-trophy"></i><span>Salesmen & Commission</span></a>
-<a class="nav-linkx" href="products.html"><i class="bi bi-box-seam"></i><span>Products</span></a>
-<a class="nav-linkx" href="inventory.html"><i class="bi bi-boxes"></i><span>Inventory</span></a>
-<a class="nav-linkx" href="barcode-labels.html"><i class="bi bi-tags"></i><span>Barcode Labels</span></a>
-<a class="nav-linkx" href="purchase.html"><i class="bi bi-bag-plus"></i><span>Purchases</span></a>
-<a class="nav-linkx" href="branches.html"><i class="bi bi-building"></i><span>Branches</span></a>
-<a class="nav-linkx" href="promotions.html"><i class="bi bi-percent"></i><span>Promotions</span></a>
-<a class="nav-linkx" href="loyalty.html"><i class="bi bi-gem"></i><span>Loyalty</span></a>
-<a class="nav-linkx" href="approvals.html"><i class="bi bi-shield-check"></i><span>Approvals</span></a>
-<a class="nav-linkx" href="reports.html"><i class="bi bi-graph-up-arrow"></i><span>Reports</span></a>
-<a class="nav-linkx" href="accounts.html"><i class="bi bi-bank"></i><span>Accounts</span></a>
-<a class="nav-linkx" href="expenses.html"><i class="bi bi-wallet2"></i><span>Expenses</span></a>
-<a class="nav-linkx active" href="setup.html"><i class="bi bi-magic"></i><span>Setup Wizard</span></a>
-<a class="nav-linkx" href="notifications.html"><i class="bi bi-bell"></i><span>Notifications</span></a>
-<a class="nav-linkx" href="invoice-designer.html"><i class="bi bi-file-earmark-richtext"></i><span>Invoice Designer</span></a>
-<a class="nav-linkx" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a></nav>
-        <div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br><small>Local Browser Mode</small></div>
-      </div>
-    </aside>
-    <div class="sidebar-backdrop"></div>
-    <div class="main">
-      <header class="topbar">
-        <button class="btn-icon d-xl-none" data-sidebar-toggle aria-label="Toggle menu"><i class="bi bi-list"></i></button>
-        <div class="page-title"><h2>Setup Wizard</h2><p>Industry selection and business-specific product fields.</p></div>
-        <button class="search-pill" data-search-open><i class="bi bi-search"></i><span>Search invoice, customer, stock...</span><kbd class="shortcut">F8</kbd></button>
-        <a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a>
-        <div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div>
-      </header>
-      <main class="page">
-
-<section class="hero mb-4"><span class="smallcaps text-white-50">First Setup Wizard</span><h3>Select business type and load industry fields.</h3><p>Retail, grocery, pharmacy, paint store, auto parts, restaurant, electronics and wholesale modes are saved in localStorage.</p></section>
-<div class="cardx mb-3"><div class="d-flex justify-content-between align-items-center"><div><h5 class="cardx-title">Current Industry</h5><p class="text-muted mb-0">Selected setup appears in Settings and Dashboard.</p></div><span class="badge-soft badge-paid" id="selectedIndustryText">Paint Store</span></div></div>
-<div class="row g-3" id="industryCards"></div>
-<div class="cardx mt-3"><h5 class="cardx-title mb-3">Industry-specific product fields</h5><div class="row g-3" id="industryFieldList"></div><button id="saveIndustrySetupBtn" class="btn btn-brand mt-3">Save Setup</button></div>
-
-      </main>
-    </div>
-  </div>
-  <div class="search-overlay" id="globalSearch">
-    <div class="search-box">
-      <div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off"><button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button></div>
-      <div class="search-results" id="globalSearchResults"></div>
-    </div>
-  </div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/core-data.js?v=20260618-sales-qr1"></script>
-  
-  <script src="js/main.js?v=20260618-sales-qr1"></script>
-  <script src="js/theme-switcher.js?v=20260618-sales-qr1"></script>
-  <script src="js/app-data.js?v=20260618-sales-qr1"></script>
-  <script src="js/retail-advanced.js?v=20260618-sales-qr1"></script>
-  <script src="js/invoice-templates.js?v=20260618-sales-qr1"></script>
-  
-  <script src="js/axtor-fixes.js?v=20260618-sales-qr1"></script>
-</body>
-</html>
+<body><div class="app-shell">
+  <aside class="sidebar"><div class="sidebar-inner"><a class="brand" href="index.html"><div class="brand-mark">A</div><div><h1>Axtor POS Cloud</h1><span>Global Business Platform</span></div></a><nav class="nav-menu"><a class="nav-linkx" href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a><a class="nav-linkx active" href="setup.html"><i class="bi bi-magic"></i><span>Setup Wizard</span></a><a class="nav-linkx" href="plans.html"><i class="bi bi-stars"></i><span>Plans &amp; Subscription</span></a><a class="nav-linkx" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a></nav><div class="sidebar-footer"><span class="status-dot"></span>Secure Cloud Setup<br><small>Progress saves to PostgreSQL</small></div></div></aside>
+  <div class="sidebar-backdrop"></div><div class="main"><header class="topbar"><button class="btn-icon d-xl-none" data-sidebar-toggle aria-label="Toggle menu"><i class="bi bi-list"></i></button><div class="page-title"><h2>Customer Setup</h2><p>Configure a fresh business in five guided sections.</p></div><div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div></header>
+  <main class="page"><section class="hero mb-4"><span class="smallcaps text-white-50">First-time onboarding</span><h3>Welcome to Axtor POS Cloud</h3><p>Your choices are saved securely to the tenant database. New customers start empty unless sample data is explicitly selected.</p></section>
+    <div class="cardx mb-3"><div class="d-flex justify-content-between align-items-center mb-2"><strong id="stepLabel">Section 1 of 5</strong><span class="badge-soft badge-paid" id="saveState">Loading…</span></div><div class="progress setup-progress"><div class="progress-bar bg-success" id="setupProgress" style="width:20%"></div></div></div>
+    <form id="onboardingForm" novalidate>
+      <section class="setup-step active" data-step="1"><div class="cardx"><h4>1. Business profile</h4><p class="text-muted">Welcome, business identity, industry, country and time zone.</p><div class="row g-3"><div class="col-md-6"><label class="form-label">Business name *</label><input class="form-control" name="businessName" required maxlength="120"></div><div class="col-md-6"><label class="form-label">Business logo URL</label><input class="form-control" name="logoUrl" type="url" placeholder="https://…"></div><div class="col-md-4"><label class="form-label">Industry *</label><select class="form-select" name="industryCode" id="industrySelect" required></select></div><div class="col-md-4"><label class="form-label">Country *</label><select class="form-select" name="country" required><option value="QA">Qatar</option><option value="AE">United Arab Emirates</option><option value="SA">Saudi Arabia</option><option value="PK">Pakistan</option><option value="IN">India</option><option value="GB">United Kingdom</option><option value="US">United States</option><option value="CN">China</option><option value="KE">Kenya</option><option value="NG">Nigeria</option><option value="ZA">South Africa</option><option value="FR">France</option></select></div><div class="col-md-4"><label class="form-label">Time zone *</label><select class="form-select" name="timezone" required><option>Asia/Qatar</option><option>Asia/Dubai</option><option>Asia/Riyadh</option><option>Asia/Karachi</option><option>Asia/Kolkata</option><option>Europe/London</option><option>America/New_York</option><option>Asia/Shanghai</option><option>Africa/Nairobi</option><option>Africa/Lagos</option><option>Africa/Johannesburg</option></select></div></div></div></section>
+      <section class="setup-step" data-step="2"><div class="cardx"><h4>2. Currency, language and tax</h4><p class="text-muted">Choose the accounting currency first. Historical exchange rates remain fixed on documents.</p><div class="row g-3"><div class="col-md-4"><label class="form-label">Base currency *</label><select class="form-select" name="baseCurrency" id="baseCurrency" required></select></div><div class="col-md-8"><label class="form-label">Additional currencies</label><select class="form-select" name="additionalCurrencies" id="additionalCurrencies" multiple size="4"></select><div class="form-text">Availability follows your subscription plan.</div></div><div class="col-md-4"><label class="form-label">Interface language *</label><select class="form-select" name="language" id="languageSelect" required></select></div><div class="col-md-4"><label class="form-label">Date format</label><select class="form-select" name="dateFormat"><option value="yyyy-MM-dd">2026-07-12</option><option value="dd/MM/yyyy">12/07/2026</option><option value="MM/dd/yyyy">07/12/2026</option></select></div><div class="col-md-4"><label class="form-label">Number locale</label><input class="form-control" name="numberLocale" value="en-QA" placeholder="en-QA"></div><div class="col-md-4"><label class="form-label">Tax system</label><select class="form-select" name="taxSystem"><option value="none">No tax</option><option value="vat">VAT</option><option value="gst">GST</option><option value="sales_tax">Sales Tax</option></select></div><div class="col-md-4"><label class="form-label">Tax label</label><input class="form-control" name="taxLabel" value="Tax"></div><div class="col-md-4"><label class="form-label">Tax registration number</label><input class="form-control" name="taxRegistrationNumber" maxlength="80"></div><div class="col-12"><label class="form-check"><input class="form-check-input" name="pricesIncludeTax" type="checkbox"> <span class="form-check-label">Product prices include tax</span></label></div></div></div></section>
+      <section class="setup-step" data-step="3"><div class="cardx"><h4>3. Operations</h4><p class="text-muted">Default branch, warehouse and administrator context.</p><div class="row g-3"><div class="col-md-6"><label class="form-label">Main branch *</label><input class="form-control" name="branchName" value="Main Branch" required></div><div class="col-md-6"><label class="form-label">Main warehouse *</label><input class="form-control" name="warehouseName" value="Main Warehouse" required></div><div class="col-md-6"><label class="form-label">Administrator</label><input class="form-control" id="adminDisplay" value="Current signed-in owner" readonly></div><div class="col-md-6"><label class="form-label">Default counter</label><input class="form-control" value="Counter 1" readonly></div></div><div class="alert alert-light border mt-3 mb-0"><i class="bi bi-shield-check text-success"></i> Default owner, administrator, manager, accountant, cashier, sales, warehouse, purchase, pharmacist, waiter, kitchen, factory, auditor and read-only roles will be created.</div></div></section>
+      <section class="setup-step" data-step="4"><div class="cardx"><h4>4. Documents and opening data</h4><p class="text-muted">Numbering, template and the fresh-customer data choice.</p><div class="row g-3"><div class="col-md-4"><label class="form-label">Invoice prefix</label><input class="form-control" name="invoicePrefix" value="INV"></div><div class="col-md-4"><label class="form-label">Quotation prefix</label><input class="form-control" name="quotationPrefix" value="QUO"></div><div class="col-md-4"><label class="form-label">Delivery note prefix</label><input class="form-control" name="deliveryPrefix" value="DN"></div><div class="col-md-6"><label class="form-label">Invoice template</label><select class="form-select" name="invoiceTemplate"><option value="standard">Standard A4</option><option value="compact">Compact A4</option><option value="thermal">Thermal 80mm</option><option value="bilingual">Bilingual / RTL</option></select></div><div class="col-md-6"><label class="form-label">Opening-data choice *</label><select class="form-select" name="dataMode" required><option value="empty" selected>Start with an empty business (recommended)</option><option value="sample">Start with clearly labelled sample data</option></select></div></div><div class="alert alert-warning mt-3 mb-0">Real customer accounts default to empty products, customers, suppliers, sales, purchases and expenses.</div></div></section>
+      <section class="setup-step" data-step="5"><div class="cardx"><h4>5. Subscription and final review</h4><p class="text-muted">Choose a plan and review before starting the trial.</p><div id="planChoices" class="row g-3 mb-4"></div><div class="row g-3"><div class="col-md-4"><label class="form-label">Billing cycle</label><select class="form-select" name="billingCycle"><option value="MONTHLY">Monthly</option><option value="ANNUAL">Annual</option></select></div><div class="col-md-8"><label class="form-label">Activation</label><input class="form-control" value="14-day trial; platform owner can activate manual payment" readonly></div></div><h5 class="mt-4">Final review</h5><div class="review-grid" id="reviewGrid"></div><label class="form-check mt-3"><input class="form-check-input" name="confirmReview" type="checkbox" required> <span class="form-check-label">I confirm the business, tax, currency and plan settings.</span></label></div></section>
+      <div class="setup-actions d-flex gap-2 justify-content-between mt-3"><button type="button" class="btn btn-outline-secondary" id="backBtn" disabled><i class="bi bi-arrow-left"></i> Back</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-success" id="saveBtn"><i class="bi bi-cloud-check"></i> Save progress</button><button type="button" class="btn btn-brand" id="nextBtn">Next <i class="bi bi-arrow-right"></i></button><button type="submit" class="btn btn-brand d-none" id="completeBtn"><i class="bi bi-check2-circle"></i> Complete Setup</button></div></div>
+    </form><div class="alert d-none mt-3" id="setupMessage" role="alert"></div>
+  </main></div></div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script><script src="js/axtor-api.js?v=20260712-global-saas1"></script><script src="js/main.js?v=20260712-global-saas1"></script><script src="js/theme-switcher.js?v=20260712-global-saas1"></script><script src="js/setup-backend.js?v=20260712-global-saas1"></script>
+</body></html>

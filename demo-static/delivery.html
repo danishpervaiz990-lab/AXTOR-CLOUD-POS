@@ -1,36 +1,37 @@
-<!doctype html>
-<html lang="en" data-theme="light">
+<!DOCTYPE html>
+
+<html data-theme="light" lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
-  <title>Delivery · Axtor POS Cloud</title>
-  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet">
-<link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0f9f78">
-</head><body><div class="app-shell"><aside class="sidebar"><div class="sidebar-inner"><a class="brand" href="index.html"><div class="brand-mark">A</div><div><h1>Axtor POS Cloud</h1><span>Retail • Grocery • Pharmacy • Paint</span></div></a><nav class="nav-menu"><a class="nav-linkx " href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
-<a class="nav-linkx " href="terminal.html"><i class="bi bi-upc-scan"></i><span>Terminal</span></a>
-<a class="nav-linkx " href="sales.html"><i class="bi bi-cart-check"></i><span>Sales</span></a>
-<a class="nav-linkx " href="shifts.html"><i class="bi bi-clock-history"></i><span>Shifts / Closing</span></a>
-<a class="nav-linkx " href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
-<a class="nav-linkx" href="salesmen.html"><i class="bi bi-trophy"></i><span>Salesmen & Commission</span></a>
-<a class="nav-linkx " href="products.html"><i class="bi bi-box-seam"></i><span>Products</span></a>
-<a class="nav-linkx " href="inventory.html"><i class="bi bi-boxes"></i><span>Inventory</span></a>
-<a class="nav-linkx " href="barcode-labels.html"><i class="bi bi-tags"></i><span>Barcode Labels</span></a>
-<a class="nav-linkx " href="purchase.html"><i class="bi bi-bag-plus"></i><span>Purchases</span></a>
-<a class="nav-linkx " href="branches.html"><i class="bi bi-building"></i><span>Branches</span></a>
-<a class="nav-linkx " href="promotions.html"><i class="bi bi-percent"></i><span>Promotions</span></a>
-<a class="nav-linkx " href="loyalty.html"><i class="bi bi-gem"></i><span>Loyalty</span></a>
-<a class="nav-linkx " href="approvals.html"><i class="bi bi-shield-check"></i><span>Approvals</span></a>
-<a class="nav-linkx " href="reports.html"><i class="bi bi-graph-up-arrow"></i><span>Reports</span></a>
-<a class="nav-linkx " href="accounts.html"><i class="bi bi-bank"></i><span>Accounts</span></a>
-<a class="nav-linkx " href="expenses.html"><i class="bi bi-wallet2"></i><span>Expenses</span></a>
-<a class="nav-linkx " href="setup.html"><i class="bi bi-magic"></i><span>Setup Wizard</span></a>
-<a class="nav-linkx " href="notifications.html"><i class="bi bi-bell"></i><span>Notifications</span></a>
-<a class="nav-linkx " href="invoice-designer.html"><i class="bi bi-file-earmark-richtext"></i><span>Invoice Designer</span></a>
-<a class="nav-linkx " href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a></nav><div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br><small>Local Browser Mode</small></div></div></aside><div class="sidebar-backdrop"></div><div class="main"><header class="topbar"><button class="btn-icon d-xl-none" data-sidebar-toggle aria-label="Toggle menu"><i class="bi bi-list"></i></button><div class="page-title"><h2>Delivery</h2><p>Delivery note and driver handover print local mode.</p></div><button class="search-pill" data-search-open><i class="bi bi-search"></i><span>Search invoice, customer, stock...</span><kbd class="shortcut">F8</kbd></button><a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a><div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div></header><main class="page"><section class="hero mb-4"><h3>Delivery Notes</h3><p>Print delivery note samples with customer delivery address and driver details.</p></section><div class="cardx"><h5 class="cardx-title">Delivery Note DO-1048</h5><p class="text-muted">Industrial Area delivery • 3 line items</p><button class="btn btn-brand" data-invoice-preview="delivery-invoice">Preview Delivery Note</button> <button class="btn btn-soft" data-invoice-print="delivery-invoice">Print Delivery Note</button></div></main></div></div><div class="search-overlay" id="globalSearch"><div class="search-box"><div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off"><button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button></div><div class="search-results" id="globalSearchResults"></div></div></div><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/core-data.js?v=20260618-sales-qr1"></script>  <script src="js/main.js?v=20260618-sales-qr1"></script>
-  <script src="js/theme-switcher.js?v=20260618-sales-qr1"></script><script src="js/app-data.js?v=20260618-sales-qr1"></script><script src="js/retail-advanced.js?v=20260618-sales-qr1"></script><script src="js/invoice-templates.js?v=20260618-sales-qr1"></script></body></html>
+<meta charset="utf-8"/><meta content="width=device-width, initial-scale=1" name="viewport"/>
+<script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+<title>Delivery · Axtor POS Cloud</title>
+<link href="assets/images/logo.svg" rel="icon" type="image/svg+xml"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+<link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet"/>
+<link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet"/><link href="manifest.webmanifest" rel="manifest"/><meta content="#0f9f78" name="theme-color"/>
+</head><body><div class="app-shell"><aside class="sidebar"><div class="sidebar-inner"><a class="brand" href="index.html"><div class="brand-mark">A</div><div><h1>Axtor POS Cloud</h1><span>Retail • Grocery • Pharmacy • Paint</span></div></a><nav class="nav-menu"><a class="nav-linkx" href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
+<a class="nav-linkx" href="terminal.html"><i class="bi bi-upc-scan"></i><span>Terminal</span></a>
+<a class="nav-linkx" href="sales.html"><i class="bi bi-cart-check"></i><span>Sales</span></a>
+<a class="nav-linkx" href="shifts.html"><i class="bi bi-clock-history"></i><span>Shifts / Closing</span></a>
+<a class="nav-linkx" href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
+<a class="nav-linkx" href="salesmen.html"><i class="bi bi-trophy"></i><span>Salesmen &amp; Commission</span></a>
+<a class="nav-linkx" href="products.html"><i class="bi bi-box-seam"></i><span>Products</span></a>
+<a class="nav-linkx" href="inventory.html"><i class="bi bi-boxes"></i><span>Inventory</span></a>
+<a class="nav-linkx" href="barcode-labels.html"><i class="bi bi-tags"></i><span>Barcode Labels</span></a>
+<a class="nav-linkx" href="purchase.html"><i class="bi bi-bag-plus"></i><span>Purchases</span></a>
+<a class="nav-linkx" href="branches.html"><i class="bi bi-building"></i><span>Branches</span></a>
+<a class="nav-linkx" href="promotions.html"><i class="bi bi-percent"></i><span>Promotions</span></a>
+<a class="nav-linkx" href="loyalty.html"><i class="bi bi-gem"></i><span>Loyalty</span></a>
+<a class="nav-linkx" href="approvals.html"><i class="bi bi-shield-check"></i><span>Approvals</span></a>
+<a class="nav-linkx" href="reports.html"><i class="bi bi-graph-up-arrow"></i><span>Reports</span></a>
+<a class="nav-linkx" href="accounts.html"><i class="bi bi-bank"></i><span>Accounts</span></a>
+<a class="nav-linkx" href="expenses.html"><i class="bi bi-wallet2"></i><span>Expenses</span></a>
+<a class="nav-linkx" href="setup.html"><i class="bi bi-magic"></i><span>Setup Wizard</span></a>
+<a class="nav-linkx" href="notifications.html"><i class="bi bi-bell"></i><span>Notifications</span></a>
+<a class="nav-linkx" href="invoice-designer.html"><i class="bi bi-file-earmark-richtext"></i><span>Invoice Designer</span></a>
+<a class="nav-linkx" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a></nav><div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br/><small>PostgreSQL Cloud Mode</small></div></div></aside><div class="sidebar-backdrop"></div><div class="main"><header class="topbar"><button aria-label="Toggle menu" class="btn-icon d-xl-none" data-sidebar-toggle=""><i class="bi bi-list"></i></button><div class="page-title"><h2>Delivery</h2><p>Delivery note and driver handover print local mode.</p></div><button class="search-pill" data-search-open=""><i class="bi bi-search"></i><span>Search invoice, customer, stock...</span><kbd class="shortcut">F8</kbd></button><a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a><div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div></header><main class="page"><section class="hero mb-4"><h3>Delivery Notes</h3><p>Print delivery note samples with customer delivery address and driver details.</p></section><div class="cardx"><h5 class="cardx-title">Delivery Note DO-1048</h5><p class="text-muted">Industrial Area delivery • 3 line items</p><button class="btn btn-brand" data-invoice-preview="delivery-invoice">Preview Delivery Note</button> <button class="btn btn-soft" data-invoice-print="delivery-invoice">Print Delivery Note</button></div></main></div></div><div class="search-overlay" id="globalSearch"><div class="search-box"><div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input autocomplete="off" id="globalSearchInput" placeholder="Type to search pages, sections, invoices..."/><button class="btn-icon" data-search-close=""><i class="bi bi-x-lg"></i></button></div><div class="search-results" id="globalSearchResults"></div></div></div><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/axtor-api.js?v=20260712-full-backend-v2"></script><script src="js/core-data.js?v=20260712-full-backend-v2"></script> <script src="js/main.js?v=20260712-full-backend-v2"></script>
+<script src="js/theme-switcher.js?v=20260712-full-backend-v2"></script><script src="js/app-data.js?v=20260712-full-backend-v2"></script><script src="js/retail-advanced.js?v=20260712-full-backend-v2"></script><script src="js/invoice-templates.js?v=20260712-full-backend-v2"></script><script src="js/backend-page-utils.js?v=20260712-full-backend-v2"></script><script src="js/delivery-backend.js?v=20260712-full-backend-v2"></script></body></html>

@@ -1,0 +1,6 @@
+{
+  "app.title":"Axtor 云端收银系统","nav.dashboard":"仪表板","nav.terminal":"收银台","nav.sales":"销售","nav.shifts":"班次与结账","nav.customers":"客户","nav.salesmen":"销售员与佣金","nav.products":"商品","nav.inventory":"库存","nav.barcode":"条码标签","nav.purchases":"采购","nav.branches":"分店","nav.promotions":"促销","nav.loyalty":"会员忠诚度","nav.approvals":"审批","nav.reports":"报表","nav.accounts":"账户","nav.expenses":"费用","nav.setup":"设置向导","nav.notifications":"通知","nav.invoiceDesigner":"发票设计器","nav.settings":"设置","nav.plans":"套餐与订阅",
+  "action.save":"保存","action.add":"添加","action.cancel":"取消","action.edit":"编辑","action.delete":"删除","action.post":"过账","action.print":"打印","action.search":"搜索","action.next":"下一步","action.back":"上一步","action.complete":"完成设置","action.retry":"重试",
+  "sales.saveInvoice":"保存发票","sales.addProduct":"添加商品","sales.complete":"完成销售","sales.selectCustomer":"选择客户","sales.paymentReceived":"已收到付款","sales.insufficientStock":"库存不足","sales.invoice":"发票","sales.quotation":"报价单","sales.deliveryNote":"送货单",
+  "status.online":"在线","status.offline":"离线","status.trial":"试用","status.readOnly":"只读","status.bestValue":"最超值","common.language":"语言","common.currency":"货币","common.customer":"客户","common.product":"商品","common.total":"总计","common.tax":"税","common.payment":"付款","common.loading":"加载中…","common.unavailablePlan":"当前套餐不包含此功能"
+}

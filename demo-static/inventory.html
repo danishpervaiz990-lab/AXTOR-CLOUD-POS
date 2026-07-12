@@ -1,35 +1,36 @@
-<!doctype html>
-<html lang="en" data-theme="light">
+<!DOCTYPE html>
+
+<html data-theme="light" lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
-  <title>Inventory · Axtor POS Cloud</title>
-  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet">
-<link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet">
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#0f9f78">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+<title>Inventory · Axtor POS Cloud</title>
+<link href="assets/images/logo.svg" rel="icon" type="image/svg+xml"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+<link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet"/>
+<link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet"/>
+<link href="manifest.webmanifest" rel="manifest"/>
+<meta content="#0f9f78" name="theme-color"/>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="sidebar-inner">
-        <a class="brand" href="index.html">
-          <div class="brand-mark">A</div>
-          <div><h1>Axtor POS Cloud</h1><span>Retail • Grocery • Pharmacy • Paint</span></div>
-        </a>
-        <nav class="nav-menu"><a class="nav-linkx" href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
+<div class="app-shell">
+<aside class="sidebar">
+<div class="sidebar-inner">
+<a class="brand" href="index.html">
+<div class="brand-mark">A</div>
+<div><h1>Axtor POS Cloud</h1><span>Retail • Grocery • Pharmacy • Paint</span></div>
+</a>
+<nav class="nav-menu"><a class="nav-linkx" href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
 <a class="nav-linkx" href="terminal.html"><i class="bi bi-upc-scan"></i><span>Terminal</span></a>
 <a class="nav-linkx" href="sales.html"><i class="bi bi-cart-check"></i><span>Sales</span></a>
 <a class="nav-linkx" href="shifts.html"><i class="bi bi-clock-history"></i><span>Shifts / Closing</span></a>
 <a class="nav-linkx" href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
-<a class="nav-linkx" href="salesmen.html"><i class="bi bi-trophy"></i><span>Salesmen & Commission</span></a>
+<a class="nav-linkx" href="salesmen.html"><i class="bi bi-trophy"></i><span>Salesmen &amp; Commission</span></a>
 <a class="nav-linkx" href="products.html"><i class="bi bi-box-seam"></i><span>Products</span></a>
 <a class="nav-linkx active" href="inventory.html"><i class="bi bi-boxes"></i><span>Inventory</span></a>
 <a class="nav-linkx" href="barcode-labels.html"><i class="bi bi-tags"></i><span>Barcode Labels</span></a>
@@ -45,39 +46,42 @@
 <a class="nav-linkx" href="notifications.html"><i class="bi bi-bell"></i><span>Notifications</span></a>
 <a class="nav-linkx" href="invoice-designer.html"><i class="bi bi-file-earmark-richtext"></i><span>Invoice Designer</span></a>
 <a class="nav-linkx" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a></nav>
-        <div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br><small>Local Browser Mode</small></div>
-      </div>
-    </aside>
-    <div class="sidebar-backdrop"></div>
-    <div class="main">
-      <header class="topbar">
-        <button class="btn-icon d-xl-none" data-sidebar-toggle aria-label="Toggle menu"><i class="bi bi-list"></i></button>
-        <div class="page-title"><h2>Inventory</h2><p>Stock adjustment, ledger, transfer, valuation and warehouses.</p></div>
-        <button class="search-pill" data-search-open><i class="bi bi-search"></i><span>Search invoice, customer, stock...</span><kbd class="shortcut">F8</kbd></button>
-        <a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a>
-        <div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div>
-      </header>
-      <main class="page">
-<ul class="nav nav-tabs mb-3"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#stock-adjustment">Stock Adjustment</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stock-ledger">Stock Ledger</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stock-transfer">Stock Transfer</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stock-valuation">Stock Valuation</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#warehouse-management">Warehouses</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stock-count">Stock Count</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#smart-reorder">Smart Reorder</button></li></ul>
-<div class="tab-content"><section class="tab-pane fade show active" id="stock-adjustment"><div class="cardx"><h5 class="cardx-title">Add New Stock Adjustment</h5><div class="row g-3 align-items-end"><div class="col-md-4"><label class="form-label">Date</label><input id="stockAdjustmentDate" class="form-control" type="date" value="2026-06-13"></div><div class="col-md-4"><label class="form-label">Warehouse</label><select id="stockAdjustmentWarehouse" class="form-select"><option>Main Warehouse</option><option>Retail Store</option></select></div><div class="col-md-4"><label class="form-label">Adjustment Type</label><select id="stockAdjustmentType" class="form-select"><option>Increase Stock</option><option>Decrease Stock</option></select></div><div class="col-md-6"><label class="form-label">Product / SKU</label><div class="stock-search-wrap"><input id="stockAdjustmentProductSearch" class="form-control" placeholder="Search product name, SKU, barcode, category or brand" autocomplete="off"><div id="stockAdjustmentProductSuggestions" class="axtor-suggestions d-none" role="listbox"></div></div></div><div class="col-md-3"><label class="form-label">Qty</label><input id="stockAdjustmentQty" class="form-control" type="number" min="0.01" step="0.01" placeholder="Qty"></div><div class="col-md-3"><button id="saveStockAdjustmentBtn" class="btn btn-brand w-100" type="button">Save Adjustment</button></div></div></div></section><section class="tab-pane fade" id="stock-ledger"><div class="cardx"><h5 class="cardx-title mb-3">Stock Ledger</h5><div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Product</th><th>Ref</th><th>In</th><th>Out</th><th>Balance</th></tr></thead><tbody id="stockLedgerBody"><tr><td>13 Jun</td><td>2K Solid Paint</td><td>INV-0001</td><td>-</td><td>2</td><td>128</td></tr><tr><td>12 Jun</td><td>HS Clear</td><td>PO-0001</td><td>24</td><td>-</td><td>72</td></tr></tbody></table></div></div></section><section class="tab-pane fade" id="stock-transfer"><div class="cardx"><h5 class="cardx-title">Stock Transfer</h5><div class="row g-3"><div class="col-md-4"><select class="form-select"><option>From: Main Warehouse</option></select></div><div class="col-md-4"><select class="form-select"><option>To: Retail Store</option><option>Van Stock</option></select></div><div class="col-md-4"><input class="form-control" placeholder="Transfer No auto"></div><div class="col-md-8"><input class="form-control" placeholder="Product"></div><div class="col-md-4"><input class="form-control" placeholder="Qty"></div><div class="col-12"><button class="btn btn-brand" data-demo-action="Transfer saved">Save Transfer</button></div></div></div></section><section class="tab-pane fade" id="stock-valuation"><div class="cardx"><h5 class="cardx-title">Stock Valuation</h5><div style="height:330px"><canvas id="inventoryValuationChart"></canvas></div></div></section><section class="tab-pane fade" id="warehouse-management"><div class="row g-3"><div class="col-lg-5"><div class="cardx"><h5 class="cardx-title">Add New Warehouse</h5><input class="form-control mb-2" placeholder="Warehouse name"><input class="form-control mb-2" placeholder="Location"><button class="btn btn-brand" data-demo-action="Warehouse saved">Save Warehouse</button></div></div><div class="col-lg-7"><div class="cardx"><h5 class="cardx-title mb-3">Warehouse Management</h5><div class="table-wrap"><table class="table"><thead><tr><th>Warehouse</th><th>Location</th><th>Stock Value</th></tr></thead><tbody><tr><td>Main Warehouse</td><td>Industrial Area</td><td>QAR 245K</td></tr><tr><td>Retail Store</td><td>Doha</td><td>QAR 81K</td></tr><tr><td>Van Stock</td><td>Sales vehicle</td><td>QAR 32K</td></tr></tbody></table></div></div></div></div></section><section class="tab-pane fade section-anchor" id="stock-count"><div class="row g-3"><div class="col-lg-4"><div class="cardx"><h5 class="cardx-title">Stock Count / Physical Inventory</h5><label class="form-label mt-2">Warehouse</label><select id="stockCountWarehouse" class="form-select"><option>Main Warehouse</option><option>Main Branch</option><option>Delivery Van Stock</option></select><label class="form-label mt-2">Scan/search product</label><input class="form-control" placeholder="Scan SKU or search product"><button id="approveStockCountBtn" class="btn btn-brand mt-3">Approve Adjustment</button></div></div><div class="col-lg-8"><div class="cardx"><h5 class="cardx-title mb-3">Count Sheet</h5><div class="table-wrap"><table class="table"><thead><tr><th>Product</th><th>System Qty</th><th>Counted Qty</th><th>Difference</th></tr></thead><tbody id="stockCountBody"></tbody></table></div></div></div><div class="col-12"><div class="cardx"><h5 class="cardx-title mb-3">Stock Count History</h5><div class="table-wrap"><table class="table"><thead><tr><th>Session</th><th>Warehouse</th><th>Time</th><th>Lines</th><th>Status</th></tr></thead><tbody id="stockCountHistoryBody"></tbody></table></div></div></div></div></section><section class="tab-pane fade section-anchor" id="smart-reorder"><div class="cardx"><div class="d-flex justify-content-between mb-3"><div><h5 class="cardx-title">Smart Reorder / Purchase Suggestion</h5><p class="text-muted mb-0">Low-stock items calculate suggested reorder quantity from sales speed and minimum stock.</p></div><span class="badge-soft badge-pending">3 alerts</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Product</th><th>Sales speed</th><th>Current stock</th><th>Minimum stock</th><th>Suggested reorder</th><th>Preferred supplier</th><th></th></tr></thead><tbody id="reorderBody"></tbody></table></div></div></section></div>
+<div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br/><small>PostgreSQL Cloud Mode</small></div>
+</div>
+</aside>
+<div class="sidebar-backdrop"></div>
+<div class="main">
+<header class="topbar">
+<button aria-label="Toggle menu" class="btn-icon d-xl-none" data-sidebar-toggle=""><i class="bi bi-list"></i></button>
+<div class="page-title"><h2>Inventory</h2><p>Stock adjustment, ledger, transfer, valuation and warehouses.</p></div>
+<button class="search-pill" data-search-open=""><i class="bi bi-search"></i><span>Search invoice, customer, stock...</span><kbd class="shortcut">F8</kbd></button>
+<a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a>
+<div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div>
+</header>
+<main class="page">
+<ul class="nav nav-tabs mb-3"><li class="nav-item"><button class="nav-link active" data-bs-target="#stock-adjustment" data-bs-toggle="tab">Stock Adjustment</button></li><li class="nav-item"><button class="nav-link" data-bs-target="#stock-ledger" data-bs-toggle="tab">Stock Ledger</button></li><li class="nav-item"><button class="nav-link" data-bs-target="#stock-transfer" data-bs-toggle="tab">Stock Transfer</button></li><li class="nav-item"><button class="nav-link" data-bs-target="#stock-valuation" data-bs-toggle="tab">Stock Valuation</button></li><li class="nav-item"><button class="nav-link" data-bs-target="#warehouse-management" data-bs-toggle="tab">Warehouses</button></li><li class="nav-item"><button class="nav-link" data-bs-target="#stock-count" data-bs-toggle="tab">Stock Count</button></li><li class="nav-item"><button class="nav-link" data-bs-target="#smart-reorder" data-bs-toggle="tab">Smart Reorder</button></li></ul>
+<div class="tab-content"><section class="tab-pane fade show active" id="stock-adjustment"><div class="cardx"><h5 class="cardx-title">Add New Stock Adjustment</h5><div class="row g-3 align-items-end"><div class="col-md-4"><label class="form-label">Date</label><input class="form-control" id="stockAdjustmentDate" type="date" value="2026-06-13"/></div><div class="col-md-4"><label class="form-label">Warehouse</label><select class="form-select" id="stockAdjustmentWarehouse"><option>Main Warehouse</option><option>Retail Store</option></select></div><div class="col-md-4"><label class="form-label">Adjustment Type</label><select class="form-select" id="stockAdjustmentType"><option>Increase Stock</option><option>Decrease Stock</option></select></div><div class="col-md-6"><label class="form-label">Product / SKU</label><div class="stock-search-wrap"><input autocomplete="off" class="form-control" id="stockAdjustmentProductSearch" placeholder="Search product name, SKU, barcode, category or brand"/><div class="axtor-suggestions d-none" id="stockAdjustmentProductSuggestions" role="listbox"></div></div></div><div class="col-md-3"><label class="form-label">Qty</label><input class="form-control" id="stockAdjustmentQty" min="0.01" placeholder="Qty" step="0.01" type="number"/></div><div class="col-md-3"><button class="btn btn-brand w-100" id="saveStockAdjustmentBtn" type="button">Save Adjustment</button></div></div></div></section><section class="tab-pane fade" id="stock-ledger"><div class="cardx"><h5 class="cardx-title mb-3">Stock Ledger</h5><div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Product</th><th>Ref</th><th>In</th><th>Out</th><th>Balance</th></tr></thead><tbody id="stockLedgerBody"><tr><td>13 Jun</td><td>2K Solid Paint</td><td>INV-0001</td><td>-</td><td>2</td><td>128</td></tr><tr><td>12 Jun</td><td>HS Clear</td><td>PO-0001</td><td>24</td><td>-</td><td>72</td></tr></tbody></table></div></div></section><section class="tab-pane fade" id="stock-transfer"><div class="cardx"><h5 class="cardx-title">Stock Transfer</h5><div class="row g-3"><div class="col-md-4"><select class="form-select"><option>From: Main Warehouse</option></select></div><div class="col-md-4"><select class="form-select"><option>To: Retail Store</option><option>Van Stock</option></select></div><div class="col-md-4"><input class="form-control" placeholder="Transfer No auto"/></div><div class="col-md-8"><input class="form-control" placeholder="Product"/></div><div class="col-md-4"><input class="form-control" placeholder="Qty"/></div><div class="col-12"><button class="btn btn-brand" data-demo-action="Transfer saved">Save Transfer</button></div></div></div></section><section class="tab-pane fade" id="stock-valuation"><div class="cardx"><h5 class="cardx-title">Stock Valuation</h5><div style="height:330px"><canvas id="inventoryValuationChart"></canvas></div></div></section><section class="tab-pane fade" id="warehouse-management"><div class="row g-3"><div class="col-lg-5"><div class="cardx"><h5 class="cardx-title">Add New Warehouse</h5><input class="form-control mb-2" placeholder="Warehouse name"/><input class="form-control mb-2" placeholder="Location"/><button class="btn btn-brand" data-demo-action="Warehouse saved">Save Warehouse</button></div></div><div class="col-lg-7"><div class="cardx"><h5 class="cardx-title mb-3">Warehouse Management</h5><div class="table-wrap"><table class="table"><thead><tr><th>Warehouse</th><th>Location</th><th>Stock Value</th></tr></thead><tbody><tr><td>Main Warehouse</td><td>Industrial Area</td><td>QAR 245K</td></tr><tr><td>Retail Store</td><td>Doha</td><td>QAR 81K</td></tr><tr><td>Van Stock</td><td>Sales vehicle</td><td>QAR 32K</td></tr></tbody></table></div></div></div></div></section><section class="tab-pane fade section-anchor" id="stock-count"><div class="row g-3"><div class="col-lg-4"><div class="cardx"><h5 class="cardx-title">Stock Count / Physical Inventory</h5><label class="form-label mt-2">Warehouse</label><select class="form-select" id="stockCountWarehouse"><option>Main Warehouse</option><option>Main Branch</option><option>Delivery Van Stock</option></select><label class="form-label mt-2">Scan/search product</label><input class="form-control" placeholder="Scan SKU or search product"/><button class="btn btn-brand mt-3" id="approveStockCountBtn">Approve Adjustment</button></div></div><div class="col-lg-8"><div class="cardx"><h5 class="cardx-title mb-3">Count Sheet</h5><div class="table-wrap"><table class="table"><thead><tr><th>Product</th><th>System Qty</th><th>Counted Qty</th><th>Difference</th></tr></thead><tbody id="stockCountBody"></tbody></table></div></div></div><div class="col-12"><div class="cardx"><h5 class="cardx-title mb-3">Stock Count History</h5><div class="table-wrap"><table class="table"><thead><tr><th>Session</th><th>Warehouse</th><th>Time</th><th>Lines</th><th>Status</th></tr></thead><tbody id="stockCountHistoryBody"></tbody></table></div></div></div></div></section><section class="tab-pane fade section-anchor" id="smart-reorder"><div class="cardx"><div class="d-flex justify-content-between mb-3"><div><h5 class="cardx-title">Smart Reorder / Purchase Suggestion</h5><p class="text-muted mb-0">Low-stock items calculate suggested reorder quantity from sales speed and minimum stock.</p></div><span class="badge-soft badge-pending">3 alerts</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Product</th><th>Sales speed</th><th>Current stock</th><th>Minimum stock</th><th>Suggested reorder</th><th>Preferred supplier</th><th></th></tr></thead><tbody id="reorderBody"></tbody></table></div></div></section></div>
 </main>
-    </div>
-  </div>
-  <div class="search-overlay" id="globalSearch">
-    <div class="search-box">
-      <div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off"><button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button></div>
-      <div class="search-results" id="globalSearchResults"></div>
-    </div>
-  </div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="js/core-data.js?v=20260618-sales-qr1"></script>
-<script src="js/charts.js?v=20260618-sales-qr1"></script>
-  <script src="js/main.js?v=20260618-sales-qr1"></script>
-  <script src="js/theme-switcher.js?v=20260618-sales-qr1"></script>
-  <script src="js/app-data.js?v=20260618-sales-qr1"></script>
-  <script src="js/retail-advanced.js?v=20260618-sales-qr1"></script>
-  <script src="js/invoice-templates.js?v=20260618-sales-qr1"></script>
-  <script src="js/axtor-fixes.js?v=20260618-sales-qr1"></script>
-</body>
+</div>
+</div>
+<div class="search-overlay" id="globalSearch">
+<div class="search-box">
+<div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input autocomplete="off" id="globalSearchInput" placeholder="Type to search pages, sections, invoices..."/><button class="btn-icon" data-search-close=""><i class="bi bi-x-lg"></i></button></div>
+<div class="search-results" id="globalSearchResults"></div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script src="js/axtor-api.js?v=20260712-full-backend-v2"></script><script src="js/core-data.js?v=20260712-full-backend-v2"></script>
+<script src="js/charts.js?v=20260712-full-backend-v2"></script>
+<script src="js/main.js?v=20260712-full-backend-v2"></script>
+<script src="js/theme-switcher.js?v=20260712-full-backend-v2"></script>
+<script src="js/app-data.js?v=20260712-full-backend-v2"></script>
+<script src="js/retail-advanced.js?v=20260712-full-backend-v2"></script>
+<script src="js/invoice-templates.js?v=20260712-full-backend-v2"></script>
+<script src="js/axtor-fixes.js?v=20260712-full-backend-v2"></script>
+
+
+<script src="js/backend-page-utils.js?v=20260712-full-backend-v2"></script><script src="js/inventory-backend.js?v=20260712-full-backend-v2"></script></body>
 </html>

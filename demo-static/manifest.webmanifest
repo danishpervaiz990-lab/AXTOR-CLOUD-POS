@@ -1,8 +1,10 @@
 {
-  "name": "Axtor POS Cloud Demo",
+  "name": "Axtor POS Cloud",
   "short_name": "Axtor POS",
   "start_url": "login.html",
   "display": "standalone",
+  "description": "Multi-tenant cloud POS and business management platform.",
+  "scope": "./",
   "background_color": "#f5f7f4",
   "theme_color": "#0f9f78",
   "icons": [

@@ -609,6 +609,7 @@
             businessId: result.business?.id || null,
             businessSlug: result.business?.slug || businessSlug,
             salesmanId: null
+            ,mustChangePassword: Boolean(result.user?.mustChangePassword)
           };
 
           localStorage.setItem('axtorApiBaseUrl', API_BASE_URL);
@@ -645,7 +646,12 @@
             ? requestedReturnUrl
             : 'index.html';
 
-          window.location.href = safeReturnUrl;
+          if (result.user?.mustChangePassword) {
+            sessionStorage.setItem('axtorPasswordChangeReturn', safeReturnUrl);
+            window.location.href = 'change-password.html';
+          } else {
+            window.location.href = safeReturnUrl;
+          }
         } catch (err) {
           console.error('Axtor backend login failed:', err);
           showError('Cannot connect to backend API. Please check Railway API and try again.');
