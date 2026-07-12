@@ -6,7 +6,12 @@ export type AuthTokenPayload = {
   businessSlug: string;
   email: string;
   role: string;
+  sessionId?: string;
 };
+
+export function hashAuthToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
 
 type InternalTokenPayload = AuthTokenPayload & {
   iat: number;

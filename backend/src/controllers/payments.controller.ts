@@ -92,6 +92,9 @@ function formatPayment(payment: any) {
     customerId: payment.customerId,
     customerName: payment.customerName,
     amount: Number(payment.amount || 0),
+    currency: payment.currency || "QAR",
+    exchangeRate: Number(payment.exchangeRate || 1),
+    baseAmount: Number(payment.baseAmount || 0),
     paymentMethod: payment.method,
     method: payment.method,
     depositAccount: allocation.depositAccount ?? null,
@@ -290,12 +293,18 @@ export async function createPayment(req: Request, res: Response) {
       const total = roundMoney(Number(invoice.total || 0));
       const previousPaid = roundMoney(Number(invoice.paid || 0));
       const currentBalance = roundMoney(Number(invoice.balance ?? total - previousPaid));
+      const paymentCurrency = String(req.body?.currency || invoice.currency || "QAR").toUpperCase();
+      const invoiceCurrency = String(invoice.currency || "QAR").toUpperCase();
+      const appliedAmount = paymentCurrency === invoiceCurrency ? amount : roundMoney(toNumber(req.body?.documentAmount));
+      if (paymentCurrency !== invoiceCurrency && appliedAmount <= 0) throw new Error(`documentAmount in ${invoiceCurrency} is required for a ${paymentCurrency} payment`);
+      const exchangeRate = paymentCurrency === invoiceCurrency ? Number(invoice.exchangeRate || 1) : toNumber(req.body?.exchangeRate);
+      if (exchangeRate <= 0) throw new Error("A positive payment exchangeRate is required");
 
       if (currentBalance <= 0) {
         throw new Error("Invoice is already fully paid");
       }
 
-      if (amount > currentBalance) {
+      if (appliedAmount > currentBalance) {
         throw new Error(`Payment amount cannot exceed balance ${currentBalance.toFixed(2)}`);
       }
 
@@ -313,7 +322,7 @@ export async function createPayment(req: Request, res: Response) {
         }
       }
 
-      const nextPaid = roundMoney(previousPaid + amount);
+      const nextPaid = roundMoney(previousPaid + appliedAmount);
       const nextBalance = roundMoney(Math.max(0, total - nextPaid));
       const nextStatus = getSalesDocumentStatus(total, nextPaid);
       const nextPaymentStatus = getPaymentStatus(total, nextPaid);
@@ -326,6 +335,11 @@ export async function createPayment(req: Request, res: Response) {
           customerId,
           customerName,
           amount,
+          currency: paymentCurrency,
+          exchangeRate,
+          baseAmount: roundMoney(amount * exchangeRate),
+          exchangeRateSource: cleanString(req.body?.exchangeRateSource) ?? (paymentCurrency === invoiceCurrency ? invoice.exchangeRateSource : "manual"),
+          exchangeRateTimestamp: toDate(req.body?.exchangeRateTimestamp),
           method: cleanString(req.body?.paymentMethod) ?? cleanString(req.body?.method) ?? "cash",
           accountId: cleanString(req.body?.accountId) ?? null,
           referenceNo: cleanString(req.body?.referenceNo) ?? null,
@@ -337,6 +351,9 @@ export async function createPayment(req: Request, res: Response) {
             customerId,
             customerName,
             amount,
+            documentAmount: appliedAmount,
+            paymentCurrency,
+            documentCurrency: invoiceCurrency,
             previousPaid,
             previousBalance: currentBalance,
             paidAfterPayment: nextPaid,
@@ -355,6 +372,8 @@ export async function createPayment(req: Request, res: Response) {
         data: {
           paid: nextPaid,
           balance: nextBalance,
+          basePaid: roundMoney(nextPaid * Number(invoice.exchangeRate || 1)),
+          baseBalance: roundMoney(nextBalance * Number(invoice.exchangeRate || 1)),
           creditAmount: nextBalance,
           status: nextStatus,
           paymentStatus: nextPaymentStatus,
@@ -368,7 +387,7 @@ export async function createPayment(req: Request, res: Response) {
         if (balanceOwner) {
           await tx.customer.update({
             where: { id: customerId },
-            data: { balance: roundMoney(Math.max(0, Number(balanceOwner.balance || 0) - amount)) },
+            data: { balance: roundMoney(Math.max(0, Number(balanceOwner.balance || 0) - appliedAmount)) },
           });
         }
       }

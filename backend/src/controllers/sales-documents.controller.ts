@@ -160,6 +160,19 @@ async function loadSettings(tx: any, businessId: string) {
   return new Map<string, any>(rows.map((row: any) => [String(row.key), row.value]));
 }
 
+async function resolveDocumentCurrency(tx: any, businessId: string, baseCurrencyInput: unknown, input: any) {
+  const baseCurrency = String(baseCurrencyInput || "QAR").toUpperCase();
+  const currency = String(input?.currency || baseCurrency).toUpperCase();
+  if (currency === baseCurrency) return { currency, baseCurrency, rate: 1, source: "base_currency", timestamp: new Date() };
+  const enabled = await tx.businessCurrency.findFirst({ where: { businessId, currencyCode: currency, active: true } });
+  if (!enabled) throw new Error(`${currency} is not enabled for this business`);
+  const manualRate = toNumber(input?.exchangeRate, 0);
+  if (manualRate > 0) return { currency, baseCurrency, rate: manualRate, source: "manual", timestamp: toDate(input?.exchangeRateTimestamp) || new Date() };
+  const saved = await tx.exchangeRate.findFirst({ where: { businessId, baseCode: currency, quoteCode: baseCurrency, effectiveAt: { lte: new Date() } }, orderBy: { effectiveAt: "desc" } });
+  if (!saved || Number(saved.rate) <= 0) throw new Error(`Exchange rate required for ${currency} to ${baseCurrency}`);
+  return { currency, baseCurrency, rate: Number(saved.rate), source: saved.source || "manual", timestamp: saved.effectiveAt };
+}
+
 function formatItem(item: any) {
   return {
     id: item.id,
@@ -204,6 +217,8 @@ function formatSalesDocument(document: any) {
     businessId: document.businessId,
     branchId: document.branchId,
     warehouseId: document.warehouseId,
+    shiftId: document.shiftId || null,
+    counterId: document.counterId || null,
     documentNo: document.documentNo,
     documentType: toApiDocumentType(documentType),
     documentTypeRaw: document.documentType,
@@ -217,6 +232,10 @@ function formatSalesDocument(document: any) {
     salesmanName: document.salesmanName,
     paymentMethod: document.paymentMethod,
     currency: document.currency || "QAR",
+    baseCurrency: document.metadata?.baseCurrency || document.currency || "QAR",
+    exchangeRate: Number(document.exchangeRate || 1),
+    exchangeRateSource: document.exchangeRateSource || "manual",
+    exchangeRateTimestamp: document.exchangeRateTimestamp,
     salesChannel: document.salesChannel,
     referenceNo: document.referenceNo,
     internalNotes: document.internalNotes,
@@ -239,6 +258,12 @@ function formatSalesDocument(document: any) {
     receivedAmount: paid,
     balance,
     balanceAmount: balance,
+    baseSubtotal: Number(document.baseSubtotal || 0),
+    baseDiscount: Number(document.baseDiscount || 0),
+    baseTax: Number(document.baseTax || 0),
+    baseTotal: Number(document.baseTotal || 0),
+    basePaid: Number(document.basePaid || 0),
+    baseBalance: Number(document.baseBalance || 0),
     returnStatus,
     returnedAmount,
     returnCount,
@@ -331,16 +356,54 @@ async function resolveCustomer(tx: any, businessId: string, input: any) {
   return { customerId: customer.id, customerName: customer.name, customer };
 }
 
-async function resolveSalesperson(tx: any, businessId: string, access: UserAccess, input: any) {
-  const requestedId = cleanString(input?.salesmanId) || access.userId;
-  const salesperson = await tx.user.findFirst({ where: { id: requestedId, businessId, status: "ACTIVE" } });
-  if (!salesperson) throw new Error("Selected sales person is invalid or inactive");
+async function resolveShiftContext(tx: any, businessId: string, userId: string, branchId: string | null, input: any) {
+  let shiftId = cleanString(input?.shiftId) || null;
+  let counterId = cleanString(input?.counterId) || null;
+  if (shiftId) {
+    const shift = await tx.shift.findFirst({ where: { id: shiftId, businessId, status: "OPEN" } });
+    if (!shift) throw new Error("Selected shift is not open");
+    if (branchId && shift.branchId && shift.branchId !== branchId) throw new Error("Shift does not belong to the selected branch");
+    counterId = counterId || shift.counterId || null;
+    return { shiftId: shift.id, counterId };
+  }
+  const shift = await tx.shift.findFirst({
+    where: { businessId, status: "OPEN", AND: [{ OR: [{ cashierUserId: userId }, { openedByUserId: userId }] }, ...(branchId ? [{ OR: [{ branchId }, { branchId: null }] }] : [])] },
+    orderBy: { openedAt: "desc" },
+  });
+  if (shift) return { shiftId: shift.id, counterId: counterId || shift.counterId || null };
+  if (counterId) {
+    const counter = await tx.counter.findFirst({ where: { id: counterId, businessId } });
+    if (!counter) throw new Error("Counter not found");
+  }
+  return { shiftId: null, counterId };
+}
 
-  if (salesperson.id !== access.userId && !hasPermission(access, "sales_documents.change_salesperson")) {
-    throw new Error("You do not have permission to select another sales person");
+async function resolveSalesperson(tx: any, businessId: string, access: UserAccess, input: any) {
+  const requestedId = cleanString(input?.salesmanId);
+
+  // Sales commission is driven by the dedicated Salesman model. Prefer it when
+  // a salesman was selected, or when the current user has a linked salesman row.
+  let salesman = requestedId
+    ? await tx.salesman.findFirst({ where: { id: requestedId, businessId, active: true } })
+    : await tx.salesman.findFirst({ where: { businessId, userId: access.userId, active: true } });
+
+  if (salesman) {
+    const isOwnProfile = !salesman.userId || salesman.userId === access.userId;
+    if (!isOwnProfile && !hasPermission(access, "sales_documents.change_salesperson")) {
+      throw new Error("You do not have permission to select another sales person");
+    }
+    return { salesmanId: salesman.id, salesmanName: salesman.name };
   }
 
-  return { salesmanId: salesperson.id, salesmanName: salesperson.name };
+  // Backward-compatible fallback for businesses that have not created salesman
+  // profiles yet. Existing user IDs continue to work without breaking old sales.
+  const requestedUserId = requestedId || access.userId;
+  const user = await tx.user.findFirst({ where: { id: requestedUserId, businessId, status: "ACTIVE" } });
+  if (!user) throw new Error("Selected sales person is invalid or inactive");
+  if (user.id !== access.userId && !hasPermission(access, "sales_documents.change_salesperson")) {
+    throw new Error("You do not have permission to select another sales person");
+  }
+  return { salesmanId: user.id, salesmanName: user.name };
 }
 
 function preparePaymentLines(input: any, total: number, documentType: PrismaDocumentType, postingMode: string) {
@@ -607,6 +670,11 @@ async function createPayments(
         customerId: input.customerId,
         customerName: input.customerName,
         amount: line.amount,
+        currency: input.document.currency || "QAR",
+        exchangeRate: Number(input.document.exchangeRate || 1),
+        baseAmount: roundMoney(Number(line.amount) * Number(input.document.exchangeRate || 1)),
+        exchangeRateSource: input.document.exchangeRateSource || "manual",
+        exchangeRateTimestamp: input.document.exchangeRateTimestamp || input.paymentDate,
         method: line.method,
         accountId: line.accountId,
         referenceNo: line.referenceNo,
@@ -650,11 +718,12 @@ export async function getSalesDocumentContext(req: Request, res: Response) {
 
     const data = await (prisma as any).$transaction(async (tx: any) => {
       const access = await loadUserAccess(tx, businessId, userId);
-      const [business, branches, warehouses, salesPersons, settingsRows, inventoryStocks] = await Promise.all([
+      const [business, branches, warehouses, users, salesmen, settingsRows, inventoryStocks] = await Promise.all([
         tx.business.findUnique({ where: { id: businessId } }),
         tx.branch.findMany({ where: { businessId, active: true }, orderBy: { name: "asc" } }),
         tx.warehouse.findMany({ where: { businessId, active: true }, orderBy: { name: "asc" } }),
         tx.user.findMany({ where: { businessId, status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, branchId: true } }),
+        tx.salesman.findMany({ where: { businessId, active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, branchId: true, userId: true } }),
         tx.appSetting.findMany({ where: { businessId } }),
         tx.inventoryStock.findMany({
           where: { businessId },
@@ -688,7 +757,12 @@ export async function getSalesDocumentContext(req: Request, res: Response) {
         },
         branches: allowedBranches,
         warehouses: allowedWarehouses,
-        salesPersons,
+        salesPersons: [
+          ...salesmen.map((row: any) => ({ ...row, source: "salesman" })),
+          ...users
+            .filter((user: any) => !salesmen.some((salesman: any) => salesman.userId === user.id))
+            .map((row: any) => ({ ...row, source: "user" })),
+        ],
         inventoryStocks: inventoryStocks
           .filter((row: any) => allowedWarehouses.some((warehouse: any) => warehouse.id === row.warehouseId))
           .map((row: any) => ({
@@ -819,7 +893,9 @@ export async function createSalesDocument(req: Request, res: Response) {
       const operational = await resolveOperationalContext(tx, businessId, access, req.body, { requireWarehouse: postingMode === "post" && documentType === "INVOICE" });
       const business = await tx.business.findUnique({ where: { id: businessId } });
       const timezone = business?.timezone || "Asia/Qatar";
-      const currency = business?.currency || "QAR";
+      const baseCurrency = business?.currency || "QAR";
+      const currencyContext = await resolveDocumentCurrency(tx, businessId, baseCurrency, req.body);
+      const currency = currencyContext.currency;
       const documentDate = toDate(req.body?.documentDate) || new Date();
       validateDocumentDate(access, documentDate, timezone);
 
@@ -861,6 +937,7 @@ export async function createSalesDocument(req: Request, res: Response) {
       const affectsStock = postingMode === "post" && stockAffectsDocument(documentType, operational.settings);
       const allowNegative = Boolean(settingValue(operational.settings, "sales.allowNegativeStock", false)) || hasPermission(access, "sales_documents.allow_negative_stock");
       if (affectsStock) await validateStock(tx, businessId, operational.warehouseId, prepared.items, allowNegative);
+      const shiftContext = await resolveShiftContext(tx, businessId, access.userId, operational.branchId, req.body);
 
       const documentNo = await getNextDocumentNumber(tx, businessId, operational.branchId, documentType as any);
       const status = postingMode === "draft" ? "DRAFT" : documentType === "INVOICE" ? getPostedStatus(total, payment.paid, payment.paymentMethod) : "ISSUED";
@@ -878,6 +955,7 @@ export async function createSalesDocument(req: Request, res: Response) {
           vehicleNumber: cleanString(req.body?.vehicleNumber) || null,
           instructions: cleanString(req.body?.deliveryInstructions) || null,
         },
+        baseCurrency: currencyContext.baseCurrency,
       };
 
       const document = await tx.salesDocument.create({
@@ -885,6 +963,8 @@ export async function createSalesDocument(req: Request, res: Response) {
           businessId,
           branchId: operational.branchId,
           warehouseId: operational.warehouseId,
+          shiftId: shiftContext.shiftId,
+          counterId: shiftContext.counterId,
           documentNo,
           documentType,
           documentPrefix: getDocumentPrefix(documentType as any),
@@ -897,6 +977,9 @@ export async function createSalesDocument(req: Request, res: Response) {
           salesmanName: salesperson.salesmanName,
           paymentMethod: payment.paymentMethod,
           currency,
+          exchangeRate: currencyContext.rate,
+          exchangeRateSource: currencyContext.source,
+          exchangeRateTimestamp: currencyContext.timestamp,
           salesChannel: cleanString(req.body?.salesChannel) || "pos_counter",
           referenceNo: cleanString(req.body?.referenceNo) || null,
           internalNotes: cleanString(req.body?.internalNotes) || null,
@@ -910,6 +993,12 @@ export async function createSalesDocument(req: Request, res: Response) {
           total,
           paid: postingMode === "draft" ? 0 : payment.paid,
           balance: postingMode === "draft" ? (documentType === "INVOICE" ? total : 0) : (documentType === "INVOICE" ? payment.balance : 0),
+          baseSubtotal: roundMoney(prepared.subtotal * currencyContext.rate),
+          baseDiscount: roundMoney(discountTotal * currencyContext.rate),
+          baseTax: roundMoney(prepared.taxTotal * currencyContext.rate),
+          baseTotal: roundMoney(total * currencyContext.rate),
+          basePaid: roundMoney((postingMode === "draft" ? 0 : payment.paid) * currencyContext.rate),
+          baseBalance: roundMoney((postingMode === "draft" ? (documentType === "INVOICE" ? total : 0) : (documentType === "INVOICE" ? payment.balance : 0)) * currencyContext.rate),
           creditAmount: postingMode === "post" && documentType === "INVOICE" ? payment.balance : 0,
           customerCreditApplied: postingMode === "post" && documentType === "INVOICE" && payment.balance > 0 && Boolean(customerInfo.customerId),
           dueDate: toDate(req.body?.dueDate) || null,
@@ -941,6 +1030,8 @@ export async function createSalesDocument(req: Request, res: Response) {
         },
         include: { items: true },
       });
+
+      await tx.documentCurrencyRate.create({ data: { businessId, entityType: "sales_document", entityId: document.id, currencyCode: currencyContext.currency, baseCurrencyCode: currencyContext.baseCurrency, rate: currencyContext.rate, source: currencyContext.source, rateTimestamp: currencyContext.timestamp } });
 
       if (affectsStock) {
         await applyStockMovement(tx, {
@@ -1049,6 +1140,8 @@ export async function postSalesDocument(req: Request, res: Response) {
           paymentStatus: getPaymentStatus(Number(document.total), payment.paid, document.documentType === "INVOICE"),
           paid: document.documentType === "INVOICE" ? payment.paid : 0,
           balance: document.documentType === "INVOICE" ? payment.balance : 0,
+          basePaid: roundMoney((document.documentType === "INVOICE" ? payment.paid : 0) * Number(document.exchangeRate || 1)),
+          baseBalance: roundMoney((document.documentType === "INVOICE" ? payment.balance : 0) * Number(document.exchangeRate || 1)),
           creditAmount: document.documentType === "INVOICE" ? payment.balance : 0,
           customerCreditApplied: document.documentType === "INVOICE" && payment.balance > 0 && Boolean(document.customerId),
           stockStatus: affectsStock ? "posted" : "not_applicable",
@@ -1212,11 +1305,14 @@ export async function updateSalesDocument(req: Request, res: Response) {
         lastEditReason: cleanString(req.body?.editReason) || null,
       };
 
+      const shiftContext = await resolveShiftContext(tx, businessId, access.userId, operational.branchId, { shiftId: req.body?.shiftId ?? current.shiftId, counterId: req.body?.counterId ?? current.counterId });
       const updated = await tx.salesDocument.update({
         where: { id: current.id },
         data: {
           branchId: operational.branchId,
           warehouseId: operational.warehouseId,
+          shiftId: shiftContext.shiftId,
+          counterId: shiftContext.counterId,
           documentType,
           documentPrefix: getDocumentPrefix(documentType as any),
           lpoNo: cleanString(req.body?.lpoNo) ?? current.lpoNo,

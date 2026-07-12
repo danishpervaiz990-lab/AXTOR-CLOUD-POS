@@ -61,12 +61,9 @@ export function tenantMiddleware(req: Request, _res: Response, next: NextFunctio
     return next();
   }
 
-  const headerValue = req.header('x-business-id') || req.header('x-tenant-id') || '';
-  const businessId = headerValue.trim() || null;
-
   req.tenant = {
-    businessId,
-    source: businessId ? 'header' : 'future-auth'
+    businessId: null,
+    source: 'future-auth'
   };
 
   next();

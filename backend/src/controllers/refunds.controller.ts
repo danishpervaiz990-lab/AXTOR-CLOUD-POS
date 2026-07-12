@@ -15,7 +15,7 @@ function status(returned: number, refunded: number) {
   return "partially_refunded";
 }
 function format(r: any) {
-  return { ...r, amount: Number(r.amount || 0), method: r.method, refundDate: r.refundDate };
+  return { ...r, amount: Number(r.amount || 0), baseAmount: Number(r.baseAmount || 0), exchangeRate: Number(r.exchangeRate || 1), currency: r.currency || "QAR", method: r.method, refundDate: r.refundDate };
 }
 async function nextNo(tx: any, bid: string) {
   await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `axtor:refund-counter:${bid}`);
@@ -75,7 +75,7 @@ export async function createRefund(req: Request,res: Response){
       if(refundable<=0) throw new Error("No refundable balance remains for this invoice");
       if(amount>refundable+0.001) throw new Error(`Refund exceeds refundable balance. Maximum allowed: ${refundable.toFixed(2)}`);
       const refundNo=await nextNo(tx,bid);
-      const row=await tx.customerRefund.create({data:{businessId:bid,refundNo,salesDocumentId:doc.id,salesReturnId:salesReturnId||null,customerId:doc.customerId||null,customerName:doc.customerName||"Walk-in Customer",amount,method,accountId:text(req.body?.accountId)||text(req.body?.depositAccount)||null,referenceNo:text(req.body?.referenceNo)||null,notes:text(req.body?.notes)||null,idempotencyKey:idempotencyKey||null,refundDate:date(req.body?.refundDate),metadata:{createdById:userId(req)||null,source:"api"}}});
+      const row=await tx.customerRefund.create({data:{businessId:bid,refundNo,salesDocumentId:doc.id,salesReturnId:salesReturnId||null,customerId:doc.customerId||null,customerName:doc.customerName||"Walk-in Customer",amount,currency:doc.currency||"QAR",exchangeRate:Number(doc.exchangeRate||1),baseAmount:money(amount*Number(doc.exchangeRate||1)),exchangeRateSource:doc.exchangeRateSource||"manual",exchangeRateTimestamp:doc.exchangeRateTimestamp||new Date(),method,accountId:text(req.body?.accountId)||text(req.body?.depositAccount)||null,referenceNo:text(req.body?.referenceNo)||null,notes:text(req.body?.notes)||null,idempotencyKey:idempotencyKey||null,refundDate:date(req.body?.refundDate),metadata:{createdById:userId(req)||null,source:"api"}}});
       const next=money(already+amount); const rs=status(returned,next);
       await tx.salesDocument.update({where:{id:doc.id},data:{refundedAmount:next,refundStatus:rs,metadata:{...(doc.metadata&&typeof doc.metadata==="object"?doc.metadata:{}),lastRefundId:row.id,lastRefundNo:refundNo,lastRefundAmount:amount,lastRefundAt:new Date().toISOString()}}});
       if(salesReturnId){ const ret=await tx.salesReturn.findFirst({where:{id:salesReturnId,businessId:bid}}); if(ret) await tx.salesReturn.update({where:{id:ret.id},data:{refundAmount:money(number(ret.refundAmount)+amount)}}); }

@@ -45,4 +45,6 @@ export const env = {
   corsOrigins: parseCorsOrigins(optional('CORS_ORIGIN', 'http://localhost:3000,http://localhost:5173,https://axtorpos.vercel.app')),
   authTokenSecret: required('AUTH_TOKEN_SECRET'),
   authTokenExpiresSeconds: numberEnv('AUTH_TOKEN_EXPIRES_SECONDS', 86400)
+  ,platformAdminEmails: optional('PLATFORM_ADMIN_EMAILS', '')
+  ,appVersion: optional('APP_VERSION', 'development')
 };
