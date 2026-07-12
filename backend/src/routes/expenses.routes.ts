@@ -1,0 +1,1 @@
+import{Router}from"express";import{requireAuth}from"../middleware/auth.middleware.js";import * as c from"../controllers/expenses.controller.js";const router=Router();router.use(requireAuth);router.get("/",c.list);router.post("/",c.create);router.patch("/:id",c.update);router.delete("/:id",c.remove);export{router};export const expensesRoutes=router;export default router;

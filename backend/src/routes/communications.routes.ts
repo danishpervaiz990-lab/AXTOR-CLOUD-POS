@@ -1,0 +1,1 @@
+import{Router}from"express";import{requireAuth}from"../middleware/auth.middleware.js";import * as c from"../controllers/communications.controller.js";const router=Router();router.use(requireAuth);router.get("/",c.list);router.post("/",c.create);router.patch("/:id/status",c.status);export{router};export const communicationsRoutes=router;export default router;
