@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install --include=dev --no-audit --no-fund && npm run prisma:generate && npm run build"
+buildCommand = "npm run prisma:generate && npm run build"
 
 [deploy]
 startCommand = "npm run prisma:deploy && npm run seed:catalog && npm run start"
