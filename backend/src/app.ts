@@ -147,3 +147,4 @@ export function createApp() {
 }
 
 export default createApp;
+// Railway fresh rebuild: Global SaaS backend
