@@ -15,8 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:predeploy": "prisma db execute --file prisma/predeploy-unique-indexes.sql --schema prisma/schema.prisma",
-    "prisma:deploy": "npm run prisma:predeploy && prisma db push --skip-generate",
+    "prisma:deploy": "prisma db push --skip-generate --accept-data-loss",
     "prisma:studio": "prisma studio",
     "seed:owner": "tsx src/scripts/seed-owner.ts"
     ,"seed:catalog": "tsx src/scripts/seed-commercial-catalog.ts"
