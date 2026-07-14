@@ -24,7 +24,7 @@ export async function getNextDocumentNumber(
   const lockKey = `axtor:document-counter:${businessId}:${branchId || 'global'}:${documentType}`;
 
   await (prismaClient as any).$queryRawUnsafe(
-    'SELECT pg_advisory_xact_lock(hashtext($1))',
+    'SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))',
     lockKey
   );
 

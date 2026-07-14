@@ -85,7 +85,7 @@ function toDate(value: unknown): Date {
 }
 
 async function getNextReturnNumber(tx: any, businessId: string) {
-  await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `axtor:return-counter:${businessId}`);
+  await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))", `axtor:return-counter:${businessId}`);
   const latest = await tx.salesReturn.findFirst({
     where: { businessId },
     orderBy: { createdAt: "desc" },
@@ -284,7 +284,7 @@ export async function createSalesReturn(req: Request, res: Response) {
       const access = await loadUserAccess(tx, businessId, userId);
       requirePermission(access, "sales_documents.return", true);
       if (idempotencyKey) {
-        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `axtor:return-idempotency:${businessId}:${idempotencyKey}`);
+        await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))", `axtor:return-idempotency:${businessId}:${idempotencyKey}`);
         const duplicate = await tx.salesReturn.findFirst({ where: { businessId, idempotencyKey }, include: { items: true } });
         if (duplicate) return { salesReturn: duplicate, duplicate: true };
       }

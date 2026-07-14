@@ -18,7 +18,7 @@ function format(r: any) {
   return { ...r, amount: Number(r.amount || 0), baseAmount: Number(r.baseAmount || 0), exchangeRate: Number(r.exchangeRate || 1), currency: r.currency || "QAR", method: r.method, refundDate: r.refundDate };
 }
 async function nextNo(tx: any, bid: string) {
-  await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `axtor:refund-counter:${bid}`);
+  await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))", `axtor:refund-counter:${bid}`);
   const count = await tx.customerRefund.count({ where: { businessId: bid } });
   for (let i=1;i<30;i++) {
     const no = `RFD-${String(count+i).padStart(6,"0")}`;
@@ -62,7 +62,7 @@ export async function createRefund(req: Request,res: Response){
     const result=await prisma.$transaction(async(tx:any)=>{
       const access=await loadUserAccess(tx,bid,userId(req));
       requirePermission(access,"sales_documents.refund",true);
-      if(idempotencyKey){ await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))",`axtor:refund-idempotency:${bid}:${idempotencyKey}`); const existing=await tx.customerRefund.findFirst({where:{businessId:bid,idempotencyKey}}); if(existing) return {row:existing,duplicate:true}; }
+      if(idempotencyKey){ await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))",`axtor:refund-idempotency:${bid}:${idempotencyKey}`); const existing=await tx.customerRefund.findFirst({where:{businessId:bid,idempotencyKey}}); if(existing) return {row:existing,duplicate:true}; }
       const doc=await tx.salesDocument.findFirst({where:{id:salesDocumentId,businessId:bid},include:{returns:true}});
       if(!doc) throw new Error("Sales invoice not found");
       if(String(doc.documentType)!=="INVOICE") throw new Error("Only invoices can be refunded");

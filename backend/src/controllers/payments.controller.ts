@@ -112,7 +112,7 @@ function formatPayment(payment: any) {
 }
 
 async function getNextReceiptNo(tx: any, businessId: string) {
-  await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `axtor:receipt-counter:${businessId}`);
+  await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))", `axtor:receipt-counter:${businessId}`);
   const prefix = "RCPT";
   const existingCount = await tx.customerPayment.count({
     where: { businessId },
@@ -265,7 +265,7 @@ export async function createPayment(req: Request, res: Response) {
       const access = await loadUserAccess(tx, businessId, getUserId(req));
       requirePermission(access, "payments.create", true);
       if (idempotencyKey) {
-        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `axtor:payment-idempotency:${businessId}:${idempotencyKey}`);
+        await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))", `axtor:payment-idempotency:${businessId}:${idempotencyKey}`);
         const existing = await tx.customerPayment.findFirst({ where: { businessId, idempotencyKey } });
         if (existing) {
           const linkedId = existing.allocation && typeof existing.allocation === "object" ? existing.allocation.salesDocumentId : null;

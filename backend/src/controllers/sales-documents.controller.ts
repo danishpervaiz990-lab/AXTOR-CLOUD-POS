@@ -637,7 +637,7 @@ async function applyStockMovement(
 }
 
 async function nextReceiptNo(tx: any, businessId: string) {
-  await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `axtor:receipt-counter:${businessId}`);
+  await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))", `axtor:receipt-counter:${businessId}`);
   const count = await tx.customerPayment.count({ where: { businessId } });
   for (let offset = 1; offset <= 50; offset += 1) {
     const receiptNo = `RCPT-${String(count + offset).padStart(6, "0")}`;
@@ -882,7 +882,7 @@ export async function createSalesDocument(req: Request, res: Response) {
     const inputItems = Array.isArray(req.body?.items) ? (req.body.items as CreateSalesDocumentItemInput[]) : [];
 
     const result = await (prisma as any).$transaction(async (tx: any) => {
-      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `axtor:sales-idempotency:${businessId}:${idempotencyKey}`);
+      await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))", `axtor:sales-idempotency:${businessId}:${idempotencyKey}`);
       const duplicate = await tx.salesDocument.findFirst({ where: { businessId, idempotencyKey }, include: { items: true } });
       if (duplicate) return { document: duplicate, duplicate: true };
 
