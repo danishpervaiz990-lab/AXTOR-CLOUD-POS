@@ -2,6 +2,8 @@ import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
 import { hasPermission, loadUserAccess } from "../services/access.service.js";
 import { writeAudit } from "../services/audit.service.js";
+import { hashPassword } from "../utils/password.js";
+import { assertUsageLimit } from "../services/entitlements.service.js";
 
 const permissionDefinitions = [
   ["sales_documents.view", "View sales documents", "Sales"],
@@ -48,6 +50,28 @@ async function requireAccessAdministrator(tx: any, req: Request, bid: string) {
   return access;
 }
 
+const defaultRoles = [
+  { name: "Admin", description: "Full operational access for a trusted administrator", permissions: ["*"] },
+  { name: "Manager", description: "Manage daily sales, customers, stock and reports", permissions: ["sales_documents.view", "sales_documents.create", "sales_documents.save_draft", "sales_documents.post", "sales_documents.change_document_type", "sales_documents.change_salesperson", "sales_documents.edit_draft", "sales_documents.edit_posted", "sales_documents.return", "sales_documents.refund", "payments.create"] },
+  { name: "Cashier", description: "Create and post counter sales and receive payments", permissions: ["sales_documents.view", "sales_documents.create", "sales_documents.save_draft", "sales_documents.post", "payments.create"] },
+  { name: "Salesman", description: "Create and manage assigned sales documents", permissions: ["sales_documents.view", "sales_documents.create", "sales_documents.save_draft", "sales_documents.post"] },
+  { name: "Warehouse", description: "Stock and fulfilment team access", permissions: ["sales_documents.view"] },
+];
+
+async function ensureDefaultRoles(tx: any, bid: string) {
+  for (const role of defaultRoles) {
+    await tx.role.upsert({
+      where: { businessId_name: { businessId: bid, name: role.name } },
+      create: { businessId: bid, ...role, isSystemRole: true },
+      update: { isSystemRole: true, description: role.description },
+    });
+  }
+}
+
+function validatePassword(password: string) {
+  return password.length >= 12 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
+}
+
 export async function getAccessControl(req: Request, res: Response) {
   try {
     const bid = businessId(req);
@@ -55,6 +79,7 @@ export async function getAccessControl(req: Request, res: Response) {
 
     const data = await (prisma as any).$transaction(async (tx: any) => {
       const access = await requireAccessAdministrator(tx, req, bid);
+      await ensureDefaultRoles(tx, bid);
       const [roles, users] = await Promise.all([
         tx.role.findMany({ where: { businessId: bid }, orderBy: [{ isSystemRole: "desc" }, { name: "asc" }] }),
         tx.user.findMany({
@@ -91,6 +116,45 @@ export async function getAccessControl(req: Request, res: Response) {
   } catch (error: any) {
     console.error("getAccessControl error:", error);
     return res.status(403).json({ ok: false, error: { message: error?.message || "Unable to load access control" } });
+  }
+}
+
+export async function createUser(req: Request, res: Response) {
+  try {
+    const bid = businessId(req);
+    const name = text(req.body?.name);
+    const email = text(req.body?.email)?.toLowerCase();
+    const password = String(req.body?.password || "");
+    const phone = text(req.body?.phone);
+    const branchId = text(req.body?.branchId);
+    const requestedRoleIds = Array.isArray(req.body?.roleIds) ? req.body.roleIds : [];
+    if (!bid || !name || !email || !password) return res.status(400).json({ ok: false, error: { message: "Name, email and password are required" } });
+    if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ ok: false, error: { message: "Enter a valid email address" } });
+    if (!validatePassword(password)) return res.status(400).json({ ok: false, error: { message: "Password must be at least 12 characters with uppercase, lowercase, number, and symbol" } });
+
+    const result = await (prisma as any).$transaction(async (tx: any) => {
+      const access = await requireAccessAdministrator(tx, req, bid);
+      await ensureDefaultRoles(tx, bid);
+      await assertUsageLimit(tx, bid, "users");
+      if (branchId) {
+        const branch = await tx.branch.findFirst({ where: { id: branchId, businessId: bid, active: true } });
+        if (!branch) throw new Error("Selected branch is invalid or inactive");
+      }
+      const roleIds = [...new Set(requestedRoleIds.map((item: unknown) => String(item || "").trim()).filter(Boolean))];
+      const roles = roleIds.length ? await tx.role.findMany({ where: { businessId: bid, id: { in: roleIds } } }) : [await tx.role.findFirstOrThrow({ where: { businessId: bid, name: "Cashier" } })];
+      if (roles.length !== (roleIds.length || 1)) throw new Error("One or more selected roles are invalid");
+      if (roles.some((role: any) => String(role.name).toLowerCase().includes("owner")) && !access.isOwner) throw new Error("Only an Owner can assign an Owner role");
+      const duplicate = await tx.user.findFirst({ where: { businessId: bid, email } });
+      if (duplicate) throw new Error("A user with this email already exists");
+      const user = await tx.user.create({ data: { businessId: bid, branchId: branchId || null, name, email, phone: phone || null, passwordHash: hashPassword(password), status: "ACTIVE", mustChangePassword: true } });
+      await tx.userRole.createMany({ data: roles.map((role: any) => ({ businessId: bid, userId: user.id, roleId: role.id })), skipDuplicates: true });
+      await writeAudit(tx, req, { businessId: bid, userId: access.userId, action: "USER_CREATED", entityType: "user", entityId: user.id, after: { name, email, branchId: branchId || null, roleIds: roles.map((role: any) => role.id) } });
+      return { id: user.id, name: user.name, email: user.email, status: user.status, roleIds: roles.map((role: any) => role.id) };
+    });
+    return res.status(201).json({ ok: true, message: "User created. They can sign in with the temporary password.", data: result });
+  } catch (error: any) {
+    console.error("createUser error:", error);
+    return res.status(400).json({ ok: false, error: { message: error?.message || "Unable to create user" } });
   }
 }
 

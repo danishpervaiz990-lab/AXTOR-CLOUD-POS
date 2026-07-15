@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
-import { getAccessControl, updateRolePermissions, updateUserRoles } from "../controllers/access-control.controller.js";
+import { createUser, getAccessControl, updateRolePermissions, updateUserRoles } from "../controllers/access-control.controller.js";
 
 export const router = Router();
 router.use(requireAuth);
 router.get("/", getAccessControl);
+router.post("/users", createUser);
 router.patch("/roles/:roleId/permissions", updateRolePermissions);
 router.patch("/users/:userId/roles", updateUserRoles);
 

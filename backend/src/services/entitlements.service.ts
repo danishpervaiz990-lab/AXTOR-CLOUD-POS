@@ -37,6 +37,14 @@ export async function loadEntitlements(tx: any, businessId: string): Promise<Ent
   });
 
   let plan = subscription?.plan || null;
+  // FOUNDATION was the legacy all-features demo plan. Older tenant rows were
+  // accidentally given Basic during the commercial-catalog migration; keep
+  // those tenants operational until the catalog job normalises their record.
+  const legacyFoundation = String(business.subscriptionPlan || "").toLowerCase() === "foundation";
+  if (legacyFoundation && (!plan || String(plan.code).toLowerCase() === "basic")) {
+    const foundationPlan = await tx.subscriptionPlan.findFirst({ where: { code: "professional", active: true }, include: { features: true } });
+    if (foundationPlan) plan = foundationPlan;
+  }
   if (!plan) {
     const legacyCode = String(business.subscriptionPlan || "basic").toLowerCase();
     plan = await tx.subscriptionPlan.findFirst({ where: { code: legacyCode, active: true }, include: { features: true } });

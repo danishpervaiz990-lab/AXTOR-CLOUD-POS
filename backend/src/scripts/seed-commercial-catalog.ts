@@ -33,15 +33,21 @@ async function main() {
   }
   for (const [code, name, symbol, decimalPrecision] of currencyRows) await prisma.currency.upsert({ where: { code }, create: { code, name, symbol, decimalPrecision }, update: { name, symbol, decimalPrecision, active: true } });
   const basic = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: "basic" } });
-  const businesses = await prisma.business.findMany({ select: { id: true, currency: true, status: true, trialEndsAt: true } });
+  const professional = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: "professional" } });
+  const businesses = await prisma.business.findMany({ select: { id: true, currency: true, status: true, trialEndsAt: true, subscriptionPlan: true } });
   for (const business of businesses) {
     const baseCode = currencyRows.some(row => row[0] === String(business.currency || "QAR").toUpperCase()) ? String(business.currency || "QAR").toUpperCase() : "QAR";
     await prisma.businessCurrency.updateMany({ where: { businessId: business.id, isBase: true, currencyCode: { not: baseCode } }, data: { isBase: false } });
     await prisma.businessCurrency.upsert({ where: { businessId_currencyCode: { businessId: business.id, currencyCode: baseCode } }, create: { businessId: business.id, currencyCode: baseCode, isBase: true, active: true }, update: { isBase: true, active: true } });
-    if (!await prisma.tenantSubscription.findFirst({ where: { businessId: business.id, isCurrent: true } })) {
+    const legacyFoundation = String(business.subscriptionPlan || "").toLowerCase() === "foundation";
+    const targetPlan = legacyFoundation ? professional : basic;
+    const currentSubscription = await prisma.tenantSubscription.findFirst({ where: { businessId: business.id, isCurrent: true } });
+    if (!currentSubscription) {
       const trialEndsAt = business.trialEndsAt || new Date(Date.now() + 14 * 86400000);
       const status = business.status === "TRIAL" ? "TRIAL" : business.status === "SUSPENDED" ? "SUSPENDED" : business.status === "CANCELLED" ? "CANCELLED" : "ACTIVE";
-      await prisma.tenantSubscription.create({ data: { businessId: business.id, planId: basic.id, status, billingCycle: "MONTHLY", startsAt: new Date(), trialEndsAt: business.status === "TRIAL" ? trialEndsAt : null, currentPeriodStart: new Date(), currentPeriodEnd: business.status === "TRIAL" ? trialEndsAt : new Date(Date.now() + 30 * 86400000), isCurrent: true, provider: "manual" } });
+      await prisma.tenantSubscription.create({ data: { businessId: business.id, planId: targetPlan.id, status, billingCycle: "MONTHLY", startsAt: new Date(), trialEndsAt: business.status === "TRIAL" ? trialEndsAt : null, currentPeriodStart: new Date(), currentPeriodEnd: business.status === "TRIAL" ? trialEndsAt : new Date(Date.now() + 30 * 86400000), isCurrent: true, provider: "manual" } });
+    } else if (legacyFoundation && currentSubscription.planId === basic.id) {
+      await prisma.tenantSubscription.update({ where: { id: currentSubscription.id }, data: { planId: professional.id } });
     }
   }
   console.log(`Commercial catalog ready: ${plans.length} plans, ${industries.length} industries, ${currencyRows.length} currencies.`);
