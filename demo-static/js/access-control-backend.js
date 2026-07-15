@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const state = { data: null, loading: false, saving: false };
+  const state = { data: null, branches: [], loading: false, saving: false };
   window.AxtorAccessControlBackend = { version: "20260710-production-access-control", init, refresh: load };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
@@ -14,6 +14,7 @@
   function init() {
     if (!document.getElementById("users-roles")) return;
     installStatus();
+    installUserCreator();
     replaceSaveButton();
     bindEvents();
     load();
@@ -49,6 +50,16 @@
     oldButton.replaceWith(button);
   }
 
+  function installUserCreator() {
+    const root = document.getElementById("users-roles")?.querySelector(".cardx");
+    if (!root || document.getElementById("axtorCreateUserForm")) return;
+    const form = document.createElement("form");
+    form.id = "axtorCreateUserForm";
+    form.className = "border rounded p-3 mb-3 bg-light-subtle";
+    form.innerHTML = `<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2"><div><strong>Add backend user</strong><div class="small text-muted">Creates a real login and assigns roles immediately.</div></div><span class="badge text-bg-light border">Temporary password required</span></div><div class="row g-2"><div class="col-md-3"><label class="form-label small fw-semibold">Full name *</label><input id="axtorNewUserName" class="form-control form-control-sm" required></div><div class="col-md-3"><label class="form-label small fw-semibold">Email *</label><input id="axtorNewUserEmail" type="email" class="form-control form-control-sm" required></div><div class="col-md-2"><label class="form-label small fw-semibold">Phone</label><input id="axtorNewUserPhone" class="form-control form-control-sm"></div><div class="col-md-2"><label class="form-label small fw-semibold">Branch</label><select id="axtorNewUserBranch" class="form-select form-select-sm"><option value="">Any branch</option></select></div><div class="col-md-2"><label class="form-label small fw-semibold">Role *</label><select id="axtorNewUserRoles" class="form-select form-select-sm" multiple required></select></div><div class="col-md-5"><label class="form-label small fw-semibold">Temporary password *</label><input id="axtorNewUserPassword" type="password" minlength="12" class="form-control form-control-sm" placeholder="12+ chars: Aa1!" required></div><div class="col-md-7 d-flex align-items-end justify-content-end"><button id="axtorCreateUserBtn" class="btn btn-sm btn-brand" type="submit"><i class="bi bi-person-plus me-1"></i>Create user</button></div></div>`;
+    root.querySelector(".row.g-3.mb-3")?.before(form);
+  }
+
   function bindEvents() {
     document.addEventListener("click", async function (event) {
       const savePermissions = event.target.closest("#savePermissionsBtn[data-backend-access='1']");
@@ -63,6 +74,10 @@
         await saveUserRoles(saveUser.getAttribute("data-save-user-roles"), saveUser);
       }
     }, true);
+    document.getElementById("axtorCreateUserForm")?.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      await createUser(event.currentTarget);
+    });
   }
 
   async function load() {
@@ -70,7 +85,11 @@
     state.loading = true;
     setStatus("Loading backend users and role permissions…", "info");
     try {
-      state.data = unwrap(await request("GET", "/api/v1/access-control"));
+      const responses = await Promise.all([request("GET", "/api/v1/access-control"), request("GET", "/api/v1/branches")]);
+      state.data = unwrap(responses[0]);
+      const branchResponse = unwrap(responses[1]);
+      state.branches = Array.isArray(branchResponse) ? branchResponse : (branchResponse?.branches || branchResponse?.items || []);
+      renderUserCreator();
       renderUsers();
       renderMatrix();
       setStatus("Backend access control loaded. Changes are server-enforced and audited.", "success");
@@ -79,6 +98,33 @@
       setStatus(error.message || "Unable to load backend access control", "danger");
     } finally {
       state.loading = false;
+    }
+  }
+
+  function renderUserCreator() {
+    const roleSelect = document.getElementById("axtorNewUserRoles");
+    const branchSelect = document.getElementById("axtorNewUserBranch");
+    if (!roleSelect || !branchSelect || !state.data) return;
+    roleSelect.innerHTML = (state.data.roles || []).filter(function (role) { return !role.protected; }).map(function (role) { return `<option value="${escapeAttr(role.id)}" ${role.name === "Cashier" ? "selected" : ""}>${escapeHtml(role.name)}</option>`; }).join("");
+    branchSelect.innerHTML = '<option value="">Any branch</option>' + (state.branches || []).map(function (branch) { return `<option value="${escapeAttr(branch.id)}">${escapeHtml(branch.name)}${branch.code ? " · " + escapeHtml(branch.code) : ""}</option>`; }).join("");
+  }
+
+  async function createUser(form) {
+    const button = document.getElementById("axtorCreateUserBtn");
+    const password = document.getElementById("axtorNewUserPassword")?.value || "";
+    if (password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) return setStatus("Temporary password must have 12+ characters including uppercase, lowercase, number and symbol.", "warning");
+    const roles = Array.from(document.getElementById("axtorNewUserRoles")?.selectedOptions || []).map(function (option) { return option.value; });
+    if (!roles.length) return setStatus("Select at least one role for the new user.", "warning");
+    setButtonLoading(button, true, "Creating…");
+    try {
+      await request("POST", "/api/v1/access-control/users", { name: document.getElementById("axtorNewUserName")?.value, email: document.getElementById("axtorNewUserEmail")?.value, phone: document.getElementById("axtorNewUserPhone")?.value, branchId: document.getElementById("axtorNewUserBranch")?.value || null, password, roleIds: roles });
+      form.reset();
+      setStatus("User created in PostgreSQL. Give them the temporary password and ask them to change it after first login.", "success");
+      await load();
+    } catch (error) {
+      setStatus(error.message || "Unable to create user", "danger");
+    } finally {
+      setButtonLoading(button, false);
     }
   }
 

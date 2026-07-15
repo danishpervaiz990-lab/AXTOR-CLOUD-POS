@@ -98,6 +98,8 @@
     }
   }
 
+  window.addEventListener("axtor:salesmen-migrated", function () { load().catch(function (error) { U.toast(error.message || "Unable to refresh salesmen", "error"); }); });
+
   U.run(async function () {
     var currentMonth = new Date().toISOString().slice(0, 7);
     ["#salesmenMonth", "#targetMonth", "#performanceMonth", "#payoutMonth"].forEach(function (id) {

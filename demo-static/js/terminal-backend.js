@@ -256,6 +256,8 @@
     U.toast("Held sale recalled. Complete Sale will post this draft.");
   }
 
+  window.addEventListener("axtor:salesmen-migrated", function () { load().catch(function (error) { U.toast(error.message || "Unable to refresh terminal data", "error"); }); });
+
   U.run(async function () {
     await load();
 

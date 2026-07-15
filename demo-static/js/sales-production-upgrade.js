@@ -53,6 +53,10 @@
     console.log("AxtorSalesProduction loaded:", window.AxtorSalesProduction.version);
   }
 
+  window.addEventListener("axtor:salesmen-migrated", function () {
+    loadContext().catch(function () {});
+  });
+
   function request(method, path, body) {
     if (!window.AxtorAPI || typeof window.AxtorAPI.request !== "function") {
       return Promise.reject(new Error("Axtor API client is unavailable"));
@@ -106,14 +110,16 @@
 
         <div class="col-12 col-lg-6">
           <label class="form-label fw-semibold">Customer *</label>
-          <input id="axtorCustomerSearch" list="axtorCustomerList" class="form-control" placeholder="Search name, phone, code, email or company" autocomplete="off">
+          <select id="axtorCustomerSelect" class="form-select" aria-label="Select customer"></select>
+          <input id="axtorCustomerSearch" type="hidden" autocomplete="off">
           <datalist id="axtorCustomerList"></datalist>
           <input id="axtorCustomerId" type="hidden">
           <div id="axtorCustomerCreditInfo" class="small text-muted mt-1">Walk-in Customer</div>
         </div>
         <div class="col-12 col-lg-6">
           <label class="form-label fw-semibold">Sales Person *</label>
-          <input id="axtorSalespersonSearch" list="axtorSalespersonList" class="form-control" placeholder="Search active sales person" autocomplete="off">
+          <select id="axtorSalespersonSelect" class="form-select" aria-label="Select sales person"></select>
+          <input id="axtorSalespersonSearch" type="hidden" autocomplete="off">
           <datalist id="axtorSalespersonList"></datalist>
           <input id="axtorSalespersonId" type="hidden">
         </div>
@@ -343,11 +349,11 @@
         refreshNumberPreview();
       }
       if (id === "axtorWarehouse") decorateStockDetails();
-      if (id === "axtorCustomerSearch") {
+      if (id === "axtorCustomerSearch" || id === "axtorCustomerSelect") {
         resolveCustomerInput(true);
         autoDueDate();
       }
-      if (id === "axtorSalespersonSearch") resolveSalespersonInput(true);
+      if (id === "axtorSalespersonSearch" || id === "axtorSalespersonSelect") resolveSalespersonInput(true);
       if (id === "axtorDocumentDate") autoDueDate();
       if (id === "axtorSalesChannel") updateDeliveryFields();
       updateSummary();
@@ -389,16 +395,21 @@
       if (context.currentUser?.branchId) branchSelect.value = context.currentUser.branchId;
 
       const salespersonList = document.getElementById("axtorSalespersonList");
+      const salespersonSelect = document.getElementById("axtorSalespersonSelect");
       salespersonList.innerHTML = (context.salesPersons || []).map(function (person) {
         return `<option value="${escapeAttr(person.name + " · " + person.email)}" data-id="${escapeAttr(person.id)}"></option>`;
       }).join("");
+      salespersonSelect.innerHTML = (context.salesPersons || []).map(function (person) {
+        return `<option value="${escapeAttr(person.id)}">${escapeHtml(person.name)}${person.email ? " · " + escapeHtml(person.email) : ""}</option>`;
+      }).join("") || '<option value="">No active sales person</option>';
       const current = (context.salesPersons || []).find(function (person) { return person.id === context.currentUser?.id; });
       if (current) {
         document.getElementById("axtorSalespersonSearch").value = current.name + " · " + current.email;
         document.getElementById("axtorSalespersonId").value = current.id;
+        salespersonSelect.value = current.id;
       }
 
-      document.getElementById("axtorSalespersonSearch").disabled = !context.capabilities?.changeSalesperson;
+      salespersonSelect.disabled = !context.capabilities?.changeSalesperson;
       document.getElementById("axtorDocumentType").disabled = context.capabilities?.changeDocumentType === false;
       const dateInput = document.getElementById("axtorDocumentDate");
       if (!context.capabilities?.backdate) dateInput.min = today();
@@ -416,8 +427,12 @@
       const data = unwrap(response);
       state.customers = Array.isArray(data) ? data : (response.customers || data?.customers || []);
       const list = document.getElementById("axtorCustomerList");
+      const select = document.getElementById("axtorCustomerSelect");
       list.innerHTML = '<option value="Walk-in Customer"></option>' + state.customers.map(function (customer) {
         return `<option value="${escapeAttr(customerLabel(customer))}" data-id="${escapeAttr(customer.id)}"></option>`;
+      }).join("");
+      select.innerHTML = '<option value="">Walk-in Customer</option>' + state.customers.map(function (customer) {
+        return `<option value="${escapeAttr(customer.id)}">${escapeHtml(customerLabel(customer))}</option>`;
       }).join("");
       if (!document.getElementById("axtorCustomerSearch").value) document.getElementById("axtorCustomerSearch").value = "Walk-in Customer";
       resolveCustomerInput(true);
@@ -460,6 +475,14 @@
   function resolveCustomerInput(strict) {
     const input = document.getElementById("axtorCustomerSearch");
     const hidden = document.getElementById("axtorCustomerId");
+    const select = document.getElementById("axtorCustomerSelect");
+    const selected = state.customers.find(function (item) { return item.id === select?.value; });
+    if (selected) {
+      input.value = customerLabel(selected);
+      hidden.value = selected.id;
+      updateCustomerCreditInfo(selected);
+      return selected;
+    }
     const text = input.value.trim();
     if (!text || text.toLowerCase() === "walk-in customer") {
       hidden.value = "";
@@ -480,6 +503,13 @@
   function resolveSalespersonInput(strict) {
     const input = document.getElementById("axtorSalespersonSearch");
     const hidden = document.getElementById("axtorSalespersonId");
+    const select = document.getElementById("axtorSalespersonSelect");
+    const selected = (state.context?.salesPersons || []).find(function (item) { return item.id === select?.value; });
+    if (selected) {
+      input.value = selected.name + " · " + selected.email;
+      hidden.value = selected.id;
+      return selected;
+    }
     const normalized = input.value.trim().toLowerCase();
     const person = (state.context?.salesPersons || []).find(function (item) {
       return (item.name + " · " + item.email).toLowerCase() === normalized || item.name.toLowerCase() === normalized;
@@ -490,6 +520,7 @@
       if (current) {
         input.value = current.name + " · " + current.email;
         hidden.value = current.id;
+        if (select) select.value = current.id;
       }
     }
     return person || null;
@@ -918,9 +949,11 @@
       setValue("axtorCustomerId", doc.customerId || "");
       const customer = state.customers.find(function (item) { return item.id === doc.customerId; });
       setValue("axtorCustomerSearch", customer ? customerLabel(customer) : doc.customerName || "Walk-in Customer");
+      setValue("axtorCustomerSelect", doc.customerId || "");
       setValue("axtorSalespersonId", doc.salesmanId || "");
       const salesperson = (state.context?.salesPersons || []).find(function (item) { return item.id === doc.salesmanId; });
       setValue("axtorSalespersonSearch", salesperson ? salesperson.name + " · " + salesperson.email : doc.salesmanName || "");
+      setValue("axtorSalespersonSelect", doc.salesmanId || "");
       setValue("axtorPaymentType", normalizeMethod(doc.paymentMethod));
       setValue("axtorPaidAmount", number(doc.paidAmount ?? doc.paid).toFixed(2));
       setValue("axtorDueDate", dateValue(doc.dueDate));
@@ -1062,7 +1095,7 @@
     setValue("axtorDocumentStatus", "New / Unsaved");
     setValue("axtorLpoNo", ""); setValue("axtorCustomerPoNo", ""); setValue("axtorPoNo", "");
     setValue("axtorReferenceNo", ""); setValue("axtorInternalNotes", ""); setValue("axtorCustomerNotes", ""); setValue("axtorEditReason", "");
-    setValue("axtorCustomerSearch", "Walk-in Customer"); setValue("axtorCustomerId", "");
+    setValue("axtorCustomerSearch", "Walk-in Customer"); setValue("axtorCustomerId", ""); setValue("axtorCustomerSelect", "");
     window.AxtorSalesBackend?.setCart?.([]);
     setDefaultDates();
     refreshNumberPreview();
