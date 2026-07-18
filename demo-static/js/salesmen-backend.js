@@ -32,6 +32,16 @@
   }
 
   function render() {
+    // Older HTML releases used a free-text branch field.  The API accepts only
+    // a real branch id, so replace it before options are populated.
+    var branchField = U.q("#salesmanBranch");
+    if (branchField && branchField.tagName !== "SELECT") {
+      var branchSelect = document.createElement("select");
+      branchSelect.id = branchField.id;
+      branchSelect.className = "form-select";
+      branchSelect.innerHTML = '<option value="">All branches</option>';
+      branchField.replaceWith(branchSelect);
+    }
     var listBody = U.q("#salesmenListBody");
     if (listBody) {
       listBody.innerHTML = state.rows.length ? state.rows.map(function (row) {
