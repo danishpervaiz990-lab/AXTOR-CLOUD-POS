@@ -1,368 +1,568 @@
-<!doctype html>
-<html lang="en" data-theme="light">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
-  <title>Customers · Axtor POS Cloud</title>
-  <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet">
-  <link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet">
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#0f9f78">
-</head>
-<body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="sidebar-inner">
-        <a class="brand" href="index.html">
-          <div class="brand-mark">A</div>
-          <div><h1>Axtor POS Cloud</h1><span>Retail • Grocery • Pharmacy • Paint</span></div>
-        </a>
+(function () {
+  "use strict";
 
-        <nav class="nav-menu">
-          <a class="nav-linkx" href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
-          <a class="nav-linkx" href="terminal.html"><i class="bi bi-upc-scan"></i><span>Terminal</span></a>
-          <a class="nav-linkx" href="sales.html"><i class="bi bi-cart-check"></i><span>Sales</span></a>
-          <a class="nav-linkx" href="shifts.html"><i class="bi bi-clock-history"></i><span>Shifts / Closing</span></a>
-          <a class="nav-linkx active" href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
-          <a class="nav-linkx" href="salesmen.html"><i class="bi bi-trophy"></i><span>Salesmen & Commission</span></a>
-          <a class="nav-linkx" href="products.html"><i class="bi bi-box-seam"></i><span>Products</span></a>
-          <a class="nav-linkx" href="inventory.html"><i class="bi bi-boxes"></i><span>Inventory</span></a>
-          <a class="nav-linkx" href="barcode-labels.html"><i class="bi bi-tags"></i><span>Barcode Labels</span></a>
-          <a class="nav-linkx" href="purchase.html"><i class="bi bi-bag-plus"></i><span>Purchases</span></a>
-          <a class="nav-linkx" href="branches.html"><i class="bi bi-building"></i><span>Branches</span></a>
-          <a class="nav-linkx" href="promotions.html"><i class="bi bi-percent"></i><span>Promotions</span></a>
-          <a class="nav-linkx" href="loyalty.html"><i class="bi bi-gem"></i><span>Loyalty</span></a>
-          <a class="nav-linkx" href="approvals.html"><i class="bi bi-shield-check"></i><span>Approvals</span></a>
-          <a class="nav-linkx" href="reports.html"><i class="bi bi-graph-up-arrow"></i><span>Reports</span></a>
-          <a class="nav-linkx" href="accounts.html"><i class="bi bi-bank"></i><span>Accounts</span></a>
-          <a class="nav-linkx" href="expenses.html"><i class="bi bi-wallet2"></i><span>Expenses</span></a>
-          <a class="nav-linkx" href="setup.html"><i class="bi bi-magic"></i><span>Setup Wizard</span></a>
-          <a class="nav-linkx" href="notifications.html"><i class="bi bi-bell"></i><span>Notifications</span></a>
-          <a class="nav-linkx" href="invoice-designer.html"><i class="bi bi-file-earmark-richtext"></i><span>Invoice Designer</span></a>
-          <a class="nav-linkx" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
-        </nav>
+  const CUSTOMERS_PATH = "/api/v1/customers";
+  let customersCache = [];
+  let searchTimer = null;
 
-        <div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br><small>Local Browser Mode</small></div>
-      </div>
-    </aside>
+  function onCustomersPage() {
+    return Boolean(document.getElementById("customersTableBody"));
+  }
 
-    <div class="sidebar-backdrop"></div>
+  function apiReady() {
+    return window.AxtorAPI &&
+      typeof window.AxtorAPI.apiGet === "function" &&
+      typeof window.AxtorAPI.apiPost === "function" &&
+      typeof window.AxtorAPI.apiPatch === "function" &&
+      typeof window.AxtorAPI.apiDelete === "function";
+  }
 
-    <div class="main">
-      <header class="topbar">
-        <button class="btn-icon d-xl-none" data-sidebar-toggle aria-label="Toggle menu"><i class="bi bi-list"></i></button>
-        <div class="page-title"><h2>Customers</h2><p>Customer list, add customer and statement of account.</p></div>
-        <button class="search-pill" data-search-open><i class="bi bi-search"></i><span>Search invoice, customer, stock...</span><kbd class="shortcut">F8</kbd></button>
-        <a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a>
-        <div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div>
-      </header>
+  function esc(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
 
-      <main class="page">
-        <ul class="nav nav-tabs mb-3">
-          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#customers-list">Customers List</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#add-customer">Add New Customer</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#customer-soa">Customer SOA</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#credit-control">Credit Control</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#customer-loyalty">Loyalty</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#customer-invoice-settings">Customer Invoice Settings</button></li>
-        </ul>
+  function toNumber(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : (fallback || 0);
+  }
 
-        <div class="tab-content">
-          <section class="tab-pane fade show active section-anchor" id="customers-list">
-            <div class="row g-3 mb-3">
-              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Total customers</div><div class="kpi-value">0</div></div></div>
-              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Receivable</div><div class="kpi-value">QAR 0.00</div></div></div>
-              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Overdue</div><div class="kpi-value text-danger">QAR 0.00</div></div></div>
-            </div>
+  function toInt(value, fallback) {
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : (fallback || 0);
+  }
 
-            <div class="cardx">
-              <div class="d-flex justify-content-between mb-3">
-                <h5 class="cardx-title">Customer directory</h5>
-                <input id="customerSearchInput" class="form-control w-auto" placeholder="Search customers" autocomplete="off">
-              </div>
+  function money(value) {
+    return "QAR " + toNumber(value, 0).toFixed(2);
+  }
 
-              <div class="table-wrap">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Phone</th>
-                      <th>Email</th>
-                      <th>Type</th>
-                      <th>Balance</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="customersTableBody">
-                    <tr><td colspan="7" class="text-muted">Loading backend customers...</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
+  function input(id) {
+    const el = document.getElementById(id);
+    return el ? String(el.value || "").trim() : "";
+  }
 
-          <section class="tab-pane fade section-anchor" id="add-customer">
-            <div class="cardx">
-              <h5 class="cardx-title mb-3">Add New Customer</h5>
+  function setInput(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value ?? "";
+  }
 
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label">Customer name</label>
-                  <input id="customerNameInput" class="form-control" placeholder="e.g. Customer Name" autocomplete="off">
-                </div>
+  function message(text, type) {
+    let box = document.getElementById("customerBackendStatus");
 
-                <div class="col-md-6">
-                  <label class="form-label">Phone</label>
-                  <input id="customerPhoneInput" class="form-control" placeholder="Qatar mobile number" autocomplete="off">
-                </div>
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "customerBackendStatus";
+      box.className = "mb-3";
 
-                <div class="col-md-6">
-                  <label class="form-label">Email</label>
-                  <input id="customerEmailInput" class="form-control" placeholder="customer@email.com" autocomplete="off">
-                </div>
+      const target = document.querySelector(".tab-content") || document.querySelector("main.page");
 
-                <div class="col-md-6">
-                  <label class="form-label">Customer type</label>
-                  <select id="customerTypeInput" class="form-select">
-                    <option>Retail</option>
-                    <option>Wholesale</option>
-                    <option>Credit</option>
-                  </select>
-                </div>
+      if (target && target.parentNode) {
+        target.parentNode.insertBefore(box, target);
+      }
+    }
 
-                <div class="col-md-6">
-                  <label class="form-label">Opening balance</label>
-                  <input id="customerOpeningBalanceInput" class="form-control" type="number" min="0" step="0.01" value="0.00">
-                </div>
+    box.innerHTML =
+      '<div class="alert alert-' + esc(type || "info") + ' py-2 mb-0">' +
+      esc(text) +
+      "</div>";
+  }
 
-                <div class="col-md-6">
-                  <label class="form-label">Credit limit</label>
-                  <input id="customerCreditLimitInput" class="form-control" type="number" min="0" step="0.01" value="5000">
-                </div>
+  function apiErrorText(error, fallback) {
+    if (error && error.message && error.message !== "API request failed") {
+      return error.message;
+    }
 
-                <div class="col-12">
-                  <label class="form-label">Address</label>
-                  <textarea id="customerAddressInput" class="form-control" rows="3"></textarea>
-                </div>
+    return fallback;
+  }
 
-                <div class="col-md-6">
-                  <label class="form-label">Credit days</label>
-                  <input id="customerCreditDaysInput" class="form-control" type="number" min="0" step="1" value="30">
-                </div>
+  function setLoading(text, className) {
+    const body = document.getElementById("customersTableBody");
 
-                <div class="col-12">
-                  <button id="saveCustomerBtn" class="btn btn-brand" type="button">Save Customer</button>
-                </div>
-              </div>
-            </div>
-          </section>
+    if (body) {
+      body.innerHTML =
+        '<tr><td colspan="7" class="' +
+        esc(className || "text-muted") +
+        '">' +
+        esc(text) +
+        "</td></tr>";
+    }
+  }
 
-          <section class="tab-pane fade section-anchor" id="customer-soa">
-            <div class="cardx">
-              <h5 class="cardx-title">Customer Statement of Account</h5>
-              <div class="row g-3 mb-3">
-                <div class="col-md-4"><select class="form-select"><option>Customer Name</option><option>Customer Name</option></select></div>
-                <div class="col-md-3"><input type="date" class="form-control" value="2026-06-01"></div>
-                <div class="col-md-3"><input type="date" class="form-control" value="2026-06-13"></div>
-                <div class="col-md-2"><button class="btn btn-brand w-100" data-demo-action="SOA refreshed">Run</button></div>
-              </div>
+  function normalizeCustomers(response) {
+    if (response && Array.isArray(response.customers)) return response.customers;
+    if (response && Array.isArray(response.data)) return response.data;
+    if (Array.isArray(response)) return response;
+    return [];
+  }
 
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th>Date</th><th>Ref</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
-                  <tbody>
-                    <tr><td>01 Jun</td><td>OPEN</td><td>Opening Balance</td><td>4,500</td><td>-</td><td>4,500</td></tr>
-                    <tr><td>09 Jun</td><td>INV-0001</td><td>2K Paint Sale</td><td>3,300</td><td>-</td><td>7,800</td></tr>
-                    <tr><td>12 Jun</td><td>PAY-088</td><td>Cash Payment</td><td>-</td><td>1,000</td><td>6,800</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
+  function customerBalance(customer) {
+    return toNumber(customer.balance ?? customer.openingBalance, 0);
+  }
 
-          <section class="tab-pane fade section-anchor" id="credit-control">
-            <div class="cardx mb-3">
-              <h5 class="cardx-title">Customer Credit Control</h5>
-              <p class="text-muted">Auto overdue flag, credit limit, credit days and POS credit block local mode.</p>
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th>Customer</th><th>0-30 Days</th><th>31-60 Days</th><th>60+ Days</th><th>Total</th><th>Status</th><th></th></tr></thead>
-                  <tbody id="creditAgingBody"></tbody>
-                </table>
-              </div>
-            </div>
+  function customerStatus(customer) {
+    const balance = customerBalance(customer);
+    const raw = String(customer.status || "").toLowerCase();
 
-            <div class="cardx">
-              <h5 class="cardx-title mb-3">Follow-up Reminders</h5>
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th>Time</th><th>Customer</th><th>Note</th></tr></thead>
-                  <tbody id="creditReminderBody"></tbody>
-                </table>
-              </div>
-            </div>
-          </section>
+    if (customer.active === false || raw === "inactive") {
+      return '<span class="badge-soft badge-danger-soft">Inactive</span>';
+    }
 
-          <section class="tab-pane fade section-anchor" id="customer-loyalty">
-            <div class="cardx">
-              <h5 class="cardx-title mb-3">Customer Loyalty Points</h5>
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th>Customer</th><th>Balance</th><th>Points</th><th>Tier</th><th></th></tr></thead>
-                  <tbody id="customerLoyaltyBody"></tbody>
-                </table>
-              </div>
-            </div>
-          </section>
+    if (raw.includes("overdue")) {
+      return '<span class="badge-soft badge-danger-soft">Overdue</span>';
+    }
 
-          <section class="tab-pane fade section-anchor" id="customer-invoice-settings">
-            <div class="row g-3">
-              <div class="col-lg-5">
-                <div class="cardx">
-                  <h5 class="cardx-title mb-3">Customer-wise Invoice Template Settings</h5>
+    if (raw.includes("due") || balance > 0) {
+      return '<span class="badge-soft badge-pending">Due</span>';
+    }
 
-                  <div id="customerInvoicePrefsForm" class="row g-3">
-                    <div class="col-12">
-                      <label class="form-label">Customer</label>
-                      <select id="customerPrefName" class="form-select">
-                        <option>Customer Name</option>
-                        <option>Customer Name</option>
-                        <option>Customer</option>
-                      </select>
-                    </div>
+    return '<span class="badge-soft badge-paid">Clear</span>';
+  }
 
-                    <div class="col-12">
-                      <label class="form-label">Default invoice template</label>
-                      <select class="form-select" data-customer-pref="template">
-                        <option value="modern-a4">Modern A4 Invoice</option>
-                        <option value="compact-a4">Compact A4 Invoice</option>
-                        <option value="paint-store">Paint Store Invoice</option>
-                        <option value="thermal-80">Thermal Receipt 80mm</option>
-                        <option value="tax-invoice">Tax Invoice</option>
-                        <option value="bilingual">Bilingual English/Arabic Invoice</option>
-                      </select>
-                    </div>
+  function updateKpis(customers) {
+    const values = document.querySelectorAll("#customers-list .kpi-value");
+    if (!values || values.length < 3) return;
 
-                    <div class="col-md-6">
-                      <label class="form-label">Default price level</label>
-                      <select class="form-select" data-customer-pref="priceLevel">
-                        <option>Retail</option>
-                        <option>Wholesale</option>
-                        <option>Garage</option>
-                        <option>VIP</option>
-                      </select>
-                    </div>
+    const activeCustomers = customers.filter(function (customer) {
+      return customer.active !== false;
+    });
 
-                    <div class="col-md-6">
-                      <label class="form-label">Payment terms</label>
-                      <select class="form-select" data-customer-pref="paymentTerms">
-                        <option>Cash</option>
-                        <option>7 Days</option>
-                        <option>15 Days</option>
-                        <option>30 Days</option>
-                      </select>
-                    </div>
+    const receivable = activeCustomers.reduce(function (total, customer) {
+      const balance = customerBalance(customer);
+      return total + (balance > 0 ? balance : 0);
+    }, 0);
 
-                    <div class="col-12">
-                      <label class="form-label">Default delivery address</label>
-                      <textarea class="form-control" rows="2" data-customer-pref="deliveryAddress"></textarea>
-                    </div>
+    const overdue = activeCustomers.reduce(function (total, customer) {
+      const status = String(customer.status || "").toLowerCase();
+      const balance = customerBalance(customer);
 
-                    <div class="col-md-6"><label class="form-check"><input class="form-check-input" type="checkbox" data-customer-pref="showBalance"> Show balance on invoice</label></div>
-                    <div class="col-md-6"><label class="form-check"><input class="form-check-input" type="checkbox" data-customer-pref="showCreditLimit"> Show customer credit limit</label></div>
-                    <div class="col-md-6"><label class="form-check"><input class="form-check-input" type="checkbox" data-customer-pref="whatsappDefault"> Send invoice on WhatsApp by default</label></div>
+      if (status.includes("overdue") || status.includes("due")) {
+        return total + (balance > 0 ? balance : 0);
+      }
 
-                    <div class="col-md-6">
-                      <label class="form-label">Preferred language</label>
-                      <select class="form-select" data-customer-pref="language">
-                        <option>English</option>
-                        <option>Arabic</option>
-                        <option>Bilingual</option>
-                      </select>
-                    </div>
+      return total;
+    }, 0);
 
-                    <div class="col-md-6">
-                      <label class="form-label">Preferred print size</label>
-                      <select class="form-select" data-customer-pref="printSize">
-                        <option>A4</option>
-                        <option>A5</option>
-                        <option>Thermal 80mm</option>
-                      </select>
-                    </div>
+    values[0].textContent = String(activeCustomers.length);
+    values[1].textContent = money(receivable);
+    values[2].textContent = money(overdue);
+  }
 
-                    <div class="col-12"><button id="saveCustomerInvoicePrefsBtn" class="btn btn-brand">Save Customer Invoice Preferences</button></div>
-                  </div>
-                </div>
-              </div>
+  function renderCustomers(customers) {
+    const body = document.getElementById("customersTableBody");
+    if (!body) return;
 
-              <div class="col-lg-7">
-                <div class="cardx">
-                  <h5 class="cardx-title">Customer Invoice Actions</h5>
-                  <p class="text-muted">Preview uses customer template if available, otherwise global default invoice template.</p>
-                  <button class="btn btn-brand" data-invoice-preview="paint-store">Preview Paint Store Invoice</button>
-                  <button class="btn btn-soft" data-invoice-print="paint-store">Print Paint Invoice</button>
-                  <button class="btn btn-soft" data-whatsapp-invoice>WhatsApp Invoice Demo</button>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
+    customersCache = Array.isArray(customers) ? customers.slice() : [];
 
-        <div class="modal fade" id="redeemModal" tabindex="-1">
-          <div class="modal-dialog">
-            <div class="modal-content cardx">
-              <div class="modal-header">
-                <h5 class="modal-title fw-bold">Redeem Points</h5>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
-              </div>
-              <div class="modal-body">
-                <label class="form-label">Customer</label>
-                <input id="redeemCustomer" class="form-control mb-2" readonly>
-                <label class="form-label">Points to redeem</label>
-                <input id="redeemPoints" class="form-control" type="number" value="500">
-                <div class="mini-stat mt-3">
-                  <div class="d-flex justify-content-between"><span>Discount value</span><strong id="redeemValue">QAR 25</strong></div>
-                </div>
-              </div>
-              <div class="modal-footer">
-                <button class="btn btn-soft" data-bs-dismiss="modal">Cancel</button>
-                <button id="confirmRedeemBtn" class="btn btn-brand">Redeem</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  </div>
+    const table = body.closest("table");
+    const header = table ? table.querySelector("thead tr") : null;
 
-  <div class="search-overlay" id="globalSearch">
-    <div class="search-box">
-      <div class="search-head">
-        <i class="bi bi-search fs-4 text-brand"></i>
-        <input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off">
-        <button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button>
-      </div>
-      <div class="search-results" id="globalSearchResults"></div>
-    </div>
-  </div>
+    if (header) {
+      header.innerHTML =
+        "<th>Name</th>" +
+        "<th>Phone</th>" +
+        "<th>Email</th>" +
+        "<th>Type</th>" +
+        "<th>Balance</th>" +
+        "<th>Status</th>" +
+        "<th>Actions</th>";
+    }
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/axtor-api.js?v=20260622-phase3b"></script>
-  <script src="js/core-data.js?v=20260618-sales-qr1"></script>
-  <script src="js/main.js?v=20260618-sales-qr1"></script>
-  <script src="js/theme-switcher.js?v=20260618-sales-qr1"></script>
-  <script src="js/app-data.js?v=20260618-sales-qr1"></script>
-  <script src="js/retail-advanced.js?v=20260618-sales-qr1"></script>
-  <script src="js/invoice-templates.js?v=20260618-sales-qr1"></script>
-  <script src="js/axtor-fixes.js?v=20260618-sales-qr1"></script>
-  <script src="js/customers-backend.js?v=20260624-phase3-customers1"></script>
-</body>
-</html>
+    if (!customersCache.length) {
+      body.innerHTML = '<tr><td colspan="7" class="text-muted">No backend customers found.</td></tr>';
+      updateKpis(customersCache);
+      return;
+    }
+
+    body.innerHTML = customersCache.map(function (customer) {
+      const id = esc(customer.id || "");
+      const name = esc(customer.name || "-");
+
+      return (
+        "<tr>" +
+          "<td>" + name + "</td>" +
+          "<td>" + esc(customer.phone || "-") + "</td>" +
+          "<td>" + esc(customer.email || "-") + "</td>" +
+          "<td>" + esc(customer.type || "Retail") + "</td>" +
+          "<td>" + money(customerBalance(customer)) + "</td>" +
+          "<td>" + customerStatus(customer) + "</td>" +
+          "<td>" +
+            "<div class='d-flex gap-2 flex-wrap'>" +
+              "<button class='btn btn-sm btn-outline-primary' type='button' data-customer-edit='" + id + "'>Edit</button>" +
+              "<button class='btn btn-sm btn-outline-danger' type='button' data-customer-delete='" + id + "' data-customer-name='" + name + "'>Delete</button>" +
+            "</div>" +
+          "</td>" +
+        "</tr>"
+      );
+    }).join("");
+
+    updateKpis(customersCache);
+  }
+
+  function buildListPath() {
+    const search = input("customerSearchInput");
+
+    if (search) {
+      return CUSTOMERS_PATH + "?active=true&q=" + encodeURIComponent(search);
+    }
+
+    return CUSTOMERS_PATH + "?active=true";
+  }
+
+  async function loadCustomers() {
+    if (!onCustomersPage()) return null;
+
+    if (!apiReady()) {
+      console.error("AxtorAPI helper missing. Load js/axtor-api.js before customers-backend.js.");
+      setLoading("Backend API helper missing.", "text-danger");
+      message("Backend API helper missing. Check customer.html script order.", "danger");
+      return null;
+    }
+
+    try {
+      setLoading("Loading backend customers...", "text-muted");
+
+      const response = await window.AxtorAPI.apiGet(buildListPath());
+      const customers = normalizeCustomers(response);
+
+      renderCustomers(customers);
+
+      return response;
+    } catch (error) {
+      console.error("Customers GET failed:", error);
+      setLoading("Failed to load backend customers.", "text-danger");
+      message(apiErrorText(error, "Failed to load backend customers."), "danger");
+      return null;
+    }
+  }
+
+  function saveButton() {
+    return document.getElementById("saveCustomerBtn");
+  }
+
+  function addCustomerTabButton() {
+    return document.querySelector('[data-bs-target="#add-customer"]') || document.querySelector('[href="#add-customer"]');
+  }
+
+  function setTabLabel(text) {
+    const btn = addCustomerTabButton();
+    if (btn) btn.textContent = text;
+  }
+
+  function setFormTitle(text) {
+    const pane = document.getElementById("add-customer");
+    const title = pane ? pane.querySelector(".cardx-title, h5") : null;
+    if (title) title.textContent = text;
+  }
+
+  function openAddCustomerTab() {
+    const btn = addCustomerTabButton();
+
+    if (btn && window.bootstrap && window.bootstrap.Tab) {
+      window.bootstrap.Tab.getOrCreateInstance(btn).show();
+    } else if (btn) {
+      btn.click();
+    }
+  }
+
+  function ensureCancelButton() {
+    const btn = saveButton();
+
+    if (!btn || document.getElementById("cancelCustomerEditBtn")) return;
+
+    const cancel = document.createElement("button");
+    cancel.id = "cancelCustomerEditBtn";
+    cancel.type = "button";
+    cancel.className = "btn btn-outline-secondary ms-2 d-none";
+    cancel.textContent = "Cancel Edit";
+
+    btn.insertAdjacentElement("afterend", cancel);
+
+    cancel.addEventListener("click", function () {
+      clearEditMode();
+      clearForm();
+      message("Edit cancelled.", "info");
+    });
+  }
+
+  function setEditMode(customerId) {
+    const btn = saveButton();
+    const cancel = document.getElementById("cancelCustomerEditBtn");
+
+    if (btn) {
+      btn.dataset.editCustomerId = customerId;
+      btn.innerHTML = "Update Customer";
+    }
+
+    if (cancel) cancel.classList.remove("d-none");
+
+    setTabLabel("Edit Customer");
+    setFormTitle("Edit Customer");
+  }
+
+  function clearEditMode() {
+    const btn = saveButton();
+    const cancel = document.getElementById("cancelCustomerEditBtn");
+
+    if (btn) {
+      delete btn.dataset.editCustomerId;
+      btn.innerHTML = "Save Customer";
+    }
+
+    if (cancel) cancel.classList.add("d-none");
+
+    setTabLabel("Add New Customer");
+    setFormTitle("Add New Customer");
+  }
+
+  function clearForm() {
+    setInput("customerNameInput", "");
+    setInput("customerPhoneInput", "");
+    setInput("customerEmailInput", "");
+    setInput("customerTypeInput", "Retail");
+    setInput("customerOpeningBalanceInput", "0.00");
+    setInput("customerCreditLimitInput", "5000");
+    setInput("customerAddressInput", "");
+    setInput("customerCreditDaysInput", "30");
+  }
+
+  function fillForm(customer) {
+    setInput("customerNameInput", customer.name || "");
+    setInput("customerPhoneInput", customer.phone || "");
+    setInput("customerEmailInput", customer.email || "");
+    setInput("customerTypeInput", customer.type || "Retail");
+    setInput("customerOpeningBalanceInput", toNumber(customer.openingBalance, 0).toFixed(2));
+    setInput("customerCreditLimitInput", toNumber(customer.creditLimit, 0).toFixed(2));
+    setInput("customerAddressInput", customer.address || "");
+    setInput("customerCreditDaysInput", String(customer.creditDays || 30));
+  }
+
+  function getPayload(isEdit) {
+    const name = input("customerNameInput");
+
+    if (!name) {
+      message("Customer name is required.", "warning");
+      return null;
+    }
+
+    const openingBalance = toNumber(input("customerOpeningBalanceInput"), 0);
+
+    const payload = {
+      name: name,
+      phone: input("customerPhoneInput") || undefined,
+      email: input("customerEmailInput") || undefined,
+      type: input("customerTypeInput") || "Retail",
+      openingBalance: openingBalance,
+      creditLimit: toNumber(input("customerCreditLimitInput"), 0),
+      creditDays: toInt(input("customerCreditDaysInput"), 30),
+      address: input("customerAddressInput") || undefined,
+      status: openingBalance > 0 ? "due" : "active",
+      active: true
+    };
+
+    if (!isEdit) payload.balance = openingBalance;
+    if (isEdit) delete payload.active;
+
+    return payload;
+  }
+
+  async function saveCustomer(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (!apiReady()) {
+      message("Backend API helper missing. Check customer.html script order.", "danger");
+      return null;
+    }
+
+    const btn = saveButton();
+    const editId = btn ? btn.dataset.editCustomerId : "";
+    const isEdit = Boolean(editId);
+    const payload = getPayload(isEdit);
+
+    if (!payload) return null;
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = isEdit ? "Updating backend..." : "Saving to backend...";
+      }
+
+      const response = isEdit
+        ? await window.AxtorAPI.apiPatch(CUSTOMERS_PATH + "/" + encodeURIComponent(editId), payload)
+        : await window.AxtorAPI.apiPost(CUSTOMERS_PATH, payload);
+
+      message(isEdit ? "Customer updated in backend successfully." : "Customer saved to backend successfully.", "success");
+
+      clearEditMode();
+      clearForm();
+      await loadCustomers();
+
+      return response;
+    } catch (error) {
+      console.error(isEdit ? "Customer PATCH failed:" : "Customer POST failed:", error);
+      message(apiErrorText(error, isEdit ? "Customer update failed. Check console." : "Customer save failed. Check console."), "danger");
+      return null;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = btn.dataset.editCustomerId ? "Update Customer" : "Save Customer";
+      }
+    }
+  }
+
+  function editCustomer(customerId) {
+    const customer = customersCache.find(function (item) {
+      return String(item.id || "") === String(customerId || "");
+    });
+
+    if (!customer) {
+      message("Customer not found in current list. Reload page and try again.", "warning");
+      return;
+    }
+
+    ensureCancelButton();
+    fillForm(customer);
+    setEditMode(customerId);
+    openAddCustomerTab();
+
+    message("Editing customer: " + (customer.name || customer.phone || customerId), "info");
+  }
+
+  async function deleteCustomer(customerId, customerName, btn) {
+    if (!customerId) {
+      message("Customer id missing. Cannot delete.", "danger");
+      return null;
+    }
+
+    const ok = window.confirm("Delete this customer from backend?\n\n" + customerName);
+
+    if (!ok) return null;
+
+    if (!apiReady()) {
+      message("Backend API helper missing. Check customer.html script order.", "danger");
+      return null;
+    }
+
+    const oldText = btn ? btn.innerHTML : "Delete";
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "Deleting...";
+      }
+
+      const response = await window.AxtorAPI.apiDelete(CUSTOMERS_PATH + "/" + encodeURIComponent(customerId));
+
+      message("Customer deleted from backend successfully.", "success");
+
+      await loadCustomers();
+
+      return response;
+    } catch (error) {
+      console.error("Customer DELETE failed:", error);
+      message(apiErrorText(error, "Customer delete failed. Check console."), "danger");
+      return null;
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = oldText;
+      }
+    }
+  }
+
+  function bindSaveButton() {
+    const oldBtn = saveButton();
+
+    if (!oldBtn || oldBtn.dataset.backendBound === "1") return;
+
+    const newBtn = oldBtn.cloneNode(true);
+    newBtn.dataset.backendBound = "1";
+
+    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+
+    newBtn.addEventListener("click", saveCustomer);
+
+    ensureCancelButton();
+  }
+
+  function bindSearch() {
+    const search = document.getElementById("customerSearchInput");
+
+    if (!search || search.dataset.backendBound === "1") return;
+
+    search.dataset.backendBound = "1";
+
+    search.addEventListener("input", function () {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(function () {
+        loadCustomers();
+      }, 250);
+    });
+  }
+
+  function bindActions() {
+    if (document.body.dataset.customersBackendActionsBound === "1") return;
+
+    document.body.dataset.customersBackendActionsBound = "1";
+
+    document.addEventListener("click", function (event) {
+      const editBtn = event.target.closest("[data-customer-edit]");
+
+      if (editBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        editCustomer(editBtn.getAttribute("data-customer-edit"));
+        return;
+      }
+
+      const delBtn = event.target.closest("[data-customer-delete]");
+
+      if (delBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        deleteCustomer(
+          delBtn.getAttribute("data-customer-delete"),
+          delBtn.getAttribute("data-customer-name") || "this customer",
+          delBtn
+        );
+      }
+    });
+  }
+
+  function isoDate(days) { var d = new Date(); d.setDate(d.getDate() + (days || 0)); return d.toISOString().slice(0, 10); }
+  function customerOptions() { var select = document.getElementById("customerStatementCustomer"); if (!select) return; var value = select.value; select.innerHTML = '<option value="">Select customer</option>' + customersCache.map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>'; }).join(''); select.value = value; }
+  async function loadStatement() { var id = input("customerStatementCustomer"), body = document.getElementById("customerStatementBody"); if (!body || !id) return; body.innerHTML = '<tr><td colspan="6" class="text-muted">Loading statement...</td></tr>'; try { var query = new URLSearchParams({ from: input("customerStatementFrom"), to: input("customerStatementTo") }); var data = window.AxtorAPI.unwrap ? window.AxtorAPI.unwrap(await window.AxtorAPI.apiGet(CUSTOMERS_PATH + '/' + encodeURIComponent(id) + '/statement?' + query)) : (await window.AxtorAPI.apiGet(CUSTOMERS_PATH + '/' + encodeURIComponent(id) + '/statement?' + query)).data; var rows = data.rows || []; body.innerHTML = rows.length ? rows.map(function (r) { return '<tr><td>' + esc(new Date(r.date).toLocaleDateString()) + '</td><td>' + esc(r.ref) + '</td><td>' + esc(r.description) + '</td><td>' + (r.debit ? money(r.debit) : '-') + '</td><td>' + (r.credit ? money(r.credit) : '-') + '</td><td>' + money(r.runningBalance) + '</td></tr>'; }).join('') : '<tr><td colspan="6" class="text-muted">No statement entries for this period.</td></tr>'; } catch (error) { body.innerHTML = '<tr><td colspan="6" class="text-danger">' + esc(apiErrorText(error, 'Unable to load statement.')) + '</td></tr>'; } }
+  async function loadAgeing() { var body = document.getElementById("creditAgingBody"); if (!body) return; try { var response = await window.AxtorAPI.apiGet(CUSTOMERS_PATH + '/ageing'); var data = response.data || response; var rows = data.rows || []; body.innerHTML = rows.length ? rows.map(function (r) { return '<tr><td>' + esc(r.customerName) + '</td><td>' + money(r.current) + '</td><td>' + money(r.days1to30) + '</td><td>' + money(r.days31to60 + r.days61to90 + r.days90plus) + '</td><td>' + money(r.total) + '</td><td>' + (r.creditHold ? '<span class="badge-soft badge-danger-soft">Held</span>' : '<span class="badge-soft badge-paid">Open</span>') + '</td><td></td></tr>'; }).join('') : '<tr><td colspan="7" class="text-muted">No outstanding balances.</td></tr>'; } catch (error) { body.innerHTML = '<tr><td colspan="7" class="text-danger">Unable to load credit ageing.</td></tr>'; } }
+
+  function boot() {
+    if (!onCustomersPage()) return;
+
+    bindSaveButton();
+    bindSearch();
+    bindActions();
+    setInput("customerStatementFrom", isoDate(-30)); setInput("customerStatementTo", isoDate(0));
+    document.getElementById("runCustomerStatementBtn")?.addEventListener("click", loadStatement);
+    loadCustomers().then(function () { customerOptions(); loadAgeing(); });
+  }
+
+  window.AxtorCustomersBackend = {
+    loadCustomers: loadCustomers,
+    renderCustomers: renderCustomers,
+    saveCustomerToBackend: saveCustomer,
+    editCustomer: editCustomer,
+    deleteCustomerFromBackend: deleteCustomer
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
