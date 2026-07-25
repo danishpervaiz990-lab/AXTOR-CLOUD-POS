@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
-import { getDocumentPrefix, getNextDocumentNumber, previewDocumentNumber } from "../utils/document-number.js";
+import { getDocumentPrefix, getNextDocumentNumber } from "../utils/document-number.js";
 import { hasPermission, loadUserAccess, requirePermission, type UserAccess } from "../services/access.service.js";
 import { writeAudit } from "../services/audit.service.js";
 
@@ -796,8 +796,20 @@ export async function previewSalesDocumentNumber(req: Request, res: Response) {
     const data = await (prisma as any).$transaction(async (tx: any) => {
       const access = await loadUserAccess(tx, businessId, userId);
       await resolveOperationalContext(tx, businessId, access, { branchId: req.query.branchId });
-      const preview = await previewDocumentNumber(tx, businessId, documentType as any);
-      return { ...preview, officialNumberGeneratedOnSave: true };
+      // Preview is informational only. The save transaction allocates the
+      // official number under a business-wide advisory lock.
+      const counter = await tx.documentCounter.findFirst({ where: { businessId, branchId: null, documentType } });
+      const prefix = counter?.prefix || getDocumentPrefix(documentType as any);
+      const padding = Number(counter?.padding || 6);
+      const documents = await tx.salesDocument.findMany({ where: { businessId, documentType }, select: { documentNo: true } });
+      const escapedPrefix = String(prefix).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pattern = new RegExp(`^${escapedPrefix}-(\\d+)$`);
+      const highestIssued = documents.reduce((highest: number, row: { documentNo: string }) => {
+        const match = pattern.exec(String(row.documentNo || ""));
+        return match ? Math.max(highest, Number(match[1])) : highest;
+      }, 0);
+      const nextNumber = Math.max(Number(counter?.nextNumber || 1), highestIssued + 1);
+      return { preview: `${prefix}-${String(nextNumber).padStart(padding, "0")}`, prefix, nextNumber, officialNumberGeneratedOnSave: true };
     });
 
     return res.json({ ok: true, data });

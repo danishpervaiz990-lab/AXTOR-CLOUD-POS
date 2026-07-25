@@ -9,6 +9,30 @@ export function getDocumentPrefix(documentType: DocumentType): string {
   return 'DOC';
 }
 
+export async function previewDocumentNumber(
+  prismaClient: PrismaClientOrTransaction,
+  businessId: string,
+  documentType: DocumentType
+): Promise<{ preview: string; prefix: string; nextNumber: number }> {
+  const counter = await (prismaClient as any).documentCounter.findFirst({
+    where: { businessId, branchId: null, documentType }
+  });
+  const prefix = counter?.prefix || getDocumentPrefix(documentType);
+  const padding = Number(counter?.padding || 6);
+  const documents = await (prismaClient as any).salesDocument.findMany({
+    where: { businessId, documentType },
+    select: { documentNo: true }
+  });
+  const escapedPrefix = String(prefix).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const numberPattern = new RegExp(`^${escapedPrefix}-(\\d+)$`);
+  const highestIssued = documents.reduce((highest: number, row: { documentNo: string }) => {
+    const match = numberPattern.exec(String(row.documentNo || ""));
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  const nextNumber = Math.max(Number(counter?.nextNumber || 1), highestIssued + 1);
+  return { preview: `${prefix}-${String(nextNumber).padStart(padding, "0")}`, prefix, nextNumber };
+}
+
 /**
  * Allocates a document number inside the caller's database transaction.
  * PostgreSQL advisory transaction locking prevents two concurrent requests
@@ -17,11 +41,14 @@ export function getDocumentPrefix(documentType: DocumentType): string {
 export async function getNextDocumentNumber(
   prismaClient: PrismaClientOrTransaction,
   businessId: string,
-  branchId: string | null,
+  _branchId: string | null,
   documentType: DocumentType
 ): Promise<string> {
   const defaultPrefix = getDocumentPrefix(documentType);
-  const lockKey = `axtor:document-counter:${businessId}:${branchId || 'global'}:${documentType}`;
+  // SalesDocument is unique by (businessId, documentNo), not by branch.  A
+  // branch-specific counter can therefore allocate the same INV-000001 as the
+  // global counter.  Lock and allocate once per business/document type.
+  const lockKey = `axtor:document-counter:${businessId}:${documentType}`;
 
   await (prismaClient as any).$queryRawUnsafe(
     'SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))',
@@ -29,35 +56,46 @@ export async function getNextDocumentNumber(
   );
 
   const existingCounter = await (prismaClient as any).documentCounter.findFirst({
-    where: { businessId, branchId, documentType }
+    where: { businessId, branchId: null, documentType }
   });
 
+  // Counter rows may predate this fix or may have been restored from a backup.
+  // Reconcile the next value with saved documents while holding the same lock;
+  // this prevents stale counters from recreating an already-issued number.
+  const prefix = existingCounter?.prefix || defaultPrefix;
+  const padding = Number(existingCounter?.padding || 6);
+  const documents = await (prismaClient as any).salesDocument.findMany({
+    where: { businessId, documentType },
+    select: { documentNo: true }
+  });
+  const escapedPrefix = String(prefix).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const numberPattern = new RegExp(`^${escapedPrefix}-(\\d+)$`);
+  const highestIssued = documents.reduce((highest: number, row: { documentNo: string }) => {
+    const match = numberPattern.exec(String(row.documentNo || ""));
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  const nextNumber = Math.max(Number(existingCounter?.nextNumber || 1), highestIssued + 1);
+
   if (!existingCounter) {
-    const firstNumber = 1;
-    const padding = 6;
     await (prismaClient as any).documentCounter.create({
       data: {
         businessId,
-        branchId,
+        branchId: null,
         documentType,
-        prefix: defaultPrefix,
-        nextNumber: firstNumber + 1,
+        prefix,
+        nextNumber: nextNumber + 1,
         padding
       }
     });
-    return `${defaultPrefix}-${String(firstNumber).padStart(padding, '0')}`;
+    return `${prefix}-${String(nextNumber).padStart(padding, '0')}`;
   }
 
-  const updatedCounter = await (prismaClient as any).documentCounter.update({
+  await (prismaClient as any).documentCounter.update({
     where: { id: existingCounter.id },
     data: {
-      nextNumber: { increment: 1 },
-      prefix: existingCounter.prefix || defaultPrefix
+      nextNumber: nextNumber + 1,
+      prefix
     }
   });
-
-  const allocatedNumber = Number(updatedCounter.nextNumber) - 1;
-  const padding = Number(updatedCounter.padding || 6);
-  const prefix = updatedCounter.prefix || defaultPrefix;
-  return `${prefix}-${String(allocatedNumber).padStart(padding, '0')}`;
+  return `${prefix}-${String(nextNumber).padStart(padding, '0')}`;
 }
