@@ -76,8 +76,10 @@
   }
   function addPlanBanner() {
     const subscription = context?.subscription; if (!subscription) return;
+    const planCode = String(context?.plan?.code || "").toLowerCase();
+    const trial = String(subscription.status).toUpperCase() === "TRIAL" && planCode !== "enterprise";
     const end = subscription.trialEndsAt || subscription.currentPeriodEnd; const days = end ? Math.ceil((new Date(end).getTime() - Date.now()) / 86400000) : null;
-    if (String(subscription.status).toUpperCase() === "TRIAL" || context.readOnly) { const banner = document.createElement("div"); banner.className = "axtor-plan-banner"; banner.textContent = context.readOnly ? `${text("status.readOnly", "Read-only")} — renew the subscription to post new transactions.` : `${text("status.trial", "Trial")}: ${Math.max(0, days || 0)} day(s) remaining · ${context.plan?.name || "Basic"}`; const main = document.querySelector(".main"); main?.insertBefore(banner, main.firstChild); }
+    if (trial || context.readOnly) { const banner = document.createElement("div"); banner.className = "axtor-plan-banner"; banner.textContent = context.readOnly ? `${text("status.readOnly", "Read-only")} — renew the subscription to post new transactions.` : `${text("status.trial", "Trial")}: ${Math.max(0, days || 0)} day(s) remaining · ${context.plan?.name || "Basic"}`; const main = document.querySelector(".main"); main?.insertBefore(banner, main.firstChild); }
   }
   function showVersion() { const footer = document.querySelector('.sidebar-footer'); if (!footer || !context?.platform) return; const line = document.createElement('div'); line.className = 'small text-muted mt-2'; line.textContent = `v${context.platform.version} · ${context.platform.environment}`; footer.appendChild(line); }
   function addNetworkStatus() {

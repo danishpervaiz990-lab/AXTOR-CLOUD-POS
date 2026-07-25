@@ -87,8 +87,9 @@
     var bank = Math.max(0, U.num(U.value("#terminalPayBank")));
     var credit = Math.max(0, U.num(U.value("#terminalPayCredit")));
     var paidNow = Math.min(grand, cash + card + bank);
-    var recorded = Math.min(grand, paidNow + credit);
-    return { subtotal: subtotal, lineDiscount: lineDiscount, invoiceDiscount: invoiceDiscount, tax: tax, grand: grand, cash: cash, card: card, bank: bank, credit: credit, paidNow: paidNow, recorded: recorded, balance: Math.max(0, grand - recorded) };
+    // Credit is the outstanding portion of the invoice, not money received.
+    var balance = Math.max(0, grand - paidNow);
+    return { subtotal: subtotal, lineDiscount: lineDiscount, invoiceDiscount: invoiceDiscount, tax: tax, grand: grand, cash: cash, card: card, bank: bank, credit: credit, paidNow: paidNow, recorded: paidNow, balance: balance };
   }
 
   function renderAll() {
@@ -171,8 +172,18 @@
     if (value.card > 0) lines.push({ method: "card", amount: Math.min(value.card, Math.max(0, value.grand - lines.reduce(function (s, x) { return s + x.amount; }, 0))) });
     if (value.bank > 0) lines.push({ method: "bank_transfer", amount: Math.min(value.bank, Math.max(0, value.grand - lines.reduce(function (s, x) { return s + x.amount; }, 0))) });
     lines = lines.filter(function (line) { return line.amount > 0; });
-    var method = lines.length > 1 ? "mixed" : lines.length === 1 ? lines[0].method : "credit";
+    var method = value.balance > 0 ? (lines.length ? "mixed" : "credit") : (lines.length > 1 ? "mixed" : lines.length === 1 ? lines[0].method : "cash");
     return { value: value, lines: lines, method: method };
+  }
+
+  function creditDueDate(customer, balance) {
+    if (!(balance > 0)) return null;
+    var configuredDays = U.num(customer && (customer.creditDays || customer.credit_days));
+    var days = Math.max(0, Math.floor(configuredDays > 0 ? configuredDays : 30));
+    var due = new Date();
+    due.setHours(12, 0, 0, 0);
+    due.setDate(due.getDate() + days);
+    return due.toISOString().slice(0, 10);
   }
 
   function payload(postingMode) {
@@ -181,11 +192,13 @@
     var payment = buildPayment();
     if (!state.cart.length) throw new Error("Cart is empty");
     if (payment.value.balance > 0 && !customerId) throw new Error("Select a customer for a credit/balance invoice");
+    if (payment.value.credit > 0 && Math.abs(payment.value.credit - payment.value.balance) > 0.001) throw new Error("Credit amount must equal the remaining balance");
     return {
       documentType: "invoice",
       postingMode: postingMode,
       idempotencyKey: "terminal:" + Date.now() + ":" + Math.random().toString(36).slice(2),
       documentDate: new Date().toISOString().slice(0, 10),
+      dueDate: creditDueDate(customer, payment.value.balance),
       customerId: customerId || null,
       customerName: customer ? customer.name : "Walk-in Customer",
       salesmanId: U.value("#saleSmId") || null,
@@ -219,7 +232,7 @@
         delete body.postingMode;
         await U.api().apiPatch("/api/v1/sales-documents/" + encodeURIComponent(state.currentDraftId), body);
         response = await U.api().apiPost("/api/v1/sales-documents/" + encodeURIComponent(state.currentDraftId) + "/post", {
-          paymentMethod: body.paymentMethod, paidAmount: body.paidAmount, paymentLines: body.paymentLines
+          paymentMethod: body.paymentMethod, paidAmount: body.paidAmount, paymentLines: body.paymentLines, dueDate: body.dueDate
         });
       } else {
         response = await U.api().apiPost("/api/v1/sales-documents", body);
