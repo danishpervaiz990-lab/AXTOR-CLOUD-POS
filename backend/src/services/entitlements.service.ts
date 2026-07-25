@@ -51,6 +51,13 @@ export async function loadEntitlements(tx: any, businessId: string): Promise<Ent
     if (!plan) plan = await tx.subscriptionPlan.findFirst({ where: { code: "basic", active: true }, include: { features: true } });
   }
 
+  // Custom / Enterprise tenants are provisioned manually and must not inherit
+  // a legacy self-service trial. Normalize the returned entitlement in memory
+  // so an existing production database does not require a startup migration.
+  if (subscription && String(plan?.code || "").toLowerCase() === "enterprise" && String(subscription.status || "").toUpperCase() === "TRIAL") {
+    subscription = { ...subscription, status: "ACTIVE", trialEndsAt: null, currentPeriodEnd: null };
+  }
+
   const overrides = await tx.tenantFeatureOverride.findMany({
     where: { businessId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
   });
