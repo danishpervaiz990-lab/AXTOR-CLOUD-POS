@@ -1,4 +1,5 @@
 import { prisma } from "../db/prisma.js";
+import { publicIndustryRegistry } from "../industry/registry.js";
 
 const plans = [
   { code: "basic", name: "Basic", description: "For small shops and new businesses", maxUsers: 2, maxBranches: 1, maxWarehouses: 1, maxCurrencies: 1, maxLanguages: 2, supportLevel: "email", apiAccess: false, whiteLabel: false, sortOrder: 1, features: ["core.products", "core.customers", "sales.invoices", "sales.quotations", "sales.delivery_notes", "sales.payments", "sales.basic_returns", "inventory.basic", "dashboard.basic", "reports.daily_sales", "documents.pdf", "pwa"] },
@@ -8,8 +9,23 @@ const plans = [
 ];
 
 const industries = [
-  { code: "retail", name: "Retail", description: "Retail, grocery, paint, hardware, electronics and general trading", features: ["retail.fast_checkout", "barcode", "qr_scan", "retail.variants", "promotions.basic", "loyalty.basic", "retail.held_sales", "sales.split_payments", "inventory.transfers", "shifts"], terminology: { product: "Product", sale: "Sale", customer: "Customer" } },
-  { code: "pharmacy", name: "Pharmacy", description: "Medicine inventory and transaction management only", features: ["pharmacy.batch_tracking", "pharmacy.expiry", "pharmacy.fefo", "pharmacy.recall", "pharmacy.restricted_products", "pharmacy.prescription_reference"], terminology: { product: "Medicine", sale: "Dispensing Sale", customer: "Customer" } },
+  ...publicIndustryRegistry().map((pack, index) => ({
+    code: pack.code,
+    name: pack.name,
+    description: pack.description,
+    sortOrder: index + 1,
+    defaultSettings: pack.defaultSettings,
+    features: [`industry.${pack.code}.*`, ...pack.modules.map(module => `industry.${pack.code}.${module}`)],
+    terminology: pack.code === "gym"
+      ? { product: "Service / Product", sale: "Member Invoice", customer: "Member" }
+      : pack.code === "clinic"
+        ? { product: "Service / Medicine", sale: "Patient Invoice", customer: "Patient" }
+        : pack.code === "school"
+          ? { product: "Fee / Item", sale: "Fee Invoice", customer: "Student / Guardian" }
+          : pack.code === "pharmacy"
+            ? { product: "Medicine", sale: "Dispensing Sale", customer: "Patient / Customer" }
+            : { product: "Product", sale: "Sale", customer: "Customer" },
+  })),
   { code: "restaurant", name: "Restaurant & Café", description: "Dine-in, takeaway, delivery and kitchen operations", features: ["restaurant.orders", "restaurant.tables", "restaurant.kitchen", "restaurant.modifiers", "restaurant.split_bill", "restaurant.recipes", "restaurant.wastage", "restaurant.z_report"], terminology: { product: "Menu Item", sale: "Order", customer: "Guest" } },
   { code: "manufacturing", name: "Factory & Light Manufacturing", description: "Practical light manufacturing for small and medium businesses", features: ["manufacturing.materials", "manufacturing.bom", "manufacturing.production_orders", "manufacturing.work_orders", "manufacturing.consumption", "manufacturing.output", "manufacturing.wastage", "manufacturing.costing", "manufacturing.quality"], terminology: { product: "Item", sale: "Dispatch", customer: "Customer" } },
   { code: "wholesale", name: "Wholesale & Distribution", description: "Wholesale pricing, credit, delivery and multi-warehouse distribution", features: ["wholesale.price_lists", "wholesale.customer_pricing", "wholesale.moq", "wholesale.unit_conversion", "wholesale.routes", "wholesale.dispatch", "wholesale.bulk_invoicing", "inventory.multi_warehouse", "salesmen.commission"], terminology: { product: "Item", sale: "Invoice", customer: "Trade Customer" } },

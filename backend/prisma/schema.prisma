@@ -157,6 +157,11 @@ model Business {
   subscriptionPayments  SubscriptionPayment[]
   businessIndustry      BusinessIndustry?
   industrySettings      IndustrySetting[]
+  industryRecords       IndustryRecord[]
+  printProfiles         PrintProfile[]
+  notificationRules     NotificationRule[]
+  notificationOutbox    NotificationOutbox[]
+  inventoryBatches      InventoryBatch[]
   businessCurrencies    BusinessCurrency[]
   exchangeRates         ExchangeRate[]
   documentCurrencyRates DocumentCurrencyRate[]
@@ -271,8 +276,9 @@ model Warehouse {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  branch   Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch           Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  inventoryBatches InventoryBatch[]
 
   @@unique([businessId, name])
   @@index([businessId])
@@ -373,7 +379,8 @@ model Product {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  inventoryBatches InventoryBatch[]
 
   @@unique([businessId, sku])
   @@index([businessId])
@@ -509,31 +516,36 @@ model SalesDocument {
 }
 
 model SalesDocumentItem {
-  id              String   @id @default(cuid())
-  businessId      String   @map("business_id")
-  salesDocumentId String   @map("sales_document_id")
-  productId       String?  @map("product_id")
-  sku             String?
-  barcode         String?
-  qrCode          String?  @map("qr_code")
-  name            String
-  description     String?
-  unit            String?  @default("PCS")
-  qty             Decimal  @db.Decimal(14, 3)
-  rate            Decimal  @default(0) @db.Decimal(14, 2)
-  price           Decimal  @default(0) @db.Decimal(14, 2)
-  discount        Decimal  @default(0) @db.Decimal(14, 2)
-  taxRate         Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
-  tax             Decimal  @default(0) @db.Decimal(14, 2)
-  total           Decimal  @default(0) @db.Decimal(14, 2)
-  createdAt       DateTime @default(now()) @map("created_at")
+  id               String    @id @default(cuid())
+  businessId       String    @map("business_id")
+  salesDocumentId  String    @map("sales_document_id")
+  productId        String?   @map("product_id")
+  inventoryBatchId String?   @map("inventory_batch_id")
+  batchNo          String?   @map("batch_no")
+  expiryDate       DateTime? @map("expiry_date")
+  sku              String?
+  barcode          String?
+  qrCode           String?   @map("qr_code")
+  name             String
+  description      String?
+  unit             String?   @default("PCS")
+  qty              Decimal   @db.Decimal(14, 3)
+  rate             Decimal   @default(0) @db.Decimal(14, 2)
+  price            Decimal   @default(0) @db.Decimal(14, 2)
+  discount         Decimal   @default(0) @db.Decimal(14, 2)
+  taxRate          Decimal   @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  tax              Decimal   @default(0) @db.Decimal(14, 2)
+  total            Decimal   @default(0) @db.Decimal(14, 2)
+  createdAt        DateTime  @default(now()) @map("created_at")
 
-  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  salesDocument SalesDocument @relation(fields: [salesDocumentId], references: [id], onDelete: Cascade)
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  salesDocument  SalesDocument   @relation(fields: [salesDocumentId], references: [id], onDelete: Cascade)
+  inventoryBatch InventoryBatch? @relation(fields: [inventoryBatchId], references: [id], onDelete: Restrict)
 
   @@index([businessId])
   @@index([salesDocumentId])
   @@index([businessId, sku])
+  @@index([businessId, inventoryBatchId])
   @@map("sales_document_items")
 }
 
@@ -1537,6 +1549,155 @@ model IndustrySetting {
 
   @@unique([businessId, key])
   @@map("industry_settings")
+}
+
+model IndustryRecord {
+  id              String    @id @default(cuid())
+  businessId      String    @map("business_id")
+  industryCode    String    @map("industry_code")
+  entityType      String    @map("entity_type")
+  referenceNo     String?   @map("reference_no")
+  displayName     String    @map("display_name")
+  status          String    @default("active")
+  relatedEntityId String?   @map("related_entity_id")
+  startAt         DateTime? @map("start_at")
+  endAt           DateTime? @map("end_at")
+  dueAt           DateTime? @map("due_at")
+  amount          Decimal?  @db.Decimal(14, 2)
+  currency        String?   @default("QAR")
+  data            Json
+  revision        Int       @default(1)
+  idempotencyKey  String?   @map("idempotency_key")
+  createdByUserId String?   @map("created_by_user_id")
+  updatedByUserId String?   @map("updated_by_user_id")
+  archivedAt      DateTime? @map("archived_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, entityType, referenceNo])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, industryCode, entityType, status])
+  @@index([businessId, dueAt])
+  @@index([businessId, relatedEntityId])
+  @@map("industry_records")
+}
+
+model PrintProfile {
+  id              String   @id @default(cuid())
+  businessId      String   @map("business_id")
+  code            String
+  name            String
+  documentType    String   @map("document_type")
+  paperSize       String   @map("paper_size")
+  widthMm         Decimal? @map("width_mm") @db.Decimal(7, 2)
+  heightMm        Decimal? @map("height_mm") @db.Decimal(7, 2)
+  marginTopMm     Decimal  @default(8) @map("margin_top_mm") @db.Decimal(7, 2)
+  marginRightMm   Decimal  @default(8) @map("margin_right_mm") @db.Decimal(7, 2)
+  marginBottomMm  Decimal  @default(8) @map("margin_bottom_mm") @db.Decimal(7, 2)
+  marginLeftMm    Decimal  @default(8) @map("margin_left_mm") @db.Decimal(7, 2)
+  fontScale       Decimal  @default(1) @map("font_scale") @db.Decimal(5, 2)
+  bilingual       Boolean  @default(false)
+  copies          String[] @default(["Original"])
+  isDefault       Boolean  @default(false) @map("is_default")
+  active          Boolean  @default(true)
+  config          Json
+  createdByUserId String?  @map("created_by_user_id")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, code])
+  @@index([businessId, documentType, active])
+  @@map("print_profiles")
+}
+
+model NotificationRule {
+  id              String   @id @default(cuid())
+  businessId      String   @map("business_id")
+  code            String
+  name            String
+  eventType       String   @map("event_type")
+  channels        String[] @default(["in_app"])
+  schedule        Json?
+  conditions      Json
+  template        Json
+  quietHours      Json?    @map("quiet_hours")
+  active          Boolean  @default(true)
+  createdByUserId String?  @map("created_by_user_id")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  business Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  outbox   NotificationOutbox[]
+
+  @@unique([businessId, code])
+  @@index([businessId, eventType, active])
+  @@map("notification_rules")
+}
+
+model NotificationOutbox {
+  id             String    @id @default(cuid())
+  businessId     String    @map("business_id")
+  ruleId         String?   @map("rule_id")
+  channel        String
+  recipientRef   String?   @map("recipient_ref")
+  payload        Json
+  status         String    @default("pending")
+  idempotencyKey String    @map("idempotency_key")
+  attemptCount   Int       @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime? @map("next_attempt_at")
+  deliveredAt    DateTime? @map("delivered_at")
+  lastError      String?   @map("last_error")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  rule     NotificationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, nextAttemptAt])
+  @@map("notification_outbox")
+}
+
+model InventoryBatch {
+  id                String    @id @default(cuid())
+  businessId        String    @map("business_id")
+  productId         String    @map("product_id")
+  warehouseId       String    @map("warehouse_id")
+  batchNo           String    @map("batch_no")
+  gtin              String?
+  productionDate    DateTime? @map("production_date")
+  bestBeforeDate    DateTime? @map("best_before_date")
+  expiryDate        DateTime? @map("expiry_date")
+  smallestUnit      String    @default("PCS") @map("smallest_unit")
+  unitsPerStockUnit Decimal   @default(1) @map("units_per_stock_unit") @db.Decimal(14, 4)
+  qtyOnHandBase     Decimal   @default(0) @map("qty_on_hand_base") @db.Decimal(16, 4)
+  qtyReservedBase   Decimal   @default(0) @map("qty_reserved_base") @db.Decimal(16, 4)
+  costPerBaseUnit   Decimal   @default(0) @map("cost_per_base_unit") @db.Decimal(14, 4)
+  status            String    @default("available")
+  quarantineReason  String?   @map("quarantine_reason")
+  recallReference   String?   @map("recall_reference")
+  metadata          Json?
+  revision          Int       @default(1)
+  createdByUserId   String?   @map("created_by_user_id")
+  updatedByUserId   String?   @map("updated_by_user_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product    Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse  Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  salesItems SalesDocumentItem[]
+
+  @@unique([businessId, productId, warehouseId, batchNo])
+  @@index([businessId, expiryDate, status])
+  @@index([businessId, gtin])
+  @@map("inventory_batches")
 }
 
 model Currency {

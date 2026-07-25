@@ -3,12 +3,15 @@ import { prisma } from "../db/prisma.js";
 import { getDocumentPrefix, getNextDocumentNumber } from "../utils/document-number.js";
 import { hasPermission, loadUserAccess, requirePermission, type UserAccess } from "../services/access.service.js";
 import { writeAudit } from "../services/audit.service.js";
+import { plain } from "../utils/http.js";
 
 type PrismaDocumentType = "INVOICE" | "QUOTATION" | "DELIVERY_NOTE";
 type ApiDocumentType = "invoice" | "quotation" | "delivery_note";
 
 type CreateSalesDocumentItemInput = {
   productId?: string;
+  inventoryBatchId?: string;
+  batchId?: string;
   sku?: string;
   barcode?: string;
   qrCode?: string;
@@ -372,8 +375,9 @@ async function resolveShiftContext(tx: any, businessId: string, userId: string, 
   });
   if (shift) return { shiftId: shift.id, counterId: counterId || shift.counterId || null };
   if (counterId) {
-    const counter = await tx.counter.findFirst({ where: { id: counterId, businessId } });
-    if (!counter) throw new Error("Counter not found");
+    const counter = await tx.counter.findFirst({ where: { id: counterId, businessId, status: "ACTIVE" } });
+    if (!counter) throw new Error("Counter not found or inactive");
+    if (branchId && counter.branchId && counter.branchId !== branchId) throw new Error("Counter does not belong to the selected branch");
   }
   return { shiftId: null, counterId };
 }
@@ -469,7 +473,7 @@ async function prepareItems(tx: any, businessId: string, inputItems: CreateSales
   let lineDiscountTotal = 0;
   let taxTotal = 0;
 
-  const items = inputItems.map((item) => {
+  const items: any[] = inputItems.map((item) => {
     const productId = cleanString(item.productId) as string;
     const product = productById.get(productId);
     if (!product) throw new Error(`Product not found: ${productId}`);
@@ -493,6 +497,7 @@ async function prepareItems(tx: any, businessId: string, inputItems: CreateSales
     return {
       product,
       productId,
+      requestedBatchId: cleanString(item.inventoryBatchId ?? item.batchId) || null,
       sku: product.sku || cleanString(item.sku) || null,
       barcode: product.barcode || cleanString(item.barcode) || null,
       qrCode: product.qrCode || cleanString(item.qrCode) || null,
@@ -521,6 +526,9 @@ async function validateStock(
 ) {
   const stockByProduct = new Map<string, any>();
   const productsWithAllocatedStock = new Set<string>();
+  const industrySelection = await tx.businessIndustry.findUnique({ where: { businessId }, include: { industry: { select: { code: true } } } });
+  const batchIndustry = ["grocery", "pharmacy"].includes(String(industrySelection?.industry?.code || "").toLowerCase());
+  const batchesByProduct = new Map<string, any[]>();
   if (warehouseId) {
     const rows = await tx.inventoryStock.findMany({
       where: { businessId, productId: { in: preparedItems.map((item) => item.productId) } },
@@ -528,6 +536,17 @@ async function validateStock(
     for (const row of rows) {
       productsWithAllocatedStock.add(String(row.productId));
       if (String(row.warehouseId) === String(warehouseId)) stockByProduct.set(String(row.productId), row);
+    }
+    if (batchIndustry) {
+      const batches = await tx.inventoryBatch.findMany({
+        where: { businessId, warehouseId, productId: { in: preparedItems.map((item) => item.productId) }, qtyOnHandBase: { gt: 0 } },
+        orderBy: [{ expiryDate: "asc" }, { createdAt: "asc" }],
+      });
+      for (const batch of batches) {
+        const rowsForProduct = batchesByProduct.get(String(batch.productId)) || [];
+        rowsForProduct.push(batch);
+        batchesByProduct.set(String(batch.productId), rowsForProduct);
+      }
     }
   }
 
@@ -546,6 +565,36 @@ async function validateStock(
     item.availableStock = available;
     item.reservedStock = warehouseStock ? Number(warehouseStock.qtyReserved || 0) : 0;
     item.usesLegacyGlobalStock = Boolean(warehouseId && !warehouseStock && !hasWarehouseAllocation);
+
+    if (batchIndustry && warehouseId) {
+      const candidates = batchesByProduct.get(String(item.productId)) || [];
+      const requested = item.requestedBatchId
+        ? candidates.find((batch: any) => String(batch.id) === String(item.requestedBatchId))
+        : null;
+      if (item.requestedBatchId && !requested) throw new Error(`Selected batch is invalid for ${item.name}`);
+      const batch = requested || candidates.find((candidate: any) => {
+        const status = String(candidate.status || "").toLowerCase();
+        const expiry = candidate.expiryDate ? new Date(candidate.expiryDate) : null;
+        return ["available", "near_expiry"].includes(status) && (!expiry || expiry.getTime() >= Date.now());
+      });
+      const fields = jsonObject(item.product.customFields);
+      const expiryTracked = Boolean(fields.expiryTracking || fields.expiryTrackingEnabled || candidates.length || item.requestedBatchId);
+      if (expiryTracked && !batch) throw new Error(`No saleable batch is available for ${item.name}`);
+      if (batch) {
+        const status = String(batch.status || "").toLowerCase();
+        if (!["available", "near_expiry"].includes(status)) throw new Error(`Batch ${batch.batchNo} for ${item.name} is ${status} and cannot be sold`);
+        if (batch.expiryDate && new Date(batch.expiryDate).getTime() < Date.now()) throw new Error(`Batch ${batch.batchNo} for ${item.name} is expired`);
+        const multiplier = String(item.unit || "").toLowerCase() === String(batch.smallestUnit || "").toLowerCase() ? 1 : Number(batch.unitsPerStockUnit || 1);
+        const requiredBaseQty = Math.max(0, item.qty * multiplier);
+        const availableBaseQty = Number(batch.qtyOnHandBase || 0) - Number(batch.qtyReservedBase || 0);
+        if (!allowNegative && availableBaseQty + 0.0001 < requiredBaseQty) throw new Error(`Insufficient batch stock for ${item.name}. Available base units: ${availableBaseQty}, Required: ${requiredBaseQty}`);
+        item.inventoryBatch = batch;
+        item.inventoryBatchId = batch.id;
+        item.batchNo = batch.batchNo;
+        item.expiryDate = batch.expiryDate || null;
+        item.batchBaseQty = requiredBaseQty;
+      }
+    }
 
     if (!allowNegative && available + 0.0001 < item.qty) {
       throw new Error(`Insufficient stock for ${item.name}. Available: ${available}, Required: ${item.qty}`);
@@ -615,6 +664,29 @@ async function applyStockMovement(
       });
     }
 
+    if (item.inventoryBatchId && item.batchBaseQty > 0) {
+      if (input.direction === "OUT") {
+        const changed = await tx.inventoryBatch.updateMany({
+          where: {
+            id: item.inventoryBatchId,
+            businessId: input.businessId,
+            warehouseId: input.warehouseId || undefined,
+            status: { in: ["available", "near_expiry"] },
+            qtyOnHandBase: { gte: item.batchBaseQty },
+          },
+          data: { qtyOnHandBase: { decrement: item.batchBaseQty }, revision: { increment: 1 }, updatedByUserId: input.userId },
+        });
+        if (!changed.count) throw new Error(`Batch stock changed before posting ${item.name}; reload and try again`);
+        const updatedBatch = await tx.inventoryBatch.findUnique({ where: { id: item.inventoryBatchId }, select: { qtyOnHandBase: true } });
+        if (Number(updatedBatch?.qtyOnHandBase || 0) <= 0) await tx.inventoryBatch.update({ where: { id: item.inventoryBatchId }, data: { status: "depleted" } });
+      } else {
+        await tx.inventoryBatch.update({
+          where: { id: item.inventoryBatchId },
+          data: { qtyOnHandBase: { increment: item.batchBaseQty }, status: "available", revision: { increment: 1 }, updatedByUserId: input.userId },
+        });
+      }
+    }
+
     await tx.stockMovement.create({
       data: {
         businessId: input.businessId,
@@ -630,7 +702,7 @@ async function applyStockMovement(
         beforeQty: movementBefore,
         afterQty: movementAfter,
         source: "sales_document",
-        metadata: { salesDocumentId: input.documentId, createdById: input.userId },
+        metadata: { salesDocumentId: input.documentId, createdById: input.userId, inventoryBatchId: item.inventoryBatchId || null, batchNo: item.batchNo || null, expiryDate: item.expiryDate || null, batchBaseQty: item.batchBaseQty || null },
       },
     });
   }
@@ -718,7 +790,7 @@ export async function getSalesDocumentContext(req: Request, res: Response) {
 
     const data = await (prisma as any).$transaction(async (tx: any) => {
       const access = await loadUserAccess(tx, businessId, userId);
-      const [business, branches, warehouses, users, salesmen, settingsRows, inventoryStocks] = await Promise.all([
+      const [business, branches, warehouses, users, salesmen, settingsRows, inventoryStocks, counters, currentShift, industrySelection] = await Promise.all([
         tx.business.findUnique({ where: { id: businessId } }),
         tx.branch.findMany({ where: { businessId, active: true }, orderBy: { name: "asc" } }),
         tx.warehouse.findMany({ where: { businessId, active: true }, orderBy: { name: "asc" } }),
@@ -730,6 +802,20 @@ export async function getSalesDocumentContext(req: Request, res: Response) {
           select: { id: true, productId: true, warehouseId: true, qtyOnHand: true, qtyReserved: true, reorderLevel: true },
           take: 5000,
         }),
+        tx.counter.findMany({
+          where: { businessId, status: "ACTIVE" },
+          include: { branch: { select: { id: true, name: true } } },
+          orderBy: { name: "asc" },
+        }),
+        tx.shift.findFirst({
+          where: { businessId, status: "OPEN", OR: [{ cashierUserId: access.userId }, { openedByUserId: access.userId }] },
+          include: {
+            branch: { select: { id: true, name: true } },
+            counter: { select: { id: true, name: true, code: true, status: true, branchId: true } },
+          },
+          orderBy: { openedAt: "desc" },
+        }),
+        tx.businessIndustry.findUnique({ where: { businessId }, include: { industry: { select: { code: true, name: true } } } }),
       ]);
 
       const allowedBranches = access.branchId && !hasPermission(access, "sales_documents.cross_branch")
@@ -737,10 +823,11 @@ export async function getSalesDocumentContext(req: Request, res: Response) {
         : branches;
       const allowedBranchIds = new Set(allowedBranches.map((branch: any) => branch.id));
       const allowedWarehouses = warehouses.filter((warehouse: any) => !warehouse.branchId || allowedBranchIds.has(warehouse.branchId));
+      const allowedCounters = counters.filter((counter: any) => !counter.branchId || allowedBranchIds.has(counter.branchId));
       const settings = Object.fromEntries(settingsRows.map((row: any) => [row.key, row.value]));
 
       return {
-        business: business ? { id: business.id, name: business.name, currency: business.currency || "QAR", timezone: business.timezone || "Asia/Qatar" } : null,
+        business: business ? { id: business.id, name: business.name, currency: business.currency || "QAR", timezone: business.timezone || "Asia/Qatar", industryCode: industrySelection?.industry?.code || null, industryName: industrySelection?.industry?.name || null } : null,
         currentUser: { id: access.userId, name: access.userName, branchId: access.branchId, roles: access.roleNames },
         permissions: Array.from(access.permissions),
         capabilities: {
@@ -757,6 +844,15 @@ export async function getSalesDocumentContext(req: Request, res: Response) {
         },
         branches: allowedBranches,
         warehouses: allowedWarehouses,
+        counters: allowedCounters,
+        currentShift: currentShift && (!currentShift.branchId || allowedBranchIds.has(currentShift.branchId)) ? plain(currentShift) : null,
+        operationalContext: {
+          branchId: currentShift?.branchId || access.branchId || allowedBranches[0]?.id || null,
+          warehouseId: allowedWarehouses.find((warehouse: any) => warehouse.branchId === (currentShift?.branchId || access.branchId))?.id || allowedWarehouses[0]?.id || null,
+          counterId: currentShift?.counterId || allowedCounters[0]?.id || null,
+          shiftId: currentShift?.id || null,
+          cashierUserId: access.userId,
+        },
         salesPersons: [
           ...salesmen.map((row: any) => ({ ...row, source: "salesman" })),
           ...users
@@ -911,6 +1007,28 @@ export async function createSalesDocument(req: Request, res: Response) {
       const customerInfo = await resolveCustomer(tx, businessId, req.body);
       const salesperson = await resolveSalesperson(tx, businessId, access, req.body);
       const prepared = await prepareItems(tx, businessId, inputItems);
+      let approvedPrescription: any = null;
+      const industrySelection = await tx.businessIndustry.findUnique({ where: { businessId }, include: { industry: { select: { code: true } } } });
+      if (postingMode === "post" && documentType === "INVOICE" && String(industrySelection?.industry?.code || "").toLowerCase() === "pharmacy") {
+        const prescriptionProducts = prepared.items.filter((item) => Boolean(jsonObject(item.product.customFields).prescriptionRequired));
+        const restrictedProducts = prepared.items.filter((item) => Boolean(jsonObject(item.product.customFields).controlled || jsonObject(item.product.customFields).restricted));
+        if (restrictedProducts.length && !hasPermission(access, "industry.pharmacy.restricted.dispense")) {
+          throw new Error("Restricted medicine dispensing requires pharmacist permission");
+        }
+        if (prescriptionProducts.length) {
+          const prescriptionId = cleanString(req.body?.prescriptionId);
+          if (!prescriptionId) throw new Error("An approved prescription is required for one or more medicines");
+          approvedPrescription = await tx.industryRecord.findFirst({
+            where: { id: prescriptionId, businessId, industryCode: "pharmacy", entityType: "pharmacy_prescription", status: "approved", archivedAt: null },
+          });
+          if (!approvedPrescription) throw new Error("Prescription is missing, expired, or not pharmacist-approved");
+          const prescribedText = JSON.stringify(approvedPrescription.data || {}).toLowerCase();
+          for (const item of prescriptionProducts) {
+            const identifiers = [item.product.sku, item.product.name, item.product.barcode].filter(Boolean).map((value) => String(value).toLowerCase());
+            if (!identifiers.some((identifier) => prescribedText.includes(identifier))) throw new Error(`Prescription does not reference ${item.name}`);
+          }
+        }
+      }
       const headerDiscount = roundMoney(Math.max(0, toNumber(req.body?.discount ?? req.body?.discountTotal)));
       const discountTotal = roundMoney(prepared.lineDiscountTotal + headerDiscount);
       const total = roundMoney(prepared.subtotal - discountTotal + prepared.taxTotal);
@@ -947,6 +1065,9 @@ export async function createSalesDocument(req: Request, res: Response) {
       const allowNegative = Boolean(settingValue(operational.settings, "sales.allowNegativeStock", false)) || hasPermission(access, "sales_documents.allow_negative_stock");
       if (affectsStock) await validateStock(tx, businessId, operational.warehouseId, prepared.items, allowNegative);
       const shiftContext = await resolveShiftContext(tx, businessId, access.userId, operational.branchId, req.body);
+      if (postingMode === "post" && Boolean(settingValue(operational.settings, "terminal.openShiftRequired", false)) && !shiftContext.shiftId) {
+        throw new Error("An open shift is required before posting a terminal sale");
+      }
 
       const documentNo = await getNextDocumentNumber(tx, businessId, operational.branchId, documentType as any);
       const status = postingMode === "draft" ? "DRAFT" : documentType === "INVOICE" ? getPostedStatus(total, payment.paid, payment.paymentMethod) : "ISSUED";
@@ -954,6 +1075,7 @@ export async function createSalesDocument(req: Request, res: Response) {
       const metadata = {
         source: "api",
         postingMode,
+        prescriptionId: cleanString(req.body?.prescriptionId) || null,
         paymentLines: payment.paymentLines,
         plannedPaid: payment.plannedPaid,
         creditOverrideReason: cleanString(req.body?.creditOverrideReason) || null,
@@ -1021,6 +1143,9 @@ export async function createSalesDocument(req: Request, res: Response) {
             create: prepared.items.map((item) => ({
               businessId,
               productId: item.productId,
+              inventoryBatchId: item.inventoryBatchId || null,
+              batchNo: item.batchNo || null,
+              expiryDate: item.expiryDate || null,
               sku: item.sku,
               barcode: item.barcode,
               qrCode: item.qrCode,
@@ -1039,6 +1164,19 @@ export async function createSalesDocument(req: Request, res: Response) {
         },
         include: { items: true },
       });
+
+      if (approvedPrescription) {
+        await tx.industryRecord.update({
+          where: { id: approvedPrescription.id },
+          data: {
+            status: "dispensed",
+            relatedEntityId: document.id,
+            revision: { increment: 1 },
+            updatedByUserId: access.userId,
+            data: { ...jsonObject(approvedPrescription.data), dispensedSalesDocumentId: document.id, dispensedDocumentNo: document.documentNo, dispensedAt: new Date().toISOString() },
+          },
+        });
+      }
 
       await tx.documentCurrencyRate.create({ data: { businessId, entityType: "sales_document", entityId: document.id, currencyCode: currencyContext.currency, baseCurrencyCode: currencyContext.baseCurrency, rate: currencyContext.rate, source: currencyContext.source, rateTimestamp: currencyContext.timestamp } });
 
@@ -1111,21 +1249,54 @@ export async function postSalesDocument(req: Request, res: Response) {
 
       const operational = await resolveOperationalContext(tx, businessId, access, { branchId: document.branchId, warehouseId: document.warehouseId }, { requireWarehouse: document.documentType === "INVOICE" });
       const settings = operational.settings;
+      const metadata = jsonObject(document.metadata);
       const affectsStock = stockAffectsDocument(document.documentType, settings);
       const allowNegative = Boolean(settingValue(settings, "sales.allowNegativeStock", false)) || hasPermission(access, "sales_documents.allow_negative_stock");
       const preparedItems = document.items.map((item: any) => ({
         productId: item.productId,
         product: null,
+        requestedBatchId: item.inventoryBatchId || null,
         sku: item.sku,
         name: item.name,
+        unit: item.unit,
         qty: Number(item.qty),
       }));
       const products = await tx.product.findMany({ where: { businessId, id: { in: preparedItems.map((item: any) => item.productId).filter(Boolean) } } });
       const byId = new Map(products.map((product: any) => [product.id, product]));
       for (const item of preparedItems) item.product = byId.get(item.productId);
+      if (preparedItems.some((item: any) => !item.product)) throw new Error("One or more draft products are no longer available");
+
+      let approvedPrescription: any = null;
+      const industrySelection = await tx.businessIndustry.findUnique({ where: { businessId }, include: { industry: { select: { code: true } } } });
+      if (document.documentType === "INVOICE" && String(industrySelection?.industry?.code || "").toLowerCase() === "pharmacy") {
+        const prescriptionProducts = preparedItems.filter((item: any) => Boolean(jsonObject(item.product.customFields).prescriptionRequired));
+        const restrictedProducts = preparedItems.filter((item: any) => Boolean(jsonObject(item.product.customFields).controlled || jsonObject(item.product.customFields).restricted));
+        if (restrictedProducts.length && !hasPermission(access, "industry.pharmacy.restricted.dispense")) {
+          throw new Error("Restricted medicine dispensing requires pharmacist permission");
+        }
+        if (prescriptionProducts.length) {
+          const prescriptionId = cleanString(req.body?.prescriptionId) || cleanString(metadata.prescriptionId);
+          if (!prescriptionId) throw new Error("An approved prescription is required for one or more medicines");
+          approvedPrescription = await tx.industryRecord.findFirst({
+            where: { id: prescriptionId, businessId, industryCode: "pharmacy", entityType: "pharmacy_prescription", status: "approved", archivedAt: null },
+          });
+          if (!approvedPrescription) throw new Error("Prescription is missing, expired, or not pharmacist-approved");
+          const prescribedText = JSON.stringify(approvedPrescription.data || {}).toLowerCase();
+          for (const item of prescriptionProducts) {
+            const identifiers = [item.product.sku, item.product.name, item.product.barcode].filter(Boolean).map((value) => String(value).toLowerCase());
+            if (!identifiers.some((identifier) => prescribedText.includes(identifier))) throw new Error(`Prescription does not reference ${item.name}`);
+          }
+        }
+      }
       if (affectsStock) await validateStock(tx, businessId, operational.warehouseId, preparedItems, allowNegative);
 
-      const metadata = jsonObject(document.metadata);
+      const shiftContext = await resolveShiftContext(tx, businessId, access.userId, operational.branchId, {
+        shiftId: req.body?.shiftId ?? document.shiftId,
+        counterId: req.body?.counterId ?? document.counterId,
+      });
+      if (Boolean(settingValue(settings, "terminal.openShiftRequired", false)) && !shiftContext.shiftId) {
+        throw new Error("An open shift is required before posting a terminal sale");
+      }
       const paymentInput = { ...metadata, ...req.body, paymentLines: req.body?.paymentLines || metadata.paymentLines, paidAmount: req.body?.paidAmount ?? metadata.plannedPaid, paymentMethod: req.body?.paymentMethod || document.paymentMethod };
       const payment = preparePaymentLines(paymentInput, Number(document.total), document.documentType, "post");
       const dueDate = toDate(req.body?.dueDate) || document.dueDate;
@@ -1156,15 +1327,34 @@ export async function postSalesDocument(req: Request, res: Response) {
           customerCreditApplied: document.documentType === "INVOICE" && payment.balance > 0 && Boolean(document.customerId),
           dueDate: payment.balance > 0 ? dueDate : document.dueDate,
           stockStatus: affectsStock ? "posted" : "not_applicable",
+          shiftId: shiftContext.shiftId,
+          counterId: shiftContext.counterId,
           postedAt: new Date(),
           updatedByUserId: access.userId,
           revision: { increment: 1 },
-          metadata: { ...metadata, postingMode: "post", paymentLines: payment.paymentLines },
+          metadata: {
+            ...metadata,
+            prescriptionId: approvedPrescription?.id || cleanString(req.body?.prescriptionId) || cleanString(metadata.prescriptionId) || null,
+            postingMode: "post",
+            paymentLines: payment.paymentLines,
+          },
         },
         include: { items: true },
       });
 
       if (affectsStock) await applyStockMovement(tx, { businessId, warehouseId: operational.warehouseId, documentId: document.id, documentNo: document.documentNo, userId: access.userId, items: preparedItems, direction: "OUT", movementType: document.documentType === "DELIVERY_NOTE" ? "delivery_note" : "sales_invoice" });
+      if (approvedPrescription) {
+        await tx.industryRecord.update({
+          where: { id: approvedPrescription.id },
+          data: {
+            status: "dispensed",
+            relatedEntityId: document.id,
+            revision: { increment: 1 },
+            updatedByUserId: access.userId,
+            data: { ...jsonObject(approvedPrescription.data), dispensedSalesDocumentId: document.id, dispensedDocumentNo: document.documentNo, dispensedAt: new Date().toISOString() },
+          },
+        });
+      }
       if (document.documentType === "INVOICE" && payment.paymentLines.length) await createPayments(tx, { businessId, customerId: document.customerId, customerName: document.customerName, document, paymentLines: payment.paymentLines, idempotencyKey: document.idempotencyKey || `post:${document.id}`, paymentDate: document.issuedAt || new Date() });
       if (document.documentType === "INVOICE" && payment.balance > 0 && document.customerId) await tx.customer.update({ where: { id: document.customerId }, data: { balance: { increment: payment.balance } } });
 
@@ -1284,7 +1474,17 @@ export async function updateSalesDocument(req: Request, res: Response) {
       }
 
       if (!isDraft && itemChangeRequested && stockAffectsDocument(current.documentType, operational.settings)) {
-        const oldItems = current.items.map((item: any) => ({ productId: item.productId, sku: item.sku, name: item.name, qty: Number(item.qty) }));
+        const oldItems = current.items.map((item: any) => ({
+          productId: item.productId,
+          sku: item.sku,
+          name: item.name,
+          unit: item.unit,
+          qty: Number(item.qty),
+          inventoryBatchId: item.inventoryBatchId,
+          batchNo: item.batchNo,
+          expiryDate: item.expiryDate,
+          batchBaseQty: Number(item.qty),
+        }));
         await applyStockMovement(tx, { businessId, warehouseId: current.warehouseId, documentId: current.id, documentNo: current.documentNo, userId: access.userId, items: oldItems, direction: "IN", movementType: "sales_edit_reversal", suffix: "-REV" });
         const productIds = financial.items.map((item: any) => item.productId);
         const products = await tx.product.findMany({ where: { businessId, id: { in: productIds }, deleted: false } });
@@ -1301,6 +1501,7 @@ export async function updateSalesDocument(req: Request, res: Response) {
 
       const metadata = {
         ...currentMetadata,
+        prescriptionId: cleanString(req.body?.prescriptionId) ?? cleanString(currentMetadata.prescriptionId) ?? null,
         ...(isDraft ? {
           paymentLines: draftPaymentPlan?.paymentLines || [],
           plannedPaid: draftPaymentPlan?.plannedPaid || 0,
@@ -1352,7 +1553,26 @@ export async function updateSalesDocument(req: Request, res: Response) {
           updatedByUserId: access.userId,
           revision: { increment: 1 },
           metadata,
-          ...(itemChangeRequested ? { items: { create: financial.items.map((item: any) => ({ businessId, productId: item.productId, sku: item.sku, barcode: item.barcode, qrCode: item.qrCode, name: item.name, description: item.description, unit: item.unit, qty: item.qty, rate: item.rate, price: item.price, discount: item.discount, taxRate: item.taxRate, tax: item.tax, total: item.total })) } } : {}),
+          ...(itemChangeRequested ? { items: { create: financial.items.map((item: any) => ({
+            businessId,
+            productId: item.productId,
+            inventoryBatchId: item.inventoryBatchId || null,
+            batchNo: item.batchNo || null,
+            expiryDate: item.expiryDate || null,
+            sku: item.sku,
+            barcode: item.barcode,
+            qrCode: item.qrCode,
+            name: item.name,
+            description: item.description,
+            unit: item.unit,
+            qty: item.qty,
+            rate: item.rate,
+            price: item.price,
+            discount: item.discount,
+            taxRate: item.taxRate,
+            tax: item.tax,
+            total: item.total,
+          })) } } : {}),
         },
         include: { items: true },
       });

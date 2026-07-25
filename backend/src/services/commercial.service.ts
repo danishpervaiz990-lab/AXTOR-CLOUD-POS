@@ -4,6 +4,7 @@ import { loadUserAccess, requirePermission } from "./access.service.js";
 import { loadEntitlements } from "./entitlements.service.js";
 import { writeAudit } from "./audit.service.js";
 import { ApiError, cleanString, plain, requireText } from "../utils/http.js";
+import { getIndustryPack } from "../industry/registry.js";
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", name: "English", direction: "ltr", productionReady: true },
@@ -120,6 +121,23 @@ export async function completeOnboarding(req: Request, businessId: string, userI
     const subscriptionStatus = plan.code === "enterprise" ? "ACTIVE" : "TRIAL";
     await tx.business.update({ where: { id: businessId }, data: { name: businessName, country, timezone, currency: baseCurrency, defaultLanguage: language, numberLocale: String(answers.numberLocale || `${language}-${country}`), dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), taxLabel: String(tax.label || "Tax"), onboardingState: "COMPLETED", onboardingStep: 20, onboardingCompletedAt: new Date(), subscriptionPlan: plan.code, subscriptionStatus, status: subscriptionStatus === "ACTIVE" ? "ACTIVE" : "TRIAL", trialEndsAt: subscriptionStatus === "ACTIVE" ? null : undefined } });
     await tx.user.update({ where: { id: access.userId }, data: { preferredLanguage: language } });
+    const selectedPack = getIndustryPack(industryCode);
+    if (!selectedPack) throw new ApiError(400, "Selected industry does not have a supported workflow registry");
+    const previousIndustry = await tx.businessIndustry.findUnique({ where: { businessId }, include: { industry: true } });
+    if (previousIndustry && previousIndustry.industryId !== industry.id) {
+      const transactionCount = await tx.salesDocument.count({ where: { businessId } });
+      if (transactionCount > 0 && !Boolean(answers.confirmIndustryChange)) {
+        throw new ApiError(409, "Industry cannot be changed after transactions exist without an owner-confirmed impact review", {
+          currentIndustry: previousIndustry.industry.code,
+          requestedIndustry: industryCode,
+          transactionCount,
+          confirmationField: "confirmIndustryChange",
+        });
+      }
+      if (transactionCount > 0 && !(access.isOwner || access.isAdmin || access.permissions.has("settings.industry_change"))) {
+        throw new ApiError(403, "Owner or platform-authorized permission is required to change industry after go-live");
+      }
+    }
     await tx.businessIndustry.upsert({ where: { businessId }, create: { businessId, industryId: industry.id }, update: { industryId: industry.id } });
     await tx.businessLocale.upsert({ where: { businessId }, create: { businessId, countryCode: country, timezone, languageCode: language, dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), numberLocale: String(answers.numberLocale || `${language}-${country}`) }, update: { countryCode: country, timezone, languageCode: language, dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), numberLocale: String(answers.numberLocale || `${language}-${country}`) } });
     await tx.businessTaxSetting.upsert({ where: { businessId }, create: { businessId, taxSystem: String(tax.system || "none"), taxLabel: String(tax.label || "Tax"), registrationNumber: cleanString(tax.registrationNumber) || null, pricesIncludeTax: Boolean(tax.pricesIncludeTax), config: tax }, update: { taxSystem: String(tax.system || "none"), taxLabel: String(tax.label || "Tax"), registrationNumber: cleanString(tax.registrationNumber) || null, pricesIncludeTax: Boolean(tax.pricesIncludeTax), config: tax } });
@@ -127,6 +145,9 @@ export async function completeOnboarding(req: Request, businessId: string, userI
       "company.profile": { name: businessName, logoUrl: cleanString(answers.logoUrl) || null, country, timezone },
       "invoice.template": { id: String(answers.invoiceTemplate || "standard"), industryCode },
       "documents.numbering": { invoicePrefix: String(answers.invoicePrefix || "INV"), quotationPrefix: String(answers.quotationPrefix || "QUO"), deliveryPrefix: String(answers.deliveryPrefix || "DN") },
+      "terminal.openShiftRequired": selectedPack.defaultSettings.openShiftRequired
+        ?? ["retail", "grocery", "hardware_paint", "pharmacy"].includes(selectedPack.code),
+      "sales.allowNegativeStock": selectedPack.defaultSettings.allowNegativeStock ?? false,
     };
     for (const [key, value] of Object.entries(setupSettings)) await tx.appSetting.upsert({ where: { businessId_key: { businessId, key } }, create: { businessId, key, value }, update: { value } });
     await tx.businessCurrency.deleteMany({ where: { businessId } });
@@ -141,6 +162,47 @@ export async function completeOnboarding(req: Request, businessId: string, userI
     if (!await tx.counter.findFirst({ where: { businessId, branchId: branch.id } })) await tx.counter.create({ data: { businessId, branchId: branch.id, name: "Counter 1", code: "C1", status: "ACTIVE" } });
     if (!await tx.account.findFirst({ where: { businessId, name: "Main Cash" } })) await tx.account.create({ data: { businessId, name: "Main Cash", type: "cash", currency: baseCurrency, active: true } });
     for (const [name, permissions] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) await tx.role.upsert({ where: { businessId_name: { businessId, name } }, create: { businessId, name, isSystemRole: true, permissions }, update: { isSystemRole: true, permissions } });
+    for (const [name, permissions] of Object.entries(selectedPack.defaultRoles)) {
+      await tx.role.upsert({ where: { businessId_name: { businessId, name } }, create: { businessId, name, isSystemRole: true, permissions }, update: { isSystemRole: true, permissions } });
+    }
+    await tx.industrySetting.upsert({
+      where: { businessId_key: { businessId, key: "industry.defaults" } },
+      create: { businessId, key: "industry.defaults", value: selectedPack.defaultSettings },
+      update: { value: selectedPack.defaultSettings },
+    });
+    const printProfiles = [
+      { code: "a4-invoice", name: "A4 Sales Invoice", documentType: "invoice", paperSize: "A4", widthMm: 210, heightMm: 297, margin: 8, isDefault: true },
+      { code: "a4-quotation", name: "A4 Quotation", documentType: "quotation", paperSize: "A4", widthMm: 210, heightMm: 297, margin: 8, isDefault: true },
+      { code: "a4-delivery-note", name: "A4 Delivery Note", documentType: "delivery_note", paperSize: "A4", widthMm: 210, heightMm: 297, margin: 8, isDefault: true },
+      { code: "a4-credit-note", name: "A4 Credit Note / Refund", documentType: "credit_note", paperSize: "A4", widthMm: 210, heightMm: 297, margin: 8, isDefault: true },
+      { code: "thermal-80", name: "80 mm Thermal Receipt", documentType: "receipt", paperSize: "80MM", widthMm: 80, heightMm: null, margin: 2, isDefault: true },
+      { code: "thermal-58", name: "58 mm Thermal Receipt", documentType: "receipt", paperSize: "58MM", widthMm: 58, heightMm: null, margin: 2, isDefault: false },
+    ];
+    for (const profile of printProfiles) {
+      await tx.printProfile.upsert({
+        where: { businessId_code: { businessId, code: profile.code } },
+        create: {
+          businessId, code: profile.code, name: profile.name, documentType: profile.documentType, paperSize: profile.paperSize,
+          widthMm: profile.widthMm, heightMm: profile.heightMm, marginTopMm: profile.margin, marginRightMm: profile.margin,
+          marginBottomMm: profile.margin, marginLeftMm: profile.margin, isDefault: profile.isDefault,
+          config: { showOperationalContext: true, showLegalDetails: true, showPaymentSummary: true, printFields: selectedPack.printFields },
+          createdByUserId: access.userId, updatedByUserId: access.userId,
+        },
+        update: { name: profile.name, documentType: profile.documentType, paperSize: profile.paperSize, active: true },
+      });
+    }
+    for (const rule of selectedPack.notificationRules) {
+      await tx.notificationRule.upsert({
+        where: { businessId_code: { businessId, code: rule.code } },
+        create: {
+          businessId, code: rule.code, name: rule.code.split("-").map(part => part[0].toUpperCase() + part.slice(1)).join(" "),
+          eventType: rule.eventType, channels: ["in_app"], conditions: rule.daysBefore ? { daysBefore: rule.daysBefore } : {},
+          template: { title: selectedPack.name, message: `Action required for ${rule.eventType}` }, active: true,
+          createdByUserId: access.userId, updatedByUserId: access.userId,
+        },
+        update: { eventType: rule.eventType, conditions: rule.daysBefore ? { daysBefore: rule.daysBefore } : {}, active: true },
+      });
+    }
     for (const documentType of ["INVOICE", "QUOTATION", "DELIVERY_NOTE"] as const) { const prefix = documentType === "INVOICE" ? String(answers.invoicePrefix || "INV") : documentType === "QUOTATION" ? String(answers.quotationPrefix || "QUO") : String(answers.deliveryPrefix || "DN"); const counter = await tx.documentCounter.findFirst({ where: { businessId, branchId: null, documentType } }); if (counter) await tx.documentCounter.update({ where: { id: counter.id }, data: { prefix } }); else await tx.documentCounter.create({ data: { businessId, branchId: null, documentType, prefix, nextNumber: 1, padding: 6 } }); }
 
     await tx.tenantSubscription.updateMany({ where: { businessId, isCurrent: true }, data: { isCurrent: false } });

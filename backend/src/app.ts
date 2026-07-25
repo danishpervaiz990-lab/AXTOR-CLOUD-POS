@@ -31,6 +31,7 @@ import settingsRoutes from "./routes/settings.routes.js";
 import communicationsRoutes from "./routes/communications.routes.js";
 import commercialRoutes from "./routes/commercial.routes.js";
 import platformAdminRoutes from "./routes/platform-admin.routes.js";
+import industryRoutes from "./routes/industry.routes.js";
 
 export function createApp() {
   const app = express();
@@ -84,6 +85,7 @@ export function createApp() {
     communications: "/api/v1/communications",
     commercial: "/api/v1/commercial",
     platformAdmin: "/api/v1/platform-admin",
+    industry: "/api/v1/industry",
   };
 
   app.get("/", (_req: Request, res: Response) => res.json({
@@ -137,6 +139,7 @@ export function createApp() {
   app.use("/api/v1/communications", communicationsRoutes);
   app.use("/api/v1/commercial", commercialRoutes);
   app.use("/api/v1/platform-admin", platformAdminRoutes);
+  app.use("/api/v1/industry", industryRoutes);
 
   app.use((req: Request, res: Response) => res.status(404).json({ ok: false, error: { message: `Route not found: ${req.method} ${req.originalUrl}`, referenceId: res.locals.requestId } }));
   app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
