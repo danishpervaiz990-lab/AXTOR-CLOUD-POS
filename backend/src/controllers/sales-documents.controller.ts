@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
-import { getDocumentPrefix, getNextDocumentNumber } from "../utils/document-number.js";
+import { getDocumentPrefix, getNextDocumentNumber, previewDocumentNumber } from "../utils/document-number.js";
 import { hasPermission, loadUserAccess, requirePermission, type UserAccess } from "../services/access.service.js";
 import { writeAudit } from "../services/audit.service.js";
 
@@ -795,12 +795,9 @@ export async function previewSalesDocumentNumber(req: Request, res: Response) {
 
     const data = await (prisma as any).$transaction(async (tx: any) => {
       const access = await loadUserAccess(tx, businessId, userId);
-      const { branchId } = await resolveOperationalContext(tx, businessId, access, { branchId: req.query.branchId });
-      const counter = await tx.documentCounter.findFirst({ where: { businessId, branchId, documentType } });
-      const prefix = counter?.prefix || getDocumentPrefix(documentType as any);
-      const nextNumber = counter?.nextNumber || 1;
-      const padding = counter?.padding || 6;
-      return { preview: `${prefix}-${String(nextNumber).padStart(padding, "0")}`, prefix, nextNumber, officialNumberGeneratedOnSave: true };
+      await resolveOperationalContext(tx, businessId, access, { branchId: req.query.branchId });
+      const preview = await previewDocumentNumber(tx, businessId, documentType as any);
+      return { ...preview, officialNumberGeneratedOnSave: true };
     });
 
     return res.json({ ok: true, data });
@@ -914,7 +911,7 @@ export async function createSalesDocument(req: Request, res: Response) {
       const requireLpo = Boolean(settingValue(operational.settings, "sales.requireLpo", false));
       if (requireLpo && !lpoNo) throw new Error("LPO number is required by business policy");
 
-      if (postingMode === "post" && documentType === "INVOICE" && payment.paymentMethod === "credit") {
+      if (postingMode === "post" && documentType === "INVOICE" && payment.balance > 0) {
         if (!customerInfo.customerId) throw new Error("Customer is required for a credit invoice");
         if (!toDate(req.body?.dueDate)) throw new Error("Due date is required for a credit invoice");
       }
@@ -1120,7 +1117,7 @@ export async function postSalesDocument(req: Request, res: Response) {
       const paymentInput = { ...metadata, ...req.body, paymentLines: req.body?.paymentLines || metadata.paymentLines, paidAmount: req.body?.paidAmount ?? metadata.plannedPaid, paymentMethod: req.body?.paymentMethod || document.paymentMethod };
       const payment = preparePaymentLines(paymentInput, Number(document.total), document.documentType, "post");
       if (document.documentType === "INVOICE" && payment.balance > 0 && !document.customerId) throw new Error("A named customer is required when an invoice has an outstanding balance");
-      if (document.documentType === "INVOICE" && payment.paymentMethod === "credit" && !document.dueDate) throw new Error("Due date is required for a credit invoice");
+      if (document.documentType === "INVOICE" && payment.balance > 0 && !document.dueDate) throw new Error("Due date is required for a credit invoice");
 
       if (document.customerId && payment.balance > 0) {
         const customer = await tx.customer.findFirst({ where: { id: document.customerId, businessId } });

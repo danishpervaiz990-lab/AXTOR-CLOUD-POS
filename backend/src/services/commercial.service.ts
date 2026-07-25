@@ -115,7 +115,10 @@ export async function completeOnboarding(req: Request, businessId: string, userI
     if (validCurrencyCount !== enabledCurrencies.length) throw new ApiError(400, "One or more selected currencies are invalid");
 
     const tax = asObject(answers.tax);
-    await tx.business.update({ where: { id: businessId }, data: { name: businessName, country, timezone, currency: baseCurrency, defaultLanguage: language, numberLocale: String(answers.numberLocale || `${language}-${country}`), dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), taxLabel: String(tax.label || "Tax"), onboardingState: "COMPLETED", onboardingStep: 20, onboardingCompletedAt: new Date(), subscriptionPlan: plan.code, subscriptionStatus: "TRIAL" } });
+    // A Custom / Enterprise tenant is a manually provisioned paid deployment,
+    // not a self-service trial.  Other plans retain the normal trial flow.
+    const subscriptionStatus = plan.code === "enterprise" ? "ACTIVE" : "TRIAL";
+    await tx.business.update({ where: { id: businessId }, data: { name: businessName, country, timezone, currency: baseCurrency, defaultLanguage: language, numberLocale: String(answers.numberLocale || `${language}-${country}`), dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), taxLabel: String(tax.label || "Tax"), onboardingState: "COMPLETED", onboardingStep: 20, onboardingCompletedAt: new Date(), subscriptionPlan: plan.code, subscriptionStatus, status: subscriptionStatus === "ACTIVE" ? "ACTIVE" : "TRIAL", trialEndsAt: subscriptionStatus === "ACTIVE" ? null : undefined } });
     await tx.user.update({ where: { id: access.userId }, data: { preferredLanguage: language } });
     await tx.businessIndustry.upsert({ where: { businessId }, create: { businessId, industryId: industry.id }, update: { industryId: industry.id } });
     await tx.businessLocale.upsert({ where: { businessId }, create: { businessId, countryCode: country, timezone, languageCode: language, dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), numberLocale: String(answers.numberLocale || `${language}-${country}`) }, update: { countryCode: country, timezone, languageCode: language, dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), numberLocale: String(answers.numberLocale || `${language}-${country}`) } });
@@ -141,8 +144,9 @@ export async function completeOnboarding(req: Request, businessId: string, userI
     for (const documentType of ["INVOICE", "QUOTATION", "DELIVERY_NOTE"] as const) { const prefix = documentType === "INVOICE" ? String(answers.invoicePrefix || "INV") : documentType === "QUOTATION" ? String(answers.quotationPrefix || "QUO") : String(answers.deliveryPrefix || "DN"); const counter = await tx.documentCounter.findFirst({ where: { businessId, branchId: null, documentType } }); if (counter) await tx.documentCounter.update({ where: { id: counter.id }, data: { prefix } }); else await tx.documentCounter.create({ data: { businessId, branchId: null, documentType, prefix, nextNumber: 1, padding: 6 } }); }
 
     await tx.tenantSubscription.updateMany({ where: { businessId, isCurrent: true }, data: { isCurrent: false } });
-    const trialEndsAt = new Date(Date.now() + 14 * 86400000);
-    await tx.tenantSubscription.create({ data: { businessId, planId: plan.id, status: "TRIAL", billingCycle: String(answers.billingCycle || "MONTHLY").toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY", startsAt: new Date(), trialEndsAt, currentPeriodStart: new Date(), currentPeriodEnd: trialEndsAt, isCurrent: true, provider: "manual" } });
+    const trialEndsAt = subscriptionStatus === "TRIAL" ? new Date(Date.now() + 14 * 86400000) : null;
+    const periodEnd = subscriptionStatus === "TRIAL" ? trialEndsAt : new Date(Date.now() + 365 * 86400000);
+    await tx.tenantSubscription.create({ data: { businessId, planId: plan.id, status: subscriptionStatus, billingCycle: String(answers.billingCycle || "MONTHLY").toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY", startsAt: new Date(), trialEndsAt, currentPeriodStart: new Date(), currentPeriodEnd: periodEnd, isCurrent: true, provider: "manual" } });
     const sampleDataRequested = Boolean(answers.sampleDataRequested || existing?.sampleDataRequested);
     if (sampleDataRequested) {
       await tx.product.createMany({ data: [{ businessId, sku: "SAMPLE-001", name: "Sample Product", unit: "PCS", price: 10, costPrice: 6, currentStock: 20, openingStock: 20 }, { businessId, sku: "SAMPLE-002", name: "Sample Service", unit: "JOB", price: 50, costPrice: 0, currentStock: 0, openingStock: 0 }], skipDuplicates: true });
@@ -150,7 +154,7 @@ export async function completeOnboarding(req: Request, businessId: string, userI
     }
     const onboarding = await tx.tenantOnboarding.upsert({ where: { businessId }, create: { businessId, currentStep: 20, completedSteps: Array.from({ length: 20 }, (_, index) => index + 1), state: "COMPLETED", answers, sampleDataRequested, completedAt: new Date() }, update: { currentStep: 20, completedSteps: Array.from({ length: 20 }, (_, index) => index + 1), state: "COMPLETED", answers, sampleDataRequested, completedAt: new Date() } });
     await writeAudit(tx, req, { businessId, userId: access.userId, action: "onboarding.completed", entityType: "TenantOnboarding", entityId: onboarding.id, after: { industryCode, planCode: plan.code, baseCurrency, language, sampleDataRequested } });
-    return plain({ onboarding, branch, warehouse, trialEndsAt, redirect: "index.html" });
+    return plain({ onboarding, branch, warehouse, trialEndsAt, subscriptionStatus, redirect: "index.html" });
   }, { timeout: 30000 });
 }
 
