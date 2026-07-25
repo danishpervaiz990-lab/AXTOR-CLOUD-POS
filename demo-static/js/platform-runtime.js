@@ -2,7 +2,7 @@
   "use strict";
 
   const EXACT_KEYS = {
-    "Dashboard":"nav.dashboard","Terminal":"nav.terminal","Sales":"nav.sales","Shifts / Closing":"nav.shifts","Customers":"nav.customers","Salesmen & Commission":"nav.salesmen","Products":"nav.products","Inventory":"nav.inventory","Barcode Labels":"nav.barcode","Purchases":"nav.purchases","Branches":"nav.branches","Promotions":"nav.promotions","Loyalty":"nav.loyalty","Approvals":"nav.approvals","Reports":"nav.reports","Accounts":"nav.accounts","Expenses":"nav.expenses","Setup Wizard":"nav.setup","Notifications":"nav.notifications","Invoice Designer":"nav.invoiceDesigner","Settings":"nav.settings",
+    "Dashboard":"nav.dashboard","Terminal":"nav.terminal","Sales":"nav.sales","Shifts / Closing":"nav.shifts","Customers":"nav.customers","Salesmen & Commission":"nav.salesmen","Products":"nav.products","Inventory":"nav.inventory","Barcode Labels":"nav.barcode","Purchases":"nav.purchases","Branches":"nav.branches","Promotions":"nav.promotions","Loyalty":"nav.loyalty","Approvals":"nav.approvals","Reports":"nav.reports","Accounts":"nav.accounts","Expenses":"nav.expenses","Setup Wizard":"nav.setup","Notifications":"nav.notifications","Invoice Designer":"nav.invoiceDesigner","Industry Workspace":"nav.industry","Settings":"nav.settings",
     "Save":"action.save","Add":"action.add","Cancel":"action.cancel","Edit":"action.edit","Delete":"action.delete","Print":"action.print","Search":"action.search","Save Invoice":"sales.saveInvoice","Add Product":"sales.addProduct","Select Customer":"sales.selectCustomer","Complete Sale":"sales.complete"
   };
   const PAGE_FEATURES = {
@@ -68,6 +68,19 @@
     select.addEventListener("change", async () => { select.disabled = true; try { await loadDictionary(select.value); await window.AxtorAPI.apiPut("/api/v1/commercial/preferences", { language: select.value }); } catch (error) { console.error(error); } finally { select.disabled = false; } });
     const user = topbar.querySelector(".user-chip"); topbar.insertBefore(select, user || null);
   }
+  function addIndustryNavigation() {
+    const nav = document.querySelector(".nav-menu"); if (!nav || nav.querySelector('a[href="industry.html"]')) return;
+    const selected = context?.industry?.industry;
+    const code = String(selected?.code || "").toLowerCase();
+    if (!selected || code === "retail" || !["gym","clinic","grocery","hardware_paint","school","pharmacy"].includes(code)) return;
+    const link = document.createElement("a");
+    link.className = "nav-linkx" + ((location.pathname.split("/").pop() || "") === "industry.html" ? " active" : "");
+    link.href = "industry.html";
+    link.dataset.industryCode = code;
+    link.innerHTML = '<i class="bi bi-grid-1x2"></i><span>' + String(selected.name || "Industry") + " Workspace</span>";
+    const reports = nav.querySelector('a[href="reports.html"]');
+    nav.insertBefore(link, reports || null);
+  }
   function applyFeatureAccess() {
     document.querySelectorAll(".nav-linkx[href]").forEach(link => { const file = (link.getAttribute("href") || "").split(/[?#]/)[0]; const key = NAV_FEATURES[file]; if (key && !hasFeature(key)) { link.hidden = true; link.setAttribute("aria-hidden", "true"); } });
     const page = location.pathname.split("/").pop() || "index.html"; const required = PAGE_FEATURES[page];
@@ -93,7 +106,7 @@
     try {
       context = unwrap(await window.AxtorAPI.apiGet("/api/v1/commercial/context"));
       const preferred = context?.user?.preferredLanguage || context?.business?.defaultLanguage || sessionStorage.getItem("axtorDisplayLanguage") || "en";
-      await loadDictionary(preferred); addLanguageSelector(); applyFeatureAccess(); addPlanBanner(); showVersion();
+      await loadDictionary(preferred); addLanguageSelector(); addIndustryNavigation(); applyFeatureAccess(); addPlanBanner(); showVersion();
       window.dispatchEvent(new CustomEvent("axtor:platform-ready", { detail: context }));
     } catch (error) { console.error("Axtor platform context unavailable", error); await loadDictionary("en"); }
   }

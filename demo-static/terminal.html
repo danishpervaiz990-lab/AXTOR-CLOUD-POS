@@ -68,11 +68,16 @@
 <div>
 <div class="scan-box mb-3 no-print">
 <div class="row g-2 align-items-end">
-<div class="col-lg-4"><label class="form-label fw-bold">Barcode scan input</label><div class="input-group"><input autocomplete="off" class="form-control" id="terminalScan" placeholder="Scan barcode / SKU then Enter"/><button class="btn btn-soft" id="cameraScanBtn" type="button"><i class="bi bi-camera"></i> Scan with Camera</button></div></div>
-<div class="col-lg-3"><label class="form-label fw-bold">Product search</label><input class="form-control" id="terminalProductSearch" placeholder="Search product name or SKU"/></div>
-<div class="col-lg-3"><label class="form-label fw-bold">Customer attach</label><select class="form-select" id="terminalCustomer"></select></div>
-<div class="col-lg-2"><label class="form-label fw-bold"><i class="bi bi-person-badge me-1"></i>Salesman</label><select class="form-select" id="saleSmId"><option value="">— Select Salesman (optional) —</option></select></div>
+<div class="col-lg-4"><label class="form-label fw-bold" for="terminalScan">Barcode scan input</label><div class="input-group"><input autocomplete="off" class="form-control" id="terminalScan" placeholder="Scan barcode / SKU then Enter"/><button class="btn btn-soft" id="cameraScanBtn" type="button"><i class="bi bi-camera"></i> Scan with Camera</button></div></div>
+<div class="col-lg-3"><label class="form-label fw-bold" for="terminalProductSearch">Product search</label><input class="form-control" id="terminalProductSearch" placeholder="Search product name or SKU"/></div>
+<div class="col-lg-3"><label class="form-label fw-bold" for="terminalCustomer">Customer attach</label><select class="form-select" id="terminalCustomer"></select></div>
+<div class="col-lg-2"><label class="form-label fw-bold" for="saleSmId"><i class="bi bi-person-badge me-1"></i>Salesman</label><select class="form-select" id="saleSmId"><option value="">— Select Salesman (optional) —</option></select></div>
 </div>
+</div>
+<div class="cardx mb-3 d-none no-print" id="terminalPrescriptionWrap">
+<label class="form-label fw-bold" for="terminalPrescription"><i class="bi bi-file-medical me-1"></i>Approved Prescription</label>
+<select class="form-select" id="terminalPrescription"><option value="">Select an approved prescription…</option></select>
+<div class="form-text">Prescription-required medicines cannot be posted until a pharmacist-approved prescription is selected. Axtor does not provide autonomous medicine advice.</div>
 </div>
 <div class="mb-3" id="terminalCreditWarning"></div>
 <div class="cardx no-print">
@@ -84,13 +89,17 @@
 <div class="cardx">
 <div class="d-flex justify-content-between align-items-center mb-2"><h5 class="cardx-title">Cart / Checkout</h5><span class="badge-soft badge-paid" id="terminalCounterBadge">Loading counter...</span></div>
 <div class="mini-stat mb-3" id="terminalCounterDetails">
+<div class="d-flex justify-content-between gap-2"><span>Business</span><strong class="text-end" id="terminalBusinessName">Loading...</strong></div>
 <div class="d-flex justify-content-between gap-2"><span>Branch</span><strong class="text-end" id="terminalBranchName">Loading...</strong></div>
-<div class="d-flex justify-content-between gap-2"><span>Counter</span><strong class="text-end" id="terminalCounterName">Loading...</strong></div>
+<div class="d-flex justify-content-between gap-2"><span>Warehouse</span><strong class="text-end" id="terminalWarehouseName">Loading...</strong></div>
+<div class="d-flex justify-content-between gap-2 align-items-center"><label for="terminalCounterSelect">Counter</label><select class="form-select form-select-sm text-end" id="terminalCounterSelect" style="max-width:190px"><option>Loading...</option></select></div>
 <div class="d-flex justify-content-between gap-2"><span>Cashier</span><strong class="text-end" id="terminalCashierName">Loading...</strong></div>
 <div class="d-flex justify-content-between gap-2"><span>Shift</span><strong class="text-end" id="terminalShiftStatus">Loading...</strong></div>
+<div class="d-flex justify-content-between gap-2"><span>Opened</span><strong class="text-end" id="terminalShiftOpenedAt">—</strong></div>
+<div class="d-flex justify-content-between gap-2"><span>Connection</span><strong class="text-end" id="terminalConnectionStatus">Checking...</strong></div>
 </div>
 <div class="table-wrap terminal-table"><table class="table table-sm"><thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Rate</th><th>Disc</th><th>Tax</th><th>Total</th><th></th></tr></thead><tbody id="terminalCartBody"></tbody></table></div>
-<div class="row g-2 mt-3"><div class="col-6"><label class="form-label">Invoice discount</label><input class="form-control" id="terminalInvoiceDiscount" type="number" value="0"/></div><div class="col-6"><label class="form-label">Return from invoice</label><button class="btn btn-soft w-100" id="returnFromInvoiceBtn"><i class="bi bi-arrow-counterclockwise"></i> Return</button></div></div>
+<div class="row g-2 mt-3"><div class="col-6"><label class="form-label" for="terminalInvoiceDiscount">Invoice discount</label><input class="form-control" id="terminalInvoiceDiscount" type="number" value="0"/></div><div class="col-6"><span class="form-label d-block">Return from invoice</span><button class="btn btn-soft w-100" id="returnFromInvoiceBtn"><i class="bi bi-arrow-counterclockwise"></i> Return</button></div></div>
 <div class="mini-stat mt-3">
 <div class="d-flex justify-content-between"><span>Subtotal</span><strong id="terminalSubtotal">QAR 0</strong></div>
 <div class="d-flex justify-content-between"><span>Line Discount</span><strong id="terminalLineDiscount">QAR 0</strong></div>
@@ -99,10 +108,10 @@
 </div>
 <h6 class="fw-bold mt-3">Split Payment</h6>
 <div class="pay-grid">
-<div class="pay-tile"><label>Cash</label><input class="form-control" id="terminalPayCash" type="number" value="0"/></div>
-<div class="pay-tile"><label>Card</label><input class="form-control" id="terminalPayCard" type="number" value="0"/></div>
-<div class="pay-tile"><label>Credit</label><input class="form-control" id="terminalPayCredit" type="number" value="0"/></div>
-<div class="pay-tile"><label>Bank</label><input class="form-control" id="terminalPayBank" type="number" value="0"/></div>
+<div class="pay-tile"><label for="terminalPayCash">Cash</label><input class="form-control" id="terminalPayCash" type="number" value="0"/></div>
+<div class="pay-tile"><label for="terminalPayCard">Card</label><input class="form-control" id="terminalPayCard" type="number" value="0"/></div>
+<div class="pay-tile"><label for="terminalPayCredit">Credit</label><input class="form-control" id="terminalPayCredit" type="number" value="0"/></div>
+<div class="pay-tile"><label for="terminalPayBank">Bank</label><input class="form-control" id="terminalPayBank" type="number" value="0"/></div>
 </div>
 <div class="mini-stat mt-3"><div class="d-flex justify-content-between"><span>Paid</span><strong id="terminalPaid">QAR 0</strong></div><div class="d-flex justify-content-between"><span>Balance</span><strong id="terminalBalance">QAR 0</strong></div></div>
 <div class="d-grid gap-2 mt-3 no-print"><button class="btn btn-brand btn-lg" id="completeTerminalSaleBtn"><i class="bi bi-check2-circle"></i> Complete Sale</button><div class="d-flex gap-2"><button class="btn btn-soft flex-fill" id="holdSaleBtn"><i class="bi bi-pause-circle"></i> Hold</button><button class="btn btn-soft flex-fill" data-bs-target="#heldSalesModal" data-bs-toggle="modal"><i class="bi bi-arrow-clockwise"></i> Recall</button></div><div class="d-flex gap-2"><button class="btn btn-soft flex-fill" id="printTerminalReceiptBtn"><i class="bi bi-printer"></i> Print Receipt</button><button class="btn btn-soft flex-fill" id="cashDrawerBtn"><i class="bi bi-cash"></i> Open Drawer</button></div></div>
@@ -116,7 +125,7 @@
 </div>
 <div class="search-overlay" id="globalSearch">
 <div class="search-box">
-<div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input autocomplete="off" id="globalSearchInput" placeholder="Type to search pages, sections, invoices..."/><button class="btn-icon" data-search-close=""><i class="bi bi-x-lg"></i></button></div>
+<div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input aria-label="Global search" autocomplete="off" id="globalSearchInput" placeholder="Type to search pages, sections, invoices..."/><button class="btn-icon" data-search-close=""><i class="bi bi-x-lg"></i></button></div>
 <div class="search-results" id="globalSearchResults"></div>
 </div>
 </div>

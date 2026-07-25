@@ -1,7 +1,7 @@
 (function () {
   "use strict";
   var U = window.AxtorPage;
-  var state = { products: [], customers: [], salesPersons: [], context: {}, cart: [], drafts: [], currentDraftId: null, lastDocument: null };
+  var state = { products: [], customers: [], salesPersons: [], prescriptions: [], context: {}, cart: [], drafts: [], currentDraftId: null, lastDocument: null, selectedCounterId: null };
 
   function replaceControl(selector) {
     var old = U.q(selector);
@@ -18,6 +18,27 @@
   }
 
   function defaultTaxRate() { return U.num(settingValue("sales.defaultTaxRate", 0)); }
+  function currency() { return state.context && state.context.business && state.context.business.currency || "QAR"; }
+  function currentCounter() {
+    return (state.context.counters || []).find(function (row) { return row.id === state.selectedCounterId; }) || null;
+  }
+  function currentShift() { return state.context.currentShift || null; }
+  function operational() {
+    var base = state.context.operationalContext || {};
+    var counter = currentCounter();
+    var shift = currentShift();
+    var branchId = counter && counter.branchId || shift && shift.branchId || base.branchId || null;
+    var warehouse = (state.context.warehouses || []).find(function (row) { return row.branchId === branchId; })
+      || (state.context.warehouses || []).find(function (row) { return row.id === base.warehouseId; })
+      || (state.context.warehouses || [])[0] || null;
+    return {
+      branchId: branchId,
+      warehouseId: warehouse && warehouse.id || null,
+      counterId: counter && counter.id || null,
+      shiftId: shift && (!counter || !shift.counterId || shift.counterId === counter.id) ? shift.id : null,
+      cashierUserId: state.context.currentUser && state.context.currentUser.id || null
+    };
+  }
 
   function normalizeList(response) {
     var value = U.data(response) || [];
@@ -34,14 +55,28 @@
     state.products = normalizeList(responses[0]);
     state.customers = normalizeList(responses[1]);
     state.context = U.data(responses[2]) || {};
+    state.selectedCounterId = state.selectedCounterId
+      || state.context.operationalContext && state.context.operationalContext.counterId
+      || state.context.currentShift && state.context.currentShift.counterId
+      || state.context.counters && state.context.counters[0] && state.context.counters[0].id
+      || null;
     state.salesPersons = state.context.salesPersons || [];
     state.drafts = U.data(responses[3]) || [];
+    if (state.context.business && state.context.business.industryCode === "pharmacy") {
+      state.prescriptions = normalizeList(await U.api().apiGet("/api/v1/industry/records?entityType=pharmacy_prescription&status=approved&limit=200"));
+    } else state.prescriptions = [];
     renderAll();
   }
 
   function productName(row) { return row.name || row.productName || "Item"; }
   function productPrice(row) { return U.num(row.price || row.sellingPrice || row.unitPrice); }
-  function productStock(row) { return U.num(row.currentStock || row.stock || row.openingStock); }
+  function productStock(row) {
+    var warehouseId = operational().warehouseId;
+    var cloud = (state.context.inventoryStocks || []).find(function (stock) {
+      return stock.productId === row.id && (!warehouseId || stock.warehouseId === warehouseId);
+    });
+    return cloud ? U.num(cloud.available) : U.num(row.currentStock || row.stock || row.openingStock);
+  }
 
   function findProduct(value) {
     var query = String(value || "").trim().toLowerCase();
@@ -67,9 +102,11 @@
       qty: 1,
       rate: productPrice(product),
       discount: 0,
-      taxRate: U.num(product.taxRate, defaultTaxRate())
+      taxRate: U.num(product.taxRate, defaultTaxRate()),
+      prescriptionRequired: Boolean(product.customFields && product.customFields.prescriptionRequired)
     });
     renderCart();
+    renderPrescription();
   }
 
   function totals() {
@@ -98,6 +135,69 @@
     renderProducts(U.value("#terminalProductSearch"));
     renderCart();
     renderHeld();
+    renderContext();
+    renderPrescription();
+  }
+
+  function renderPrescription() {
+    var required = state.cart.some(function (item) { return item.prescriptionRequired; });
+    var wrap = U.q("#terminalPrescriptionWrap");
+    if (wrap) wrap.classList.toggle("d-none", !required && !(state.context.business && state.context.business.industryCode === "pharmacy"));
+    var select = U.q("#terminalPrescription");
+    if (select) {
+      var selected = select.value;
+      select.innerHTML = '<option value="">Select an approved prescription…</option>' + state.prescriptions.map(function (row) {
+        return '<option value="' + U.esc(row.id) + '">' + U.esc((row.referenceNo || row.displayName) + " · " + row.displayName) + "</option>";
+      }).join("");
+      if (state.prescriptions.some(function (row) { return row.id === selected; })) select.value = selected;
+      select.required = required;
+    }
+  }
+
+  function setText(id, value) {
+    var element = U.q(id);
+    if (element) element.textContent = value == null || value === "" ? "—" : String(value);
+  }
+
+  function renderContext() {
+    var context = state.context || {};
+    var shift = currentShift();
+    var counter = currentCounter();
+    var op = operational();
+    var branch = (context.branches || []).find(function (row) { return row.id === op.branchId; });
+    var warehouse = (context.warehouses || []).find(function (row) { return row.id === op.warehouseId; });
+    var select = U.q("#terminalCounterSelect");
+    if (select) {
+      select.innerHTML = (context.counters || []).length
+        ? (context.counters || []).map(function (row) {
+          return '<option value="' + U.esc(row.id) + '"' + (row.id === state.selectedCounterId ? " selected" : "") + ">"
+            + U.esc(row.name + (row.code ? " (" + row.code + ")" : "")) + "</option>";
+        }).join("")
+        : '<option value="">No active counter</option>';
+      select.disabled = Boolean(shift && shift.counterId);
+    }
+    setText("#terminalBusinessName", context.business && context.business.name);
+    setText("#terminalBranchName", branch && branch.name || shift && shift.branch && shift.branch.name);
+    setText("#terminalWarehouseName", warehouse && warehouse.name);
+    setText("#terminalCashierName", context.currentUser && context.currentUser.name);
+    setText("#terminalShiftStatus", shift ? "OPEN · " + (shift.id || "").slice(-8).toUpperCase() : "No open shift");
+    setText("#terminalShiftOpenedAt", shift && shift.openedAt ? U.datetime(shift.openedAt) : "—");
+    setText("#terminalConnectionStatus", navigator.onLine ? "Online" : "Offline");
+    var badge = U.q("#terminalCounterBadge");
+    if (badge) {
+      badge.textContent = counter ? counter.name + " · " + (counter.status || "ACTIVE") : "No active counter";
+      badge.className = "badge-soft " + (counter ? "badge-paid" : "badge-overdue");
+    }
+    var required = Boolean(settingValue("terminal.openShiftRequired", false));
+    var complete = U.q("#completeTerminalSaleBtn");
+    if (complete) {
+      complete.disabled = !counter || (required && !shift);
+      complete.title = !counter ? "An active counter is required" : required && !shift ? "Open a shift before making a sale" : "";
+    }
+    var warning = U.q("#terminalCreditWarning");
+    if (warning && required && !shift) {
+      warning.innerHTML = '<div class="alert alert-warning py-2 mb-0">An open shift is required. <a href="shifts.html" class="alert-link">Open a shift</a> before posting sales.</div>';
+    }
   }
 
   function renderProducts(search) {
@@ -110,7 +210,7 @@
     grid.innerHTML = rows.length ? rows.map(function (row) {
       return '<div class="fast-product"><div class="product-icon"><i class="bi bi-box-seam"></i></div><strong>' + U.esc(productName(row)) +
         '</strong><small class="text-muted">' + U.esc(row.sku || "-") + " • Stock " + U.money(productStock(row)) +
-        '</small><div class="d-flex justify-content-between align-items-center mt-auto"><span class="fw-bold">QAR ' + U.money(productPrice(row)) +
+        '</small><div class="d-flex justify-content-between align-items-center mt-auto"><span class="fw-bold">' + U.esc(currency()) + " " + U.money(productPrice(row)) +
         '</span><button type="button" class="btn btn-sm btn-brand" data-cloud-terminal-add="' + U.esc(row.id) + '">Add</button></div></div>';
     }).join("") : '<div class="text-muted p-3">No backend products found.</div>';
   }
@@ -124,9 +224,9 @@
       return "<tr><td><strong>" + U.esc(item.name) + "</strong></td><td>" + U.esc(item.sku) +
         '</td><td><div class="d-flex align-items-center gap-1"><button type="button" class="btn btn-sm btn-soft" data-cloud-qty="' + index + '" data-delta="-1">−</button>' +
         '<input class="form-control form-control-sm text-center" style="width:64px" data-cloud-qty-input="' + index + '" value="' + U.esc(item.qty) + '">' +
-        '<button type="button" class="btn btn-sm btn-soft" data-cloud-qty="' + index + '" data-delta="1">+</button></div></td><td>QAR ' + U.money(item.rate) +
-        '</td><td><input class="form-control form-control-sm" type="number" data-cloud-disc="' + index + '" value="' + U.esc(item.discount) + '"></td><td>QAR ' +
-        U.money(itemTax) + '</td><td class="fw-bold">QAR ' + U.money(total) + '</td><td><button type="button" class="btn btn-sm btn-soft text-danger" data-cloud-remove="' + index + '">×</button></td></tr>';
+        '<button type="button" class="btn btn-sm btn-soft" data-cloud-qty="' + index + '" data-delta="1">+</button></div></td><td>' + U.esc(currency()) + " " + U.money(item.rate) +
+        '</td><td><input class="form-control form-control-sm" type="number" data-cloud-disc="' + index + '" value="' + U.esc(item.discount) + '"></td><td>' + U.esc(currency()) + " " +
+        U.money(itemTax) + '</td><td class="fw-bold">' + U.esc(currency()) + " " + U.money(total) + '</td><td><button type="button" class="btn btn-sm btn-soft text-danger" data-cloud-remove="' + index + '">×</button></td></tr>';
     }).join("") : U.emptyRow(8, "Scan barcode or add a product to start sale");
     renderTotals();
   }
@@ -143,7 +243,7 @@
     };
     Object.keys(map).forEach(function (id) {
       var element = U.q("#" + id);
-      if (element) element.textContent = "QAR " + U.money(map[id]);
+      if (element) element.textContent = currency() + " " + U.money(map[id]);
     });
     var taxLabel = U.q("#terminalTaxLabel");
     if (taxLabel) taxLabel.textContent = "Tax";
@@ -151,7 +251,10 @@
     var warning = U.q("#terminalCreditWarning");
     if (warning) {
       var customerId = U.value("#terminalCustomer");
-      warning.innerHTML = value.balance > 0 && !customerId ? '<div class="alert alert-warning py-2 mb-0">Select a named customer for an outstanding credit balance.</div>' : "";
+      var shiftRequired = Boolean(settingValue("terminal.openShiftRequired", false));
+      warning.innerHTML = shiftRequired && !currentShift()
+        ? '<div class="alert alert-warning py-2 mb-0">An open shift is required. <a href="shifts.html" class="alert-link">Open a shift</a> before posting sales.</div>'
+        : value.balance > 0 && !customerId ? '<div class="alert alert-warning py-2 mb-0">Select a named customer for an outstanding credit balance.</div>' : "";
     }
   }
 
@@ -160,7 +263,7 @@
     if (!body) return;
     body.innerHTML = state.drafts.length ? state.drafts.map(function (row) {
       return "<tr><td>" + U.esc(row.documentNo) + "</td><td>" + U.esc(row.customerName || "Walk-in Customer") + "</td><td>" + U.datetime(row.createdAt) +
-        "</td><td>" + U.esc((row.items || []).length) + "</td><td>QAR " + U.money(row.total) +
+        "</td><td>" + U.esc((row.items || []).length) + "</td><td>" + U.esc(currency()) + " " + U.money(row.total) +
         '</td><td><button type="button" class="btn btn-sm btn-brand" data-cloud-recall="' + U.esc(row.id) + '">Recall</button></td></tr>';
     }).join("") : U.emptyRow(6, "No held backend sales");
   }
@@ -191,6 +294,7 @@
     var customer = state.customers.find(function (row) { return row.id === customerId; });
     var payment = buildPayment();
     if (!state.cart.length) throw new Error("Cart is empty");
+    if (state.cart.some(function (item) { return item.prescriptionRequired; }) && !U.value("#terminalPrescription")) throw new Error("Select an approved prescription for prescription-required medicine");
     if (payment.value.balance > 0 && !customerId) throw new Error("Select a customer for a credit/balance invoice");
     if (payment.value.credit > 0 && Math.abs(payment.value.credit - payment.value.balance) > 0.001) throw new Error("Credit amount must equal the remaining balance");
     return {
@@ -198,6 +302,12 @@
       postingMode: postingMode,
       idempotencyKey: "terminal:" + Date.now() + ":" + Math.random().toString(36).slice(2),
       documentDate: new Date().toISOString().slice(0, 10),
+      branchId: operational().branchId,
+      warehouseId: operational().warehouseId,
+      counterId: operational().counterId,
+      shiftId: operational().shiftId,
+      cashierUserId: operational().cashierUserId,
+      prescriptionId: U.value("#terminalPrescription") || null,
       dueDate: creditDueDate(customer, payment.value.balance),
       customerId: customerId || null,
       customerName: customer ? customer.name : "Walk-in Customer",
@@ -219,7 +329,9 @@
     ["#terminalInvoiceDiscount", "#terminalPayCash", "#terminalPayCard", "#terminalPayCredit", "#terminalPayBank"].forEach(function (id) {
       var element = U.q(id); if (element) element.value = 0;
     });
+    var prescription = U.q("#terminalPrescription"); if (prescription) prescription.value = "";
     renderCart();
+    renderPrescription();
   }
 
   async function completeSale(button) {
@@ -232,7 +344,8 @@
         delete body.postingMode;
         await U.api().apiPatch("/api/v1/sales-documents/" + encodeURIComponent(state.currentDraftId), body);
         response = await U.api().apiPost("/api/v1/sales-documents/" + encodeURIComponent(state.currentDraftId) + "/post", {
-          paymentMethod: body.paymentMethod, paidAmount: body.paidAmount, paymentLines: body.paymentLines, dueDate: body.dueDate
+          paymentMethod: body.paymentMethod, paidAmount: body.paidAmount, paymentLines: body.paymentLines, dueDate: body.dueDate,
+          prescriptionId: body.prescriptionId, shiftId: body.shiftId, counterId: body.counterId
         });
       } else {
         response = await U.api().apiPost("/api/v1/sales-documents", body);
@@ -241,6 +354,9 @@
       U.toast("Sale posted: " + (state.lastDocument.documentNo || "Invoice"));
       resetTerminal();
       await load();
+      if (Boolean(settingValue("print.autoPreviewTerminal", false)) && state.lastDocument && state.lastDocument.id) {
+        window.open("invoice-view.html?id=" + encodeURIComponent(state.lastDocument.id) + "&profile=thermal-80", "_blank", "noopener");
+      }
     } catch (error) { U.error(error); } finally { done(); }
   }
 
@@ -258,13 +374,21 @@
   async function recallDraft(id) {
     var draft = U.data(await U.api().apiGet("/api/v1/sales-documents/" + encodeURIComponent(id)));
     state.currentDraftId = draft.id;
+    if (draft.counterId && (state.context.counters || []).some(function (row) { return row.id === draft.counterId; })) state.selectedCounterId = draft.counterId;
     state.cart = (draft.items || []).map(function (item) {
-      return { productId: item.productId, sku: item.sku, barcode: item.barcode, name: item.name, qty: U.num(item.qty), rate: U.num(item.rate), discount: U.num(item.discount), taxRate: U.num(item.taxRate) };
+      var product = state.products.find(function (row) { return row.id === item.productId; }) || {};
+      return {
+        productId: item.productId, sku: item.sku, barcode: item.barcode, name: item.name,
+        qty: U.num(item.qty), rate: U.num(item.rate), discount: U.num(item.discount), taxRate: U.num(item.taxRate),
+        prescriptionRequired: Boolean(product.customFields && product.customFields.prescriptionRequired)
+      };
     });
     var customer = U.q("#terminalCustomer"); if (customer) customer.value = draft.customerId || "";
     var salesman = U.q("#saleSmId"); if (salesman) salesman.value = draft.salesmanId || "";
+    var prescription = U.q("#terminalPrescription"); if (prescription) prescription.value = draft.metadata && draft.metadata.prescriptionId || "";
     var invoiceDiscount = U.q("#terminalInvoiceDiscount"); if (invoiceDiscount) invoiceDiscount.value = Math.max(0, U.num(draft.discount) - state.cart.reduce(function (s, item) { return s + item.discount; }, 0));
     renderCart();
+    renderContext();
     U.modalHide("#heldSalesModal");
     U.toast("Held sale recalled. Complete Sale will post this draft.");
   }
@@ -283,6 +407,7 @@
     var payCard = replaceControl("#terminalPayCard");
     var payCredit = replaceControl("#terminalPayCredit");
     var payBank = replaceControl("#terminalPayBank");
+    var counterSelect = replaceControl("#terminalCounterSelect");
     renderAll();
 
     U.on(search, "input", function () { renderProducts(search.value); });
@@ -295,10 +420,25 @@
     [customer, salesman, discount, payCash, payCard, payCredit, payBank].forEach(function (element) {
       U.on(element, "input", renderTotals); U.on(element, "change", renderTotals);
     });
+    U.on(counterSelect, "change", function () {
+      var previous = state.selectedCounterId;
+      if (state.cart.length && !window.confirm("Changing counters will keep this cart but change its operational context. Continue?")) {
+        counterSelect.value = previous || "";
+        return;
+      }
+      state.selectedCounterId = counterSelect.value || null;
+      renderContext();
+      renderProducts(U.value("#terminalProductSearch"));
+    });
+    addEventListener("online", renderContext);
+    addEventListener("offline", renderContext);
 
     U.bind("#completeTerminalSaleBtn", "click", function (event) { completeSale(event.currentTarget); });
     U.bind("#holdSaleBtn", "click", function (event) { holdSale(event.currentTarget); });
-    U.bind("#printTerminalReceiptBtn", "click", function () { window.print(); });
+    U.bind("#printTerminalReceiptBtn", "click", function () {
+      if (!state.lastDocument || !state.lastDocument.id) return U.toast("Complete a sale before printing its receipt", "error");
+      window.open("invoice-view.html?id=" + encodeURIComponent(state.lastDocument.id) + "&profile=thermal-80&print=1", "_blank", "noopener");
+    });
     U.bind("#cashDrawerBtn", "click", function () { U.toast("Cash drawer command requires supported POS hardware integration", "error"); });
     U.bind("#returnFromInvoiceBtn", "click", function () { window.location.href = "sales.html#returns"; });
 

@@ -1,6 +1,10 @@
 (function () {
   "use strict";
   var U = window.AxtorPage;
+  var activeDocument = null;
+  var profiles = [];
+  var activeProfile = null;
+
   function status(message, type) {
     var box = U.q("#invoiceViewStatus");
     if (!box) return;
@@ -8,43 +12,193 @@
     box.textContent = message;
     box.classList.remove("d-none");
   }
-  function render(documentData) {
+
+  function unwrap(response) { return U.data(response) || response || null; }
+  async function safeGet(url, fallback) {
+    try { return unwrap(await U.api().apiGet(url)); } catch (_) { return fallback; }
+  }
+
+  function valueMap(settings) {
+    if (!settings) return {};
+    if (settings.values) return settings.values;
+    if (Array.isArray(settings.settings)) return Object.fromEntries(settings.settings.map(function (row) { return [row.key, row.value]; }));
+    return {};
+  }
+
+  function profileTemplate(profile, documentData) {
+    if (profile && profile.paperSize === "58MM") return "thermal-58";
+    if (profile && profile.paperSize === "80MM") return "thermal-80";
+    var type = String(documentData.documentType || "invoice").toLowerCase();
+    if (type === "quotation") return "quotation";
+    if (type === "delivery_note") return "delivery-invoice";
+    return "modern-a4";
+  }
+
+  function pickProfile(requested, documentData) {
+    if (requested) {
+      var exact = profiles.find(function (row) { return row.code === requested || row.id === requested; });
+      if (exact) return exact;
+    }
+    var type = String(documentData.documentType || "invoice").toLowerCase();
+    var receipt = requested && requested.indexOf("thermal") === 0;
+    var matching = profiles.filter(function (row) {
+      return receipt ? row.documentType === "receipt" : row.documentType === type;
+    });
+    return matching.find(function (row) { return row.isDefault; }) || matching[0] || {
+      code: receipt ? "thermal-80" : "a4-" + type,
+      name: receipt ? "80 mm Thermal Receipt" : "A4 Document",
+      documentType: receipt ? "receipt" : type,
+      paperSize: receipt ? "80MM" : "A4",
+      widthMm: receipt ? 80 : 210,
+      heightMm: receipt ? null : 297,
+      marginTopMm: receipt ? 2 : 8,
+      marginRightMm: receipt ? 2 : 8,
+      marginBottomMm: receipt ? 2 : 8,
+      marginLeftMm: receipt ? 2 : 8,
+      fontScale: 1,
+      copies: ["Original"],
+      config: {},
+    };
+  }
+
+  function applyPrintProfile(profile) {
+    activeProfile = profile;
+    var old = U.q("#axtorCloudPrintProfile");
+    if (old) old.remove();
+    var style = document.createElement("style");
+    style.id = "axtorCloudPrintProfile";
+    var thermal = profile.paperSize === "58MM" || profile.paperSize === "80MM";
+    var width = Number(profile.widthMm || (profile.paperSize === "58MM" ? 58 : profile.paperSize === "80MM" ? 80 : 210));
+    var height = profile.heightMm ? Number(profile.heightMm) : null;
+    var pageSize = thermal ? width + "mm auto" : width + "mm " + (height || 297) + "mm";
+    var margins = [
+      Number(profile.marginTopMm || 0),
+      Number(profile.marginRightMm || 0),
+      Number(profile.marginBottomMm || 0),
+      Number(profile.marginLeftMm || 0)
+    ].join("mm ") + "mm";
+    style.textContent = "@page{size:" + pageSize + ";margin:" + margins + "}"
+      + "@media print{html,body{width:" + (thermal ? width + "mm" : "auto") + ";margin:0!important;padding:0!important;background:#fff!important}"
+      + ".page{max-width:none!important;margin:0!important;padding:0!important}.invoice-sheet{font-size:calc(13px * " + Number(profile.fontScale || 1) + ")!important;"
+      + (thermal ? "width:" + Math.max(40, width - Number(profile.marginLeftMm || 0) - Number(profile.marginRightMm || 0)) + "mm!important;max-width:none!important;" : "width:auto!important;max-width:none!important;")
+      + "box-shadow:none!important;border:0!important;margin:0!important}.inv-table thead{display:table-header-group}.inv-table tr,.inv-totals,.signature-card{break-inside:avoid;page-break-inside:avoid}}";
+    document.head.appendChild(style);
+    document.body.dataset.printProfile = profile.code;
+  }
+
+  function renderProfileSelector(documentData) {
+    var actions = U.q("#invoiceViewPrintBtn") && U.q("#invoiceViewPrintBtn").parentElement;
+    if (!actions || U.q("#invoiceViewProfile")) return;
+    var select = document.createElement("select");
+    select.id = "invoiceViewProfile";
+    select.className = "form-select no-print";
+    select.style.maxWidth = "230px";
+    select.setAttribute("aria-label", "Print profile");
+    var relevant = profiles.filter(function (row) {
+      return row.documentType === String(documentData.documentType || "invoice").toLowerCase() || row.documentType === "receipt";
+    });
+    if (!relevant.length) relevant = [activeProfile];
+    select.innerHTML = relevant.map(function (row) {
+      return '<option value="' + U.esc(row.code) + '"' + (row.code === activeProfile.code ? " selected" : "") + ">" + U.esc(row.name) + "</option>";
+    }).join("");
+    select.addEventListener("change", function () {
+      var selected = profiles.find(function (row) { return row.code === select.value; }) || activeProfile;
+      renderDocument(documentData, selected);
+      var url = new URL(location.href);
+      url.searchParams.set("profile", selected.code);
+      history.replaceState(null, "", url);
+    });
+    actions.insertBefore(select, U.q("#invoiceViewPrintBtn"));
+  }
+
+  function normalizedData(documentData, context) {
+    var branch = (context.branches || []).find(function (row) { return row.id === documentData.branchId; });
+    var warehouse = (context.warehouses || []).find(function (row) { return row.id === documentData.warehouseId; });
+    var counter = (context.counters || []).find(function (row) { return row.id === documentData.counterId; });
+    var cashier = (context.salesPersons || []).find(function (row) { return row.id === documentData.createdByUserId || row.userId === documentData.createdByUserId; });
+    var created = new Date(documentData.issuedAt || documentData.postedAt || documentData.createdAt || Date.now());
+    return Object.assign({}, documentData, {
+      invoiceNo: documentData.documentNo,
+      date: created.toLocaleDateString(),
+      time: created.toLocaleTimeString(),
+      customer: documentData.customerName || "Walk-in Customer",
+      customerPhone: documentData.customerPhone || "",
+      customerTax: documentData.customerTaxNumber || "",
+      salesman: documentData.salesmanName || "",
+      cashier: cashier && cashier.name || documentData.cashierName || "—",
+      branch: branch && branch.name || documentData.branchName || "—",
+      warehouseName: warehouse && warehouse.name || "—",
+      counterName: counter && counter.name || "—",
+      shiftReference: documentData.shiftId ? documentData.shiftId.slice(-8).toUpperCase() : "",
+      paymentMethod: documentData.paymentMethod || "—",
+      paid: documentData.paid,
+      balance: documentData.balance,
+      grand: documentData.total,
+      total: documentData.total,
+      returned: documentData.returnedAmount,
+      refunded: documentData.refundedAmount,
+      items: documentData.items || [],
+    });
+  }
+
+  function renderDocument(documentData, profile, context) {
     var root = U.q("#invoiceViewRoot");
     if (!root) return;
-    var items = documentData.items || [];
-    root.innerHTML = '<div class="cardx invoice-paper"><div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3"><div><h2 class="mb-1">' +
-      U.esc((documentData.documentType || "invoice").replaceAll("_", " ").toUpperCase()) + '</h2><div class="text-muted">' + U.esc(documentData.documentNo) +
-      '</div></div><div class="text-end"><h4 class="mb-1">Axtor POS Cloud</h4><div class="text-muted">' + U.date(documentData.documentDate || documentData.createdAt) +
-      '</div></div></div><div class="row mb-4"><div class="col-6"><small class="text-muted">Customer</small><div class="fw-bold">' + U.esc(documentData.customerName || "Walk-in Customer") +
-      '</div><div>LPO: ' + U.esc(documentData.lpoNo || "-") + '</div></div><div class="col-6 text-end"><small class="text-muted">Salesman</small><div class="fw-bold">' +
-      U.esc(documentData.salesmanName || "-") + '</div><div>Status: ' + U.esc(documentData.status) + '</div></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Item</th><th>SKU</th><th class="text-end">Qty</th><th class="text-end">Rate</th><th class="text-end">Discount</th><th class="text-end">Tax</th><th class="text-end">Total</th></tr></thead><tbody>' +
-      (items.length ? items.map(function (item) {
-        return "<tr><td>" + U.esc(item.name) + "</td><td>" + U.esc(item.sku || "-") + "</td><td class=\"text-end\">" + U.money(item.qty) +
-          "</td><td class=\"text-end\">QAR " + U.money(item.rate) + "</td><td class=\"text-end\">QAR " + U.money(item.discount) +
-          "</td><td class=\"text-end\">QAR " + U.money(item.tax) + "</td><td class=\"text-end\">QAR " + U.money(item.total) + "</td></tr>";
-      }).join("") : U.emptyRow(7)) + '</tbody></table></div><div class="row justify-content-end"><div class="col-md-5"><div class="d-flex justify-content-between"><span>Subtotal</span><strong>QAR ' +
-      U.money(documentData.subtotal) + '</strong></div><div class="d-flex justify-content-between"><span>Discount</span><strong>QAR ' + U.money(documentData.discount) +
-      '</strong></div><div class="d-flex justify-content-between"><span>Tax</span><strong>QAR ' + U.money(documentData.tax) + '</strong></div><hr><div class="d-flex justify-content-between fs-5"><span>Total</span><strong>QAR ' +
-      U.money(documentData.total) + '</strong></div><div class="d-flex justify-content-between"><span>Paid</span><strong>QAR ' + U.money(documentData.paid) +
-      '</strong></div><div class="d-flex justify-content-between"><span>Balance</span><strong>QAR ' + U.money(documentData.balance) + "</strong></div></div></div></div>";
+    context = context || window.AxtorInvoiceContext || {};
+    applyPrintProfile(profile);
+    var template = profileTemplate(profile, documentData);
+    root.innerHTML = window.AxtorInvoice
+      ? window.AxtorInvoice.render(template, { data: normalizedData(documentData, context) })
+      : '<div class="alert alert-danger">Invoice engine not loaded.</div>';
+    document.title = documentData.documentNo + " · Axtor POS Cloud";
   }
+
   U.run(async function () {
     var params = new URLSearchParams(window.location.search);
     var id = params.get("id");
     var number = params.get("documentNo") || params.get("no");
     try {
       if (!id && number) {
-        var rows = U.data(await U.api().apiGet("/api/v1/sales-documents?q=" + encodeURIComponent(number) + "&limit=20")) || [];
+        var rows = unwrap(await U.api().apiGet("/api/v1/sales-documents?q=" + encodeURIComponent(number) + "&limit=20")) || [];
         var match = rows.find(function (row) { return row.documentNo === number; }) || rows[0];
         id = match && match.id;
       }
       if (!id) throw new Error("Document id or document number is required");
-      var data = U.data(await U.api().apiGet("/api/v1/sales-documents/" + encodeURIComponent(id)));
-      render(data);
+      var results = await Promise.all([
+        U.api().apiGet("/api/v1/sales-documents/" + encodeURIComponent(id)),
+        safeGet("/api/v1/settings", { values: {} }),
+        safeGet("/api/v1/industry/print-profiles", []),
+        safeGet("/api/v1/sales-documents/context", {}),
+      ]);
+      activeDocument = unwrap(results[0]);
+      var settings = valueMap(results[1]);
+      profiles = Array.isArray(results[2]) ? results[2] : [];
+      var context = results[3] || {};
+      window.AxtorInvoiceContext = context;
+      var business = context.business || {};
+      var company = Object.assign({}, settings["company.profile"] || {}, {
+        companyName: (settings["company.profile"] || {}).companyName || (settings["company.profile"] || {}).name || business.name,
+        legalBusinessName: (settings["company.profile"] || {}).legalBusinessName || business.legalName || business.name,
+        currency: business.currency || "QAR",
+        currencySymbol: (business.currency || "QAR") + " ",
+      });
+      if (window.AxtorInvoice && window.AxtorInvoice.setCloudConfig) {
+        window.AxtorInvoice.setCloudConfig({
+          company: company,
+          invoice: settings["invoice.settings"] || {},
+          designer: settings["invoice.designer"] || {},
+        });
+      }
+      activeProfile = pickProfile(params.get("profile"), activeDocument);
+      renderDocument(activeDocument, activeProfile, context);
+      renderProfileSelector(activeDocument);
       var box = U.q("#invoiceViewStatus"); if (box) box.classList.add("d-none");
+      if (params.get("print") === "1") setTimeout(function () { window.print(); }, 350);
     } catch (error) {
       status(error.message || "Unable to load document", "danger");
     }
     U.bind("#invoiceViewPrintBtn", "click", function () { window.print(); });
+    addEventListener("beforeprint", function () { document.body.classList.add("axtor-printing"); });
+    addEventListener("afterprint", function () { document.body.classList.remove("axtor-printing"); });
   });
 })();

@@ -376,7 +376,7 @@
     }));
   }
 
-  function initPlatformRuntime(){ if(document.querySelector('script[data-axtor-platform]')) return; const script=document.createElement('script'); script.src='js/platform-runtime.js?v=20260725-terminal-credit-v4'; script.defer=true; script.dataset.axtorPlatform='1'; document.body.appendChild(script); }
+  function initPlatformRuntime(){ if(document.querySelector('script[data-axtor-platform]')) return; const script=document.createElement('script'); script.src='js/platform-runtime.js?v=20260725-multi-industry-v1'; script.defer=true; script.dataset.axtorPlatform='1'; document.body.appendChild(script); }
   function init(){ if(initAccessControl() === false) return; initBootstrapFallback(); initTheme(); initSidebar(); initSearch(); initHashTabs(); initDashboardScrollTop(); initDateYear(); initToasts(); initPlatformRuntime(); }
   document.addEventListener('DOMContentLoaded', init);
 })();
