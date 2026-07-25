@@ -1128,8 +1128,9 @@ export async function postSalesDocument(req: Request, res: Response) {
       const metadata = jsonObject(document.metadata);
       const paymentInput = { ...metadata, ...req.body, paymentLines: req.body?.paymentLines || metadata.paymentLines, paidAmount: req.body?.paidAmount ?? metadata.plannedPaid, paymentMethod: req.body?.paymentMethod || document.paymentMethod };
       const payment = preparePaymentLines(paymentInput, Number(document.total), document.documentType, "post");
+      const dueDate = toDate(req.body?.dueDate) || document.dueDate;
       if (document.documentType === "INVOICE" && payment.balance > 0 && !document.customerId) throw new Error("A named customer is required when an invoice has an outstanding balance");
-      if (document.documentType === "INVOICE" && payment.balance > 0 && !document.dueDate) throw new Error("Due date is required for a credit invoice");
+      if (document.documentType === "INVOICE" && payment.balance > 0 && !dueDate) throw new Error("Due date is required for a credit invoice");
 
       if (document.customerId && payment.balance > 0) {
         const customer = await tx.customer.findFirst({ where: { id: document.customerId, businessId } });
@@ -1153,6 +1154,7 @@ export async function postSalesDocument(req: Request, res: Response) {
           baseBalance: roundMoney((document.documentType === "INVOICE" ? payment.balance : 0) * Number(document.exchangeRate || 1)),
           creditAmount: document.documentType === "INVOICE" ? payment.balance : 0,
           customerCreditApplied: document.documentType === "INVOICE" && payment.balance > 0 && Boolean(document.customerId),
+          dueDate: payment.balance > 0 ? dueDate : document.dueDate,
           stockStatus: affectsStock ? "posted" : "not_applicable",
           postedAt: new Date(),
           updatedByUserId: access.userId,
