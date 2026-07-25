@@ -82,7 +82,13 @@
 </div>
 <div class="terminal-cart">
 <div class="cardx">
-<div class="d-flex justify-content-between align-items-center mb-2"><h5 class="cardx-title">Cart / Checkout</h5><span class="badge-soft badge-paid">Counter 1</span></div>
+<div class="d-flex justify-content-between align-items-center mb-2"><h5 class="cardx-title">Cart / Checkout</h5><span class="badge-soft badge-paid" id="terminalCounterBadge">Loading counter...</span></div>
+<div class="mini-stat mb-3" id="terminalCounterDetails">
+<div class="d-flex justify-content-between gap-2"><span>Branch</span><strong class="text-end" id="terminalBranchName">Loading...</strong></div>
+<div class="d-flex justify-content-between gap-2"><span>Counter</span><strong class="text-end" id="terminalCounterName">Loading...</strong></div>
+<div class="d-flex justify-content-between gap-2"><span>Cashier</span><strong class="text-end" id="terminalCashierName">Loading...</strong></div>
+<div class="d-flex justify-content-between gap-2"><span>Shift</span><strong class="text-end" id="terminalShiftStatus">Loading...</strong></div>
+</div>
 <div class="table-wrap terminal-table"><table class="table table-sm"><thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Rate</th><th>Disc</th><th>Tax</th><th>Total</th><th></th></tr></thead><tbody id="terminalCartBody"></tbody></table></div>
 <div class="row g-2 mt-3"><div class="col-6"><label class="form-label">Invoice discount</label><input class="form-control" id="terminalInvoiceDiscount" type="number" value="0"/></div><div class="col-6"><label class="form-label">Return from invoice</label><button class="btn btn-soft w-100" id="returnFromInvoiceBtn"><i class="bi bi-arrow-counterclockwise"></i> Return</button></div></div>
 <div class="mini-stat mt-3">
@@ -119,8 +125,8 @@
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="js/main.js?v=20260725-terminal-credit-v4"></script>
 <script src="js/theme-switcher.js?v=20260712-full-backend-v2"></script>
-<script src="js/app-data.js?v=20260712-full-backend-v2"></script>
+<script src="js/app-data.js?v=20260725-terminal-invoice-v6"></script>
 <script src="js/retail-advanced.js?v=20260712-full-backend-v2"></script>
-<script src="js/invoice-templates.js?v=20260712-full-backend-v2"></script>
-<script src="js/backend-page-utils.js?v=20260712-full-backend-v2"></script><script src="js/salesmen-bootstrap.js?v=20260715-customer-ready-v1"></script><script src="js/terminal-backend.js?v=20260725-terminal-credit-v4"></script></body>
+<script src="js/invoice-templates.js?v=20260725-terminal-invoice-v6"></script>
+<script src="js/backend-page-utils.js?v=20260712-full-backend-v2"></script><script src="js/salesmen-bootstrap.js?v=20260715-customer-ready-v1"></script><script src="js/terminal-backend.js?v=20260725-terminal-invoice-v6"></script></body>
 </html>

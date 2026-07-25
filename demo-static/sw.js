@@ -1,4 +1,4 @@
-const CACHE_NAME = 'axtor-pos-cloud-20260725-terminal-credit-v4';
+const CACHE_NAME = 'axtor-pos-cloud-20260725-terminal-invoice-v6';
 const APP_SHELL = [
   './', 'accounts.html', 'approvals.html', 'barcode-labels.html', 'branches.html', 'communications.html', 'change-password.html', 'customer.html', 'delivery.html', 'expenses.html', 'index.html', 'inventory.html', 'invoice-designer.html', 'invoice-view.html', 'login.html', 'loyalty.html', 'notifications.html', 'offline.html', 'plans.html', 'products.html', 'promotions.html', 'purchase.html', 'quotations.html', 'reports.html', 'sales.html', 'salesmen.html', 'settings.html', 'setup.html', 'shifts.html', 'terminal.html',
   'css/style.css', 'css/retro-pos-theme.css',
