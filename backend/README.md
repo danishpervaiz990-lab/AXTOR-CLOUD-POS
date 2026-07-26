@@ -1,39 +1,28 @@
-# Axtor Cloud POS Backend
+# Axtor POS Cloud Backend
 
-Production API for Axtor Cloud POS.
+Clean Railway deployment root for the Node.js, Express, TypeScript, Prisma 6 and PostgreSQL API.
 
-## Stack
+## Railway contract
 
-- Node.js 20+
-- Express and TypeScript
-- Prisma 6.19
-- PostgreSQL
-- Railway
+- Install: `npm ci --include=dev --no-audit --no-fund`
+- Build: `npx prisma validate && npx prisma generate && npm run build`
+- Pre-deploy: `npx prisma migrate deploy`
+- Start: `node dist/server.js`
+- Health: `GET /health`
+- Database health: `GET /api/v1/health/db`
 
-## Local validation
+Set Railway's root directory to the repository root containing this file. Do not run a second `npm ci` in the build or start command.
+
+Required configuration is documented in `.env.example`. Never commit `.env` or real credentials.
+
+## Local verification
 
 ```text
 npm ci
-npm run prisma:generate
+npx prisma validate
+npx prisma generate
 npm run typecheck
 npm run build
 ```
 
-Required variables are documented in `.env.example`. Never commit `.env` or secret values.
-
-## Railway
-
-Use repository root directory `backend`. The supplied `railway.toml` generates Prisma, compiles TypeScript, deploys committed migrations, seeds the idempotent commercial catalog, and starts the API.
-
-Health routes:
-
-```text
-GET /health
-GET /api/v1/health/db
-```
-
-The main API families include authentication, access control, products, customers, sales documents, payments, returns, refunds, purchases, inventory, accounts, expenses, reports, settings, commercial SaaS context and protected platform administration.
-
-Tenant identity always comes from the authenticated token. Frontend tenant IDs and `x-business-id` headers are not trusted.
-
-See the repository-level `GLOBAL-SAAS-DEPLOYMENT-GUIDE.md`, `GLOBAL-SAAS-QA-REPORT.md`, `AXTOR-GLOBAL-SAAS-RELEASE-REPORT.md` and `KNOWN-LIMITATIONS-GLOBAL-SAAS.md` before deployment.
+See `docs/` for the audit, route matrix, migration findings, deployment checklist and rollback guide.

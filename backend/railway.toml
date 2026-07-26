@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npx prisma validate && npx prisma generate && npm run build"
+buildCommand = "npx prisma validate && npx prisma generate && npm run build"
 
 [deploy]
 preDeployCommand = ["npx prisma migrate deploy"]
