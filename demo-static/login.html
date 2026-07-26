@@ -517,7 +517,8 @@
 
   <script>
     (function () {
-      const API_BASE_URL = 'https://axtor-cloud-pos-production.up.railway.app';
+      const DEFAULT_API_BASE_URL = 'https://axtor-cloud-pos-production.up.railway.app';
+      const API_BASE_URL = String(localStorage.getItem('axtorApiBaseUrl') || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
 
       const form = document.getElementById('loginForm');
       const presetParams = new URLSearchParams(window.location.search);

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Axtor Pharmacy POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/dedicated-industry.css?v=20260726-repair1" rel="stylesheet">
+</head>
+<body>
+  <div class="industry-shell">
+    <aside class="industry-nav">
+      <div class="brand">AXTOR · Pharmacy POS</div>
+      <a class="active" href="pharmacy.html">Safety Dashboard</a>
+      <a href="terminal.html">Dispensing Checkout</a>
+      <a href="products.html">Medicines</a>
+      <a href="industry.html">Batches & Expiry</a>
+      <a href="inventory.html">Stock & Transfers</a>
+      <a href="purchase.html">Receiving</a>
+      <a href="sales.html">Invoices & Returns</a>
+      <a href="reports.html">Compliance Reports</a>
+      <a href="settings.html">Settings</a>
+    </aside>
+    <main>
+      <section class="hero"><h1>Pharmacy Safety Dashboard</h1><p>Lot traceability, expiry controls, quarantines and recalled-stock visibility</p></section>
+      <section class="kpis">
+        <div class="kpi"><span>Expiring in 90 Days</span><strong id="expiring">—</strong></div>
+        <div class="kpi"><span>Expired</span><strong id="expired">—</strong></div>
+        <div class="kpi"><span>Quarantined</span><strong id="quarantined">—</strong></div>
+        <div class="kpi"><span>Recalled</span><strong id="recalled">—</strong></div>
+      </section>
+      <section class="panel">
+        <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
+          <div><h2 class="h5 mb-1">Controlled batch queue</h2><p class="mb-0 text-muted">Blocked stock remains visible and cannot be selected as saleable inventory.</p></div>
+          <a class="btn btn-success" href="industry.html">Review Batch Controls</a>
+        </div>
+        <div id="status" class="status mt-3"></div>
+        <div class="table-wrap mt-3">
+          <table class="table">
+            <thead><tr><th>Medicine</th><th>Lot</th><th>Expiry</th><th>Available Qty</th><th>Control Status</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="5">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <p class="small text-muted mb-0">This screen supports inventory and dispensing controls only. It does not provide clinical diagnosis or autonomous prescribing.</p>
+      </section>
+    </main>
+  </div>
+  <script src="js/axtor-api.js?v=20260726-repair1"></script>
+  <script>
+    const unwrap=value=>value&&Object.prototype.hasOwnProperty.call(value,"data")?value.data:value;
+    const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+    async function loadPharmacy(){
+      try{
+        const batches=unwrap(await AxtorAPI.apiGet("/api/v1/industry/batches?limit=200"))||[],now=Date.now(),limit=now+90*86400000;
+        expiring.textContent=String(batches.filter(row=>row.expiryDate&&new Date(row.expiryDate).getTime()>=now&&new Date(row.expiryDate).getTime()<=limit).length);
+        expired.textContent=String(batches.filter(row=>String(row.status).toLowerCase()==="expired"||(row.expiryDate&&new Date(row.expiryDate).getTime()<now)).length);
+        quarantined.textContent=String(batches.filter(row=>String(row.status).toLowerCase()==="quarantined").length);
+        recalled.textContent=String(batches.filter(row=>String(row.status).toLowerCase()==="recalled").length);
+        rows.innerHTML=batches.slice(0,75).map(row=>`<tr><td>${esc(row.product?.name||row.productId)}</td><td>${esc(row.batchNo)}</td><td>${row.expiryDate?new Date(row.expiryDate).toLocaleDateString():"—"}</td><td>${Number(row.qtyOnHandBase||0)-Number(row.qtyReservedBase||0)}</td><td>${esc(row.status)}</td></tr>`).join("")||'<tr><td colspan="5">No medicine batches recorded.</td></tr>';
+      }catch(error){status.textContent=error.message||"Pharmacy dashboard could not be loaded";status.className="status mt-3 text-danger"}
+    }
+    loadPharmacy();
+  </script>
+</body>
+</html>

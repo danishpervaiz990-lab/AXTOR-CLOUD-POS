@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Axtor Grocery POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/dedicated-industry.css?v=20260726-repair1" rel="stylesheet">
+</head>
+<body>
+  <div class="industry-shell">
+    <aside class="industry-nav">
+      <div class="brand">AXTOR · Grocery POS</div>
+      <a class="active" href="grocery.html">Fresh Dashboard</a>
+      <a href="terminal.html">Barcode Checkout</a>
+      <a href="products.html">Products & PLU</a>
+      <a href="industry.html">Batches & Expiry</a>
+      <a href="inventory.html">Inventory</a>
+      <a href="purchase.html">Suppliers & Receiving</a>
+      <a href="sales.html">Sales & Returns</a>
+      <a href="reports.html">Margin Reports</a>
+      <a href="settings.html">Settings</a>
+    </aside>
+    <main>
+      <section class="hero"><h1>Grocery Operations</h1><p>Barcode checkout, batch rotation, expiry alerts and perishable stock control</p></section>
+      <section class="kpis">
+        <div class="kpi"><span>Today’s Sales</span><strong id="todaySales">—</strong></div>
+        <div class="kpi"><span>Low Stock</span><strong id="lowStock">—</strong></div>
+        <div class="kpi"><span>Expiring in 30 Days</span><strong id="expiring">—</strong></div>
+        <div class="kpi"><span>Blocked Batches</span><strong id="blocked">—</strong></div>
+      </section>
+      <section class="panel">
+        <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
+          <div><h2 class="h5 mb-1">Expiry-first stock queue</h2><p class="mb-0 text-muted">Oldest saleable batches appear first.</p></div>
+          <a class="btn btn-success" href="industry.html">Manage Batches</a>
+        </div>
+        <div id="status" class="status mt-3"></div>
+        <div class="table-wrap mt-3">
+          <table class="table">
+            <thead><tr><th>Product</th><th>Batch</th><th>Warehouse</th><th>Expiry</th><th>Available Qty</th><th>Status</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="6">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="js/axtor-api.js?v=20260726-repair1"></script>
+  <script>
+    const unwrap=value=>value&&Object.prototype.hasOwnProperty.call(value,"data")?value.data:value;
+    const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+    async function loadGrocery(){
+      try{
+        const [summaryResult,batchesResult]=await Promise.all([AxtorAPI.apiGet("/api/v1/dashboard/summary"),AxtorAPI.apiGet("/api/v1/industry/batches?limit=100")]);
+        const summary=unwrap(summaryResult),batches=unwrap(batchesResult)||[],now=Date.now(),limit=now+30*86400000;
+        const expiringRows=batches.filter(row=>row.expiryDate&&new Date(row.expiryDate).getTime()>=now&&new Date(row.expiryDate).getTime()<=limit);
+        const blockedRows=batches.filter(row=>["expired","quarantined","recalled","damaged"].includes(String(row.status||"").toLowerCase()));
+        todaySales.textContent=Number(summary.today?.sales||0).toFixed(2);
+        lowStock.textContent=String(summary.inventory?.lowStockCount||0);
+        expiring.textContent=String(expiringRows.length);
+        blocked.textContent=String(blockedRows.length);
+        rows.innerHTML=batches.slice(0,50).map(row=>`<tr><td>${esc(row.product?.name||row.productId)}</td><td>${esc(row.batchNo)}</td><td>${esc(row.warehouse?.name||"—")}</td><td>${row.expiryDate?new Date(row.expiryDate).toLocaleDateString():"—"}</td><td>${Number(row.qtyOnHandBase||0)-Number(row.qtyReservedBase||0)}</td><td>${esc(row.status)}</td></tr>`).join("")||'<tr><td colspan="6">No batches recorded.</td></tr>';
+      }catch(error){status.textContent=error.message||"Grocery dashboard could not be loaded";status.className="status mt-3 text-danger"}
+    }
+    loadGrocery();
+  </script>
+</body>
+</html>
