@@ -643,7 +643,9 @@
 
           const loginParams = new URLSearchParams(window.location.search);
           const storedReturnUrl = sessionStorage.getItem('axtorAuthReturnUrl');
-          const requestedReturnUrl = loginParams.get('return') || storedReturnUrl || 'industry-dashboard.html';
+          const industryCode = String(sessionResult?.business?.industry?.code || result?.business?.industry?.code || '').toLowerCase();
+          const dedicatedHome = ({ retail:'retail.html', gym:'gym.html', school:'school.html', education:'school.html', clinic:'clinic.html', grocery:'grocery.html', pharmacy:'pharmacy.html', restaurant:'restaurant.html', hardware:'hardware.html', paint:'paint.html', furniture:'furniture.html', workshop:'workshop.html', wholesale:'wholesale.html', manufacturing:'manufacturing.html' })[industryCode] || 'industry-dashboard.html';
+          const requestedReturnUrl = loginParams.get('return') || storedReturnUrl || dedicatedHome;
           sessionStorage.removeItem('axtorAuthReturnUrl');
 
           const safeReturnUrl = /^(?![a-z]+:|\/\/)[A-Za-z0-9._~!$&'()*+,;=:@%?\/#-]+$/i.test(requestedReturnUrl)
