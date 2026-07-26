@@ -1,0 +1,4 @@
+import{Router}from"express";import{requireAuth}from"../middleware/auth.middleware.js";import * as c from"../controllers/purchases.controller.js";const router=Router();router.use(requireAuth);
+router.get("/requests",c.requests);router.post("/requests",c.createRequest);router.post("/requests/:id/convert",c.convertRequest);router.get("/goods-receipts",c.receipts);router.get("/supplier-payments",c.payments);router.post("/supplier-payments",c.createPayment);router.get("/supplier-statement/:supplierId",c.statement);router.get("/returns",c.returns);router.post("/returns",c.createReturn);
+router.get("/",c.list);router.post("/",c.create);router.get("/:id",c.get);router.patch("/:id",c.update);router.post("/:id/receive",c.receive);router.delete("/:id",c.cancel);
+export{router};export const purchasesRoutes=router;export default router;
