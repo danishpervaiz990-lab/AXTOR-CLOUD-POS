@@ -69,15 +69,15 @@
     const user = topbar.querySelector(".user-chip"); topbar.insertBefore(select, user || null);
   }
   function addIndustryNavigation() {
-    const nav = document.querySelector(".nav-menu"); if (!nav || nav.querySelector('a[href="industry.html"]')) return;
+    const nav = document.querySelector(".nav-menu"); if (!nav || nav.querySelector('a[href="industry-dashboard.html"]')) return;
     const selected = context?.industry?.industry;
     const code = String(selected?.code || "").toLowerCase();
-    if (!selected || code === "retail" || !["gym","clinic","grocery","hardware_paint","school","pharmacy"].includes(code)) return;
+    if (!selected || !["retail","gym","clinic","grocery","hardware","paint","hardware_paint","school","pharmacy","restaurant","furniture","workshop","wholesale","manufacturing"].includes(code)) return;
     const link = document.createElement("a");
     link.className = "nav-linkx" + ((location.pathname.split("/").pop() || "") === "industry.html" ? " active" : "");
-    link.href = "industry.html";
+    link.href = "industry-dashboard.html";
     link.dataset.industryCode = code;
-    link.innerHTML = '<i class="bi bi-grid-1x2"></i><span>' + String(selected.name || "Industry") + " Workspace</span>";
+    link.innerHTML = '<i class="bi bi-grid-1x2"></i><span>' + String(selected.name || "Industry") + " Dashboard</span>";
     const reports = nav.querySelector('a[href="reports.html"]');
     nav.insertBefore(link, reports || null);
   }

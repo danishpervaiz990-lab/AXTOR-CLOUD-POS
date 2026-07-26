@@ -500,6 +500,7 @@
         <button class="btn btn-axtor-login w-100" id="loginButton" type="submit">
           Login to dashboard
         </button>
+        <div class="text-center mt-3"><a class="fw-bold text-decoration-none" style="color:#08775b" href="industries.html">New business? Choose an industry POS system</a></div>
       </form>
 
       <div class="support-row">
@@ -519,6 +520,9 @@
       const API_BASE_URL = 'https://axtor-cloud-pos-production.up.railway.app';
 
       const form = document.getElementById('loginForm');
+      const presetParams = new URLSearchParams(window.location.search);
+      if (presetParams.get('workspace')) document.getElementById('businessSlug').value = presetParams.get('workspace');
+      if (presetParams.get('email')) document.getElementById('loginEmail').value = presetParams.get('email');
       const error = document.getElementById('loginError');
       const businessSlugInput = document.getElementById('businessSlug');
       const emailInput = document.getElementById('loginEmail');
@@ -639,12 +643,12 @@
 
           const loginParams = new URLSearchParams(window.location.search);
           const storedReturnUrl = sessionStorage.getItem('axtorAuthReturnUrl');
-          const requestedReturnUrl = loginParams.get('return') || storedReturnUrl || 'index.html';
+          const requestedReturnUrl = loginParams.get('return') || storedReturnUrl || 'industry-dashboard.html';
           sessionStorage.removeItem('axtorAuthReturnUrl');
 
           const safeReturnUrl = /^(?![a-z]+:|\/\/)[A-Za-z0-9._~!$&'()*+,;=:@%?\/#-]+$/i.test(requestedReturnUrl)
             ? requestedReturnUrl
-            : 'index.html';
+            : 'industry-dashboard.html';
 
           if (result.user?.mustChangePassword) {
             sessionStorage.setItem('axtorPasswordChangeReturn', safeReturnUrl);
