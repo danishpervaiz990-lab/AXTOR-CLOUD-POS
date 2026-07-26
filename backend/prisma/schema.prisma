@@ -172,6 +172,7 @@ model Business {
   onboarding            TenantOnboarding?
   authSessions          AuthSession[]
   importJobs            DataImportJob[]
+  provisioningRuns      TenantProvisioningRun[]
 
   @@map("businesses")
 }
@@ -1499,6 +1500,7 @@ model IndustryProfile {
   defaultSettings    Json?    @map("default_settings")
   active             Boolean  @default(true)
   sortOrder          Int      @default(0) @map("sort_order")
+  registryVersion    String   @default("legacy") @map("registry_version")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
@@ -1524,17 +1526,35 @@ model IndustryFeature {
 }
 
 model BusinessIndustry {
-  id         String   @id @default(cuid())
-  businessId String   @unique @map("business_id")
-  industryId String   @map("industry_id")
-  selectedAt DateTime @default(now()) @map("selected_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(cuid())
+  businessId        String   @unique @map("business_id")
+  industryId        String   @map("industry_id")
+  selectedAt        DateTime @default(now()) @map("selected_at")
+  provisioningState String   @default("completed") @map("provisioning_state")
+  registryVersion   String   @default("legacy") @map("registry_version")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   industry IndustryProfile @relation(fields: [industryId], references: [id], onDelete: Restrict)
 
   @@index([industryId])
   @@map("business_industries")
+}
+
+model TenantProvisioningRun {
+  id             String   @id @default(cuid())
+  businessId     String   @map("business_id")
+  idempotencyKey String   @unique @map("idempotency_key")
+  requestHash    String   @map("request_hash")
+  status         String   @default("completed")
+  response       Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+  @@map("tenant_provisioning_runs")
 }
 
 model IndustrySetting {

@@ -32,6 +32,7 @@ import communicationsRoutes from "./routes/communications.routes.js";
 import commercialRoutes from "./routes/commercial.routes.js";
 import platformAdminRoutes from "./routes/platform-admin.routes.js";
 import industryRoutes from "./routes/industry.routes.js";
+import publicCatalogRoutes from "./routes/public-catalog.routes.js";
 
 export function createApp() {
   const app = express();
@@ -86,6 +87,7 @@ export function createApp() {
     commercial: "/api/v1/commercial",
     platformAdmin: "/api/v1/platform-admin",
     industry: "/api/v1/industry",
+    publicCatalog: "/api/v1/public",
   };
 
   app.get("/", (_req: Request, res: Response) => res.json({
@@ -114,6 +116,7 @@ export function createApp() {
   });
 
   app.use("/api/v1/auth", authRoutes);
+  app.use("/api/v1/public", publicCatalogRoutes);
   app.use("/api/v1/access-control", accessControlRoutes);
   app.use("/api/v1/dashboard", dashboardRoutes);
   app.use("/api/v1/customers", customersRoutes);

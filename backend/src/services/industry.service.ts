@@ -1,6 +1,6 @@
 import type { Request } from "express";
 import { prisma } from "../db/prisma.js";
-import { getIndustryEntity, getIndustryPack, publicIndustryRegistry, type IndustryEntityDefinition, type IndustryPack } from "../industry/registry.js";
+import { getIndustryEntity, getIndustryPack, INDUSTRY_REGISTRY_VERSION, publicIndustryRegistry, type IndustryEntityDefinition, type IndustryPack } from "../industry/registry.js";
 import { hasPermission, loadUserAccess, type UserAccess } from "./access.service.js";
 import { writeAudit } from "./audit.service.js";
 import { ApiError, cleanString, dateValue, numberValue, plain, queryLimit, requireText } from "../utils/http.js";
@@ -132,8 +132,9 @@ export async function registry(businessId: string, userId: string | null) {
   const selection = await prisma.businessIndustry.findUnique({ where: { businessId }, include: { industry: true } });
   const pack = getIndustryPack(selection?.industry?.code);
   return plain({
+    registryVersion: INDUSTRY_REGISTRY_VERSION,
     selected: pack,
-    selection: selection ? { industryId: selection.industryId, selectedAt: selection.selectedAt, code: selection.industry.code, name: selection.industry.name } : null,
+    selection: selection ? { industryId: selection.industryId, selectedAt: selection.selectedAt, provisioningState: selection.provisioningState, registryVersion: selection.registryVersion, code: selection.industry.code, name: selection.industry.name } : null,
     available: publicIndustryRegistry().map(item => ({ code: item.code, name: item.name, description: item.description, modules: item.modules })),
     permissions: [...access.permissions],
     canManage: access.isOwner || access.isAdmin || hasPermission(access, "industry.*"),

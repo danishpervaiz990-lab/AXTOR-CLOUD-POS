@@ -21,6 +21,11 @@ export type IndustryPack = {
   code: string;
   name: string;
   description: string;
+  icon?: string;
+  suitableFor?: string[];
+  catalogueHighlights?: string[];
+  operationalStatus?: "core_ready" | "vertical_beta" | "catalogue_preview";
+  registrationEnabled?: boolean;
   modules: string[];
   sidebarOrder: string[];
   dashboardWidgets: string[];
@@ -31,6 +36,8 @@ export type IndustryPack = {
   reports: string[];
   entities: IndustryEntityDefinition[];
 };
+
+export const INDUSTRY_REGISTRY_VERSION = "2026.07.26-release-group-1";
 
 const field = (
   key: string,
@@ -56,6 +63,34 @@ const entity = (
   permission: `industry.${permission}`,
   statuses,
   fields,
+});
+
+const cataloguePack = (
+  code: string,
+  name: string,
+  description: string,
+  icon: string,
+  suitableFor: string[],
+  modules: string[],
+  highlights: string[],
+): IndustryPack => ({
+  code,
+  name,
+  description,
+  icon,
+  suitableFor,
+  catalogueHighlights: highlights,
+  operationalStatus: "catalogue_preview",
+  registrationEnabled: false,
+  modules,
+  sidebarOrder: ["dashboard", ...modules.slice(0, 6), "reports"],
+  dashboardWidgets: [],
+  defaultRoles: {},
+  defaultSettings: {},
+  notificationRules: [],
+  printFields: [],
+  reports: [],
+  entities: [],
 });
 
 export const INDUSTRY_REGISTRY: Record<string, IndustryPack> = {
@@ -306,9 +341,86 @@ export const INDUSTRY_REGISTRY: Record<string, IndustryPack> = {
       ], "pharmacy.safety_override"),
     ],
   },
+  hardware: cataloguePack(
+    "hardware",
+    "Hardware Store",
+    "Trade quotations, unit conversion, cut quantities, contractor pricing, staged delivery, credit control, and warranty tracking.",
+    "bi-tools",
+    ["Hardware shops", "Building-material suppliers", "Electrical and plumbing traders"],
+    ["terminal", "quotations", "tradePricing", "projects", "deliveries", "inventory", "reports"],
+    ["Contractor quotations and LPO", "Piece/box/metre unit conversion", "Partial and staged delivery", "Trade pricing and credit aging"],
+  ),
+  paint: cataloguePack(
+    "paint",
+    "Paint Shop",
+    "Paint catalogue, colour formulas, revision-controlled tinting jobs, component consumption, mix labels, and project pricing.",
+    "bi-palette",
+    ["Automotive paint shops", "Decorative paint retailers", "Industrial coating suppliers"],
+    ["terminal", "colorFormulas", "mixJobs", "projects", "inventory", "deliveries", "reports"],
+    ["Colour formula revisions", "Tinting and mix-job costing", "Component consumption", "Mixed-paint labels and history"],
+  ),
+  restaurant: cataloguePack(
+    "restaurant",
+    "Restaurant / Café",
+    "Table, takeaway, delivery, kitchen routing, modifiers, split billing, recipe consumption, wastage, and shift control.",
+    "bi-cup-hot",
+    ["Restaurants", "Cafés", "Cloud kitchens", "Quick-service outlets"],
+    ["tables", "orders", "menu", "kitchen", "recipes", "wastage", "shifts", "reports"],
+    ["Floor and table service", "Kitchen tickets and preparation states", "Modifiers and split bills", "Recipe cost and wastage"],
+  ),
+  furniture: cataloguePack(
+    "furniture",
+    "Furniture Shop",
+    "Stock and made-to-order furniture, variants, custom measurements, deposits, procurement, delivery, installation, and warranty.",
+    "bi-lamp",
+    ["Furniture showrooms", "Custom furniture makers", "Interior furnishing suppliers"],
+    ["catalogue", "quotations", "customOrders", "deposits", "procurement", "delivery", "installation", "reports"],
+    ["Variant and dimension catalogue", "Made-to-order approvals", "Deposit and installment tracking", "Delivery and installation scheduling"],
+  ),
+  workshop: cataloguePack(
+    "workshop",
+    "Workshop / Garage",
+    "Customer assets and vehicles, inspection, estimates, job cards, technician assignment, parts, labour, warranty, and delivery.",
+    "bi-wrench-adjustable-circle",
+    ["Vehicle workshops", "Repair centres", "Equipment service businesses"],
+    ["assets", "inspections", "estimates", "jobCards", "technicians", "parts", "warranty", "reports"],
+    ["Asset and vehicle history", "Estimate approval and job cards", "Parts and labour posting", "Technician productivity"],
+  ),
+  wholesale: cataloguePack(
+    "wholesale",
+    "Wholesale / Distribution",
+    "Trade customers, price lists, MOQ, bulk orders, credit approval, multi-warehouse allocation, pick-pack-dispatch, and collections.",
+    "bi-boxes",
+    ["Distributors", "Importers", "B2B wholesalers"],
+    ["tradeCustomers", "priceLists", "salesOrders", "credit", "pickPack", "dispatch", "routes", "reports"],
+    ["Customer price lists and MOQ", "Credit approval and aging", "Pick-pack-dispatch", "Route and collection control"],
+  ),
+  manufacturing: cataloguePack(
+    "manufacturing",
+    "Light Manufacturing",
+    "BOM revisions, production orders, material issue, work stages, quality checkpoints, output receipt, costing, and variance.",
+    "bi-gear-wide-connected",
+    ["Small factories", "Assemblers", "Light production businesses"],
+    ["materials", "bom", "productionOrders", "workOrders", "quality", "output", "costing", "reports"],
+    ["Revision-controlled BOM", "Material reservation and issue", "Quality and output receipt", "Production cost variance"],
+  ),
 };
 
-export const REQUIRED_INDUSTRY_CODES = ["retail", "gym", "clinic", "grocery", "hardware_paint", "school", "pharmacy"] as const;
+export const REQUIRED_INDUSTRY_CODES = [
+  "retail",
+  "grocery",
+  "pharmacy",
+  "hardware",
+  "paint",
+  "gym",
+  "clinic",
+  "restaurant",
+  "furniture",
+  "school",
+  "workshop",
+  "wholesale",
+  "manufacturing",
+] as const;
 
 export function getIndustryPack(code: string | null | undefined): IndustryPack | null {
   return code ? INDUSTRY_REGISTRY[String(code).toLowerCase()] || null : null;

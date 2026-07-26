@@ -1,5 +1,5 @@
 import { prisma } from "../db/prisma.js";
-import { publicIndustryRegistry } from "../industry/registry.js";
+import { getIndustryPack, INDUSTRY_REGISTRY_VERSION, publicIndustryRegistry } from "../industry/registry.js";
 
 const plans = [
   { code: "basic", name: "Basic", description: "For small shops and new businesses", maxUsers: 2, maxBranches: 1, maxWarehouses: 1, maxCurrencies: 1, maxLanguages: 2, supportLevel: "email", apiAccess: false, whiteLabel: false, sortOrder: 1, features: ["core.products", "core.customers", "sales.invoices", "sales.quotations", "sales.delivery_notes", "sales.payments", "sales.basic_returns", "inventory.basic", "dashboard.basic", "reports.daily_sales", "documents.pdf", "pwa"] },
@@ -26,10 +26,19 @@ const industries = [
             ? { product: "Medicine", sale: "Dispensing Sale", customer: "Patient / Customer" }
             : { product: "Product", sale: "Sale", customer: "Customer" },
   })),
-  { code: "restaurant", name: "Restaurant & Café", description: "Dine-in, takeaway, delivery and kitchen operations", features: ["restaurant.orders", "restaurant.tables", "restaurant.kitchen", "restaurant.modifiers", "restaurant.split_bill", "restaurant.recipes", "restaurant.wastage", "restaurant.z_report"], terminology: { product: "Menu Item", sale: "Order", customer: "Guest" } },
-  { code: "manufacturing", name: "Factory & Light Manufacturing", description: "Practical light manufacturing for small and medium businesses", features: ["manufacturing.materials", "manufacturing.bom", "manufacturing.production_orders", "manufacturing.work_orders", "manufacturing.consumption", "manufacturing.output", "manufacturing.wastage", "manufacturing.costing", "manufacturing.quality"], terminology: { product: "Item", sale: "Dispatch", customer: "Customer" } },
-  { code: "wholesale", name: "Wholesale & Distribution", description: "Wholesale pricing, credit, delivery and multi-warehouse distribution", features: ["wholesale.price_lists", "wholesale.customer_pricing", "wholesale.moq", "wholesale.unit_conversion", "wholesale.routes", "wholesale.dispatch", "wholesale.bulk_invoicing", "inventory.multi_warehouse", "salesmen.commission"], terminology: { product: "Item", sale: "Invoice", customer: "Trade Customer" } },
-  { code: "services", name: "Service Business", description: "Repair, workshop, salon, maintenance and professional services", features: ["services.job_cards", "services.assets", "services.technicians", "services.appointments", "services.estimates", "services.parts", "services.warranty", "services.history"], terminology: { product: "Service / Part", sale: "Service Invoice", customer: "Client" } },
+  (() => {
+    const pack = getIndustryPack("hardware_paint");
+    if (!pack) throw new Error("Legacy Hardware and Paint pack is missing");
+    return {
+      code: pack.code,
+      name: pack.name,
+      description: `${pack.description} Existing combined-pack tenants remain supported.`,
+      sortOrder: 90,
+      defaultSettings: pack.defaultSettings,
+      features: [`industry.${pack.code}.*`, ...pack.modules.map(module => `industry.${pack.code}.${module}`)],
+      terminology: { product: "Hardware / Paint Item", sale: "Trade Sale", customer: "Trade Customer" },
+    };
+  })(),
 ];
 
 const currencyRows = [
@@ -44,7 +53,7 @@ async function main() {
   }
   for (const industryInput of industries) {
     const { features, terminology, ...data } = industryInput;
-    const industry = await prisma.industryProfile.upsert({ where: { code: data.code }, create: { ...data, defaultTerminology: terminology }, update: { ...data, defaultTerminology: terminology } });
+    const industry = await prisma.industryProfile.upsert({ where: { code: data.code }, create: { ...data, registryVersion: INDUSTRY_REGISTRY_VERSION, defaultTerminology: terminology }, update: { ...data, registryVersion: INDUSTRY_REGISTRY_VERSION, defaultTerminology: terminology } });
     for (const featureKey of features) await prisma.industryFeature.upsert({ where: { industryId_featureKey: { industryId: industry.id, featureKey } }, create: { industryId: industry.id, featureKey, enabled: true }, update: { enabled: true } });
   }
   for (const [code, name, symbol, decimalPrecision] of currencyRows) await prisma.currency.upsert({ where: { code }, create: { code, name, symbol, decimalPrecision }, update: { name, symbol, decimalPrecision, active: true } });
