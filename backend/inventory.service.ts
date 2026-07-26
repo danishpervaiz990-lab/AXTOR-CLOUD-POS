@@ -1,7 +1,73 @@
-import type {Request}from"express";import{prisma}from"../db/prisma.js";import{writeAudit}from"./audit.service.js";import{ApiError,cleanString,plain,queryLimit,requireText}from"../utils/http.js";
-export async function listNotifications(businessId:string,userId:string|null,q:any={}){const where:any={businessId};if(String(q.read||"").toLowerCase()==="false"||String(q.unread||"")==="true")where.readAt=null;if(cleanString(q.type))where.type=cleanString(q.type);if(String(q.mine||"")==="true"&&userId)where.OR=[{userId:null},{userId}];const rows=await prisma.notification.findMany({where,orderBy:{createdAt:"desc"},take:queryLimit(q.limit,100,500)});const unread=await prisma.notification.count({where:{businessId,readAt:null,...(String(q.mine||"")==="true"&&userId?{OR:[{userId:null},{userId}]}:{})}});return{notifications:plain(rows),unread};}
-export async function createNotification(req:Request,businessId:string,userId:string|null,input:any){return prisma.$transaction(async tx=>{const row=await tx.notification.create({data:{businessId,userId:cleanString(input.userId),type:cleanString(input.type)||"info",title:requireText(input.title,"Title"),message:requireText(input.message,"Message"),entityType:cleanString(input.entityType),entityId:cleanString(input.entityId)}});await writeAudit(tx,req,{businessId,userId,action:"notification.create",entityType:"Notification",entityId:row.id,after:row});return plain(row);});}
-export async function markRead(businessId:string,id:string,read=true){const row=await prisma.notification.findFirst({where:{id,businessId}});if(!row)throw new ApiError(404,"Notification not found");return plain(await prisma.notification.update({where:{id},data:{readAt:read?new Date():null}}));}
-export async function markAllRead(businessId:string,userId:string|null){const r=await prisma.notification.updateMany({where:{businessId,readAt:null,...(userId?{OR:[{userId:null},{userId}]}:{})},data:{readAt:new Date()}});return{updated:r.count};}
-export async function removeNotification(businessId:string,id:string){const row=await prisma.notification.findFirst({where:{id,businessId}});if(!row)throw new ApiError(404,"Notification not found");await prisma.notification.delete({where:{id}});return{id,deleted:true};}
-export async function auditLogs(businessId:string,q:any={}){const where:any={businessId};if(cleanString(q.entityType))where.entityType=cleanString(q.entityType);if(cleanString(q.action))where.action={contains:cleanString(q.action),mode:"insensitive"};const rows=await prisma.auditLog.findMany({where,orderBy:{createdAt:"desc"},take:queryLimit(q.limit,200,1000)});return plain(rows);}
+import type { Request } from "express";
+
+export type UserAccess = {
+  userId: string;
+  businessId: string;
+  branchId: string | null;
+  userName: string;
+  roleNames: string[];
+  permissions: Set<string>;
+  isOwner: boolean;
+  isAdmin: boolean;
+  isManager: boolean;
+};
+
+export async function loadUserAccess(tx: any, businessId: string, userId?: string | null): Promise<UserAccess> {
+  if (!userId) throw new Error("Authenticated user context is required");
+
+  const user = await tx.user.findFirst({
+    where: { id: userId, businessId, status: "ACTIVE" },
+    include: { userRoles: { include: { role: true } } },
+  });
+
+  if (!user) throw new Error("Authenticated user is no longer active");
+
+  const roleNames = (user.userRoles || []).map((entry: any) => String(entry.role?.name || "").trim()).filter(Boolean);
+  const normalizedRoles = roleNames.map((name: string) => name.toLowerCase());
+  const permissions = new Set<string>();
+
+  for (const entry of user.userRoles || []) {
+    for (const permission of entry.role?.permissions || []) {
+      const value = String(permission || "").trim();
+      if (value) permissions.add(value);
+    }
+  }
+
+  return {
+    userId: user.id,
+    businessId,
+    branchId: user.branchId || null,
+    userName: user.name,
+    roleNames,
+    permissions,
+    isOwner: normalizedRoles.some((role: string) => role.includes("owner")),
+    isAdmin: normalizedRoles.some((role: string) => role.includes("admin")),
+    isManager: normalizedRoles.some((role: string) => role.includes("manager")),
+  };
+}
+
+export function hasPermission(access: UserAccess, permission: string, legacyDefault = false): boolean {
+  if (access.isOwner || access.isAdmin) return true;
+  if (access.permissions.has("*") || access.permissions.has(permission)) return true;
+
+  const segments = permission.split(".");
+  for (let index = segments.length - 1; index > 0; index -= 1) {
+    const wildcard = `${segments.slice(0, index).join(".")}.*`;
+    if (access.permissions.has(wildcard)) return true;
+  }
+
+  // Backward compatibility: existing installations may have roles but no populated permission array yet.
+  if (legacyDefault && access.permissions.size === 0) return true;
+  return false;
+}
+
+export function requirePermission(access: UserAccess, permission: string, legacyDefault = false): void {
+  if (!hasPermission(access, permission, legacyDefault)) {
+    throw new Error(`Permission denied: ${permission}`);
+  }
+}
+
+export function requestIp(req: Request): string | null {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0]?.trim();
+  return forwarded || req.socket.remoteAddress || null;
+}

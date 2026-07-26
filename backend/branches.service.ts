@@ -1,401 +1,47 @@
-import crypto from "node:crypto";
 import type { Request } from "express";
 import { prisma } from "../db/prisma.js";
-import {
-  getIndustryPack,
-  INDUSTRY_REGISTRY_VERSION,
-  publicIndustryRegistry,
-  type IndustryPack,
-} from "../industry/registry.js";
-import { hashPassword } from "../utils/password.js";
-import { plain } from "../utils/http.js";
+import { writeAudit } from "./audit.service.js";
+import { nextEntityNumber } from "./numbering.service.js";
+import { ApiError, cleanString, dateRange, dateValue, numberValue, plain, requireText, roundMoney, roundQty } from "../utils/http.js";
 
-export class PublicCatalogError extends Error {
-  constructor(
-    public status: number,
-    public code: string,
-    message: string,
-    public details?: unknown,
-  ) {
-    super(message);
-  }
-}
-
-const operationalCodes = new Set(["retail", "grocery", "pharmacy", "gym", "clinic", "school"]);
-const supportedLanguages = new Set(["en", "ar", "zh-CN", "hi", "ur", "hinglish", "sw", "fr", "es", "pt"]);
-const allowedTaxSystems = new Set(["none", "vat", "gst", "sales_tax"]);
-const allowedBillingCycles = new Set(["MONTHLY", "ANNUAL"]);
-
-function requiredText(value: unknown, label: string, max = 160): string {
-  const text = String(value ?? "").trim();
-  if (!text) throw new PublicCatalogError(400, "VALIDATION_ERROR", `${label} is required`);
-  if (text.length > max) throw new PublicCatalogError(400, "VALIDATION_ERROR", `${label} is too long`);
-  return text;
-}
-
-function optionalText(value: unknown, max = 160): string | null {
-  const text = String(value ?? "").trim();
-  if (!text) return null;
-  if (text.length > max) throw new PublicCatalogError(400, "VALIDATION_ERROR", "A supplied value is too long");
-  return text;
-}
-
-function normalizeEmail(value: unknown): string {
-  const email = requiredText(value, "Owner email", 254).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new PublicCatalogError(400, "VALIDATION_ERROR", "Enter a valid owner email address");
-  }
-  return email;
-}
-
-function validatePassword(value: unknown): string {
-  const password = String(value ?? "");
-  if (
-    password.length < 12 ||
-    password.length > 128 ||
-    !/[a-z]/.test(password) ||
-    !/[A-Z]/.test(password) ||
-    !/\d/.test(password) ||
-    !/[^A-Za-z0-9]/.test(password)
-  ) {
-    throw new PublicCatalogError(
-      400,
-      "WEAK_PASSWORD",
-      "Password must be 12–128 characters and include uppercase, lowercase, number, and symbol",
-    );
-  }
-  return password;
-}
-
-function slugBase(name: string): string {
-  const value = name.toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-  return (value || "business").slice(0, 42);
-}
-
-function requestFingerprint(input: Record<string, unknown>): string {
-  const safe = {
-    businessName: input.businessName,
-    ownerName: input.ownerName,
-    email: String(input.email || "").toLowerCase(),
-    country: input.country,
-    timezone: input.timezone,
-    baseCurrency: input.baseCurrency,
-    language: input.language,
-    industryCode: input.industryCode,
-    planCode: input.planCode,
-    billingCycle: input.billingCycle,
-    firstBranch: input.firstBranch,
-    firstWarehouse: input.firstWarehouse,
-    firstCounter: input.firstCounter,
-  };
-  return crypto.createHash("sha256").update(JSON.stringify(safe)).digest("hex");
-}
-
-function publicPack(pack: IndustryPack) {
-  const canRegister = pack.registrationEnabled !== false && operationalCodes.has(pack.code);
-  return {
-    code: pack.code,
-    name: pack.name,
-    description: pack.description,
-    icon: pack.icon || "bi-grid",
-    suitableFor: pack.suitableFor || [],
-    highlights: pack.catalogueHighlights || pack.modules.slice(0, 6),
-    modules: pack.modules,
-    dashboardWidgets: pack.dashboardWidgets,
-    reports: pack.reports,
-    operationalStatus: pack.operationalStatus || (pack.code === "retail" ? "core_ready" : "vertical_beta"),
-    canRegister,
-    availabilityMessage: canRegister
-      ? "Available for controlled onboarding"
-      : "Catalogue preview — operational pack is not yet production-ready",
-  };
-}
-
-export async function catalogue() {
-  const [plans, currencyRows] = await Promise.all([
-    prisma.subscriptionPlan.findMany({
-      where: { active: true },
-      orderBy: { sortOrder: "asc" },
-      select: {
-        code: true,
-        name: true,
-        description: true,
-        isRecommended: true,
-        monthlyPrice: true,
-        annualPrice: true,
-        priceCurrency: true,
-        maxUsers: true,
-        maxBranches: true,
-        maxWarehouses: true,
-        maxCurrencies: true,
-        maxLanguages: true,
-        supportLevel: true,
-        apiAccess: true,
-        whiteLabel: true,
-      },
-    }),
-    prisma.currency.findMany({
-      where: { active: true },
-      orderBy: { name: "asc" },
-      select: { code: true, name: true, symbol: true, decimalPrecision: true },
-    }),
-  ]);
-  return plain({
-    registryVersion: INDUSTRY_REGISTRY_VERSION,
-    industries: publicIndustryRegistry().map(publicPack),
-    plans,
-    currencies: currencyRows,
-    languages: [
-      { code: "en", name: "English" },
-      { code: "ar", name: "العربية" },
-      { code: "zh-CN", name: "简体中文" },
-      { code: "hi", name: "हिन्दी" },
-      { code: "ur", name: "اردو" },
-      { code: "hinglish", name: "Hinglish" },
-      { code: "sw", name: "Kiswahili" },
-      { code: "fr", name: "Français" },
-      { code: "es", name: "Español" },
-      { code: "pt", name: "Português" },
-    ],
+function normalizeItems(items: unknown): any[] {
+  if (!Array.isArray(items) || !items.length) throw new ApiError(400, "At least one purchase item is required");
+  return items.map((item: any, index) => {
+    const qty = roundQty(numberValue(item.qty ?? item.quantity));
+    const cost = roundMoney(numberValue(item.cost ?? item.rate ?? item.unitCost));
+    if (qty <= 0) throw new ApiError(400, `Item ${index + 1} quantity must be greater than zero`);
+    const discount = roundMoney(numberValue(item.discount));
+    const taxRate = numberValue(item.taxRate);
+    const base = roundMoney(qty * cost - discount);
+    const tax = item.tax !== undefined ? roundMoney(numberValue(item.tax)) : roundMoney(base * taxRate / 100);
+    return { productId: cleanString(item.productId) || null, sku: cleanString(item.sku) || null, barcode: cleanString(item.barcode) || null, name: requireText(item.name ?? item.productName, `Item ${index + 1} name`), qty, cost, discount, taxRate, tax, total: roundMoney(base + tax) };
   });
 }
+function calculateTotals(items:any[],input:any){const subtotal=roundMoney(items.reduce((s,i)=>s+i.qty*i.cost,0));const discount=roundMoney(numberValue(input.discount,items.reduce((s,i)=>s+i.discount,0)));const tax=roundMoney(numberValue(input.tax,items.reduce((s,i)=>s+i.tax,0)));const total=roundMoney(numberValue(input.total,subtotal-discount+tax));const paid=Math.min(total,Math.max(0,roundMoney(numberValue(input.paid))));return{subtotal,discount,tax,total,paid,balance:roundMoney(total-paid)};}
+async function resolveSupplier(tx:any,businessId:string,input:any){const supplierId=cleanString(input.supplierId);if(supplierId){const row=await tx.supplier.findFirst({where:{id:supplierId,businessId,active:true}});if(!row)throw new ApiError(400,"Selected supplier is invalid");return row;}const name=requireText(input.supplierName,"Supplier");let row=await tx.supplier.findFirst({where:{businessId,name:{equals:name,mode:"insensitive"},active:true}});if(!row)row=await tx.supplier.create({data:{businessId,name,active:true}});return row;}
+async function resolveWarehouse(tx:any,businessId:string,warehouseIdInput:any,branchId?:string|null){const id=cleanString(warehouseIdInput);if(id){const row=await tx.warehouse.findFirst({where:{id,businessId,active:true}});if(!row)throw new ApiError(400,"Selected warehouse is invalid");return row;}let row=await tx.warehouse.findFirst({where:{businessId,active:true,...(branchId?{OR:[{branchId},{branchId:null}]}:{})},orderBy:{createdAt:"asc"}});if(!row)row=await tx.warehouse.create({data:{businessId,name:"Main Warehouse",code:"MAIN",branchId:branchId||null,active:true}});return row;}
+function formatPurchase(row:any){return plain({...row,status:String(row.status).toLowerCase(),purchaseDate:row.purchaseDate,items:row.items||[],amount:Number(row.total),paidAmount:Number(row.paid),balanceAmount:Number(row.balance)});}
 
-export function industryDetail(codeInput: unknown) {
-  const code = String(codeInput || "").trim().toLowerCase();
-  const pack = publicIndustryRegistry().find(item => item.code === code);
-  if (!pack) throw new PublicCatalogError(404, "INDUSTRY_NOT_FOUND", "Industry solution was not found");
-  return { registryVersion: INDUSTRY_REGISTRY_VERSION, ...publicPack(pack) };
-}
+export async function listPurchases(businessId:string,query:any){const where:any={businessId};if(cleanString(query.supplierId))where.supplierId=cleanString(query.supplierId);if(cleanString(query.status))where.status=String(query.status).toUpperCase();const {from,to}=dateRange(query.from,query.to,365);if(query.from||query.to)where.purchaseDate={gte:from,lte:to};const rows=await prisma.purchase.findMany({where,include:{items:true,goodsReceipts:{include:{items:true}},returns:{include:{items:true}}},orderBy:{purchaseDate:"desc"},take:Math.min(500,numberValue(query.limit,200))});return rows.map(formatPurchase);}
+export async function getPurchase(businessId:string,id:string){const row=await prisma.purchase.findFirst({where:{businessId,OR:[{id},{purchaseNo:id}]},include:{items:true,goodsReceipts:{include:{items:true}},returns:{include:{items:true}}}});if(!row)throw new ApiError(404,"Purchase not found");return formatPurchase(row);}
+export async function createPurchase(req:Request,businessId:string,userId:string|null,input:any){const items=normalizeItems(input.items);return prisma.$transaction(async tx=>{const supplier=await resolveSupplier(tx,businessId,input);const branchId=cleanString(input.branchId)||null;const warehouse=await resolveWarehouse(tx,businessId,input.warehouseId,branchId);const totals=calculateTotals(items,input);const purchaseNo=cleanString(input.purchaseNo)||await nextEntityNumber(tx,"purchase","purchaseNo",businessId,"PO");const status=String(input.status||"DRAFT").toUpperCase()==="POSTED"?"POSTED":"DRAFT";const row=await tx.purchase.create({data:{businessId,branchId,warehouseId:warehouse.id,purchaseNo,supplierId:supplier.id,supplierName:supplier.name,authorizedBy:cleanString(input.authorizedBy)||null,referenceNo:cleanString(input.referenceNo)||null,dueDate:dateValue(input.dueDate)||null,purchaseDate:dateValue(input.purchaseDate)||new Date(),...totals,status,metadata:input.metadata&&typeof input.metadata==="object"?input.metadata:undefined,items:{create:items.map(i=>({businessId,...i}))}},include:{items:true}});if(status==="POSTED")await postPurchaseStock(tx,req,businessId,userId,row,warehouse.id);await writeAudit(tx,req,{businessId,userId,action:"purchase.create",entityType:"Purchase",entityId:row.id,after:plain(row)});return formatPurchase(row);});}
+export async function updatePurchase(req:Request,businessId:string,userId:string|null,id:string,input:any){return prisma.$transaction(async tx=>{const before=await tx.purchase.findFirst({where:{id,businessId},include:{items:true}});if(!before)throw new ApiError(404,"Purchase not found");if(before.status==="POSTED")throw new ApiError(409,"Posted purchase cannot be edited");const items=input.items?normalizeItems(input.items):before.items.map((i:any)=>({productId:i.productId,sku:i.sku,barcode:i.barcode,name:i.name,qty:Number(i.qty),cost:Number(i.cost),discount:Number(i.discount),taxRate:Number(i.taxRate),tax:Number(i.tax),total:Number(i.total)}));const supplier=input.supplierId||input.supplierName?await resolveSupplier(tx,businessId,input):null;const totals=calculateTotals(items,{...before,...input});await tx.purchaseItem.deleteMany({where:{purchaseId:id,businessId}});const row=await tx.purchase.update({where:{id},data:{...(supplier?{supplierId:supplier.id,supplierName:supplier.name}:{}),...(input.branchId!==undefined?{branchId:cleanString(input.branchId)||null}:{}),...(input.warehouseId!==undefined?{warehouseId:(await resolveWarehouse(tx,businessId,input.warehouseId,cleanString(input.branchId)||before.branchId)).id}:{}),...(input.referenceNo!==undefined?{referenceNo:cleanString(input.referenceNo)||null}:{}),...(input.dueDate!==undefined?{dueDate:dateValue(input.dueDate)||null}:{}),...(input.purchaseDate!==undefined?{purchaseDate:dateValue(input.purchaseDate)||before.purchaseDate}:{}),...totals,items:{create:items.map(i=>({businessId,...i}))}},include:{items:true}});await writeAudit(tx,req,{businessId,userId,action:"purchase.update",entityType:"Purchase",entityId:id,before:plain(before),after:plain(row)});return formatPurchase(row);});}
+async function postPurchaseStock(tx:any,req:Request,businessId:string,userId:string|null,purchase:any,warehouseId:string){if(purchase.status==="POSTED"&&purchase.receivedAt)return;const items=purchase.items||await tx.purchaseItem.findMany({where:{purchaseId:purchase.id,businessId}});for(const item of items){if(!item.productId)continue;const product=await tx.product.findFirst({where:{id:item.productId,businessId,deleted:false}});if(!product)continue;const current=await tx.inventoryStock.findUnique({where:{businessId_productId_warehouseId:{businessId,productId:product.id,warehouseId}}});const beforeQty=Number(current?.qtyOnHand||0);const qty=Number(item.qty);await tx.inventoryStock.upsert({where:{businessId_productId_warehouseId:{businessId,productId:product.id,warehouseId}},create:{businessId,productId:product.id,warehouseId,qtyOnHand:qty},update:{qtyOnHand:{increment:qty}}});await tx.product.update({where:{id:product.id},data:{currentStock:{increment:qty},costPrice:Number(item.cost)}});await tx.stockMovement.create({data:{businessId,movementNo:await nextEntityNumber(tx,"stockMovement","movementNo",businessId,"MOV"),productId:product.id,sku:product.sku,productName:product.name,warehouseId,direction:"IN",movementType:"PURCHASE_RECEIPT",referenceNo:purchase.purchaseNo,qty,beforeQty,afterQty:beforeQty+qty,source:"purchases",metadata:{purchaseId:purchase.id}}});}
+await tx.purchase.update({where:{id:purchase.id},data:{status:"POSTED",receivedAt:new Date(),warehouseId}});if(purchase.supplierId)await tx.supplier.update({where:{id:purchase.supplierId},data:{balance:{increment:Number(purchase.balance)}}});await writeAudit(tx,req,{businessId,userId,action:"purchase.receive",entityType:"Purchase",entityId:purchase.id,after:{warehouseId,total:Number(purchase.total)}});}
+export async function receivePurchase(req:Request,businessId:string,userId:string|null,id:string,input:any){return prisma.$transaction(async tx=>{const purchase=await tx.purchase.findFirst({where:{businessId,OR:[{id},{purchaseNo:id}]},include:{items:true}});if(!purchase)throw new ApiError(404,"Purchase not found");if(purchase.status==="POSTED"&&purchase.receivedAt)return formatPurchase(purchase);const warehouse=await resolveWarehouse(tx,businessId,input.warehouseId||purchase.warehouseId,purchase.branchId);await postPurchaseStock(tx,req,businessId,userId,purchase,warehouse.id);const row=await tx.purchase.findUnique({where:{id:purchase.id},include:{items:true,goodsReceipts:{include:{items:true}}}});const receiptNo=cleanString(input.receiptNo)||await nextEntityNumber(tx,"goodsReceipt","receiptNo",businessId,"GRN");const existing=await tx.goodsReceipt.findFirst({where:{businessId,purchaseId:purchase.id}});if(!existing){await tx.goodsReceipt.create({data:{businessId,purchaseId:purchase.id,receiptNo,warehouseId:warehouse.id,receivedByUserId:userId,notes:cleanString(input.notes)||null,items:{create:purchase.items.map((i:any)=>({businessId,productId:i.productId,sku:i.sku,productName:i.name,qty:i.qty,cost:i.cost}))}}});}return formatPurchase(row);});}
+export async function cancelPurchase(req:Request,businessId:string,userId:string|null,id:string){return prisma.$transaction(async tx=>{const before=await tx.purchase.findFirst({where:{id,businessId}});if(!before)throw new ApiError(404,"Purchase not found");if(before.status==="POSTED")throw new ApiError(409,"Received purchase cannot be cancelled from this endpoint");const row=await tx.purchase.update({where:{id},data:{status:"CANCELLED"}});await writeAudit(tx,req,{businessId,userId,action:"purchase.cancel",entityType:"Purchase",entityId:id,before:plain(before),after:plain(row)});return formatPurchase(row);});}
 
-export async function register(req: Request, input: Record<string, unknown>) {
-  const idempotencyKey = requiredText(
-    req.header("Idempotency-Key") || req.header("X-Idempotency-Key"),
-    "Idempotency-Key header",
-    120,
-  );
-  if (!/^[A-Za-z0-9._:-]{16,120}$/.test(idempotencyKey)) {
-    throw new PublicCatalogError(400, "INVALID_IDEMPOTENCY_KEY", "Idempotency-Key must be 16–120 safe characters");
-  }
+export async function listPurchaseRequests(businessId:string){return plain(await prisma.purchaseRequest.findMany({where:{businessId},orderBy:{createdAt:"desc"}}));}
+export async function createPurchaseRequest(req:Request,businessId:string,userId:string|null,input:any){return prisma.$transaction(async tx=>{const row=await tx.purchaseRequest.create({data:{businessId,requestNo:cleanString(input.requestNo)||await nextEntityNumber(tx,"purchaseRequest","requestNo",businessId,"PR"),itemName:requireText(input.itemName||input.item,"Item"),qty:Math.max(.001,numberValue(input.qty,1)),requestedByUserId:userId,notes:cleanString(input.notes)||null}});await writeAudit(tx,req,{businessId,userId,action:"purchase_request.create",entityType:"PurchaseRequest",entityId:row.id,after:plain(row)});return plain(row);});}
+export async function convertPurchaseRequest(req:Request,businessId:string,userId:string|null,id:string,input:any){return prisma.$transaction(async tx=>{const request=await tx.purchaseRequest.findFirst({where:{id,businessId}});if(!request)throw new ApiError(404,"Purchase request not found");if(request.purchaseId){const existing=await tx.purchase.findFirst({where:{id:request.purchaseId,businessId},include:{items:true}});return formatPurchase(existing);}
+const supplier=await resolveSupplier(tx,businessId,{supplierId:input.supplierId,supplierName:input.supplierName||"Unassigned Supplier"});const warehouse=await resolveWarehouse(tx,businessId,input.warehouseId,null);let product=null;if(cleanString(input.productId))product=await tx.product.findFirst({where:{id:cleanString(input.productId),businessId}});if(!product)product=await tx.product.findFirst({where:{businessId,name:{contains:request.itemName,mode:"insensitive"},deleted:false}});const item={productId:product?.id||null,sku:product?.sku||null,barcode:product?.barcode||null,name:request.itemName,qty:Number(request.qty),cost:numberValue(input.cost,Number(product?.costPrice||0)),discount:0,taxRate:0,tax:0,total:roundMoney(Number(request.qty)*numberValue(input.cost,Number(product?.costPrice||0)))};const total=item.total;const purchase=await tx.purchase.create({data:{businessId,warehouseId:warehouse.id,purchaseNo:await nextEntityNumber(tx,"purchase","purchaseNo",businessId,"PO"),supplierId:supplier.id,supplierName:supplier.name,subtotal:total,total,balance:total,status:"DRAFT",items:{create:{businessId,...item}}},include:{items:true}});await tx.purchaseRequest.update({where:{id},data:{status:"converted",purchaseId:purchase.id}});await writeAudit(tx,req,{businessId,userId,action:"purchase_request.convert",entityType:"PurchaseRequest",entityId:id,after:{purchaseId:purchase.id,purchaseNo:purchase.purchaseNo}});return formatPurchase(purchase);});}
+export async function listGoodsReceipts(businessId:string){return plain(await prisma.goodsReceipt.findMany({where:{businessId},include:{items:true,purchase:true},orderBy:{receivedAt:"desc"}}));}
 
-  const fingerprint = requestFingerprint(input);
-  const previous = await prisma.tenantProvisioningRun.findUnique({ where: { idempotencyKey } });
-  if (previous) {
-    if (previous.requestHash !== fingerprint) {
-      throw new PublicCatalogError(409, "IDEMPOTENCY_CONFLICT", "This idempotency key was already used for different registration data");
-    }
-    return plain(previous.response);
-  }
+export async function listSupplierPayments(businessId:string,query:any){return plain(await prisma.supplierPayment.findMany({where:{businessId,...(cleanString(query.supplierId)?{supplierId:cleanString(query.supplierId)}:{})},orderBy:{paymentDate:"desc"},take:300}));}
+export async function createSupplierPayment(req:Request,businessId:string,userId:string|null,input:any){const amount=roundMoney(numberValue(input.amount));if(amount<=0)throw new ApiError(400,"Payment amount must be greater than zero");return prisma.$transaction(async tx=>{const supplier=await resolveSupplier(tx,businessId,input);const allocations=Array.isArray(input.allocations)?input.allocations:[];let allocated=0;const normalized=[];for(const a of allocations){const purchaseId=cleanString(a.purchaseId||a.id);const pay=roundMoney(numberValue(a.amount||a.payNow));if(!purchaseId||pay<=0)continue;const purchase=await tx.purchase.findFirst({where:{id:purchaseId,businessId,supplierId:supplier.id}});if(!purchase)throw new ApiError(400,"One selected purchase does not belong to this supplier");const applied=Math.min(pay,Number(purchase.balance));if(applied<=0)continue;await tx.purchase.update({where:{id:purchase.id},data:{paid:{increment:applied},balance:{decrement:applied}}});allocated=roundMoney(allocated+applied);normalized.push({purchaseId:purchase.id,purchaseNo:purchase.purchaseNo,amount:applied});}
+const voucherNo=cleanString(input.voucherNo)||await nextEntityNumber(tx,"supplierPayment","voucherNo",businessId,"SPAY");const row=await tx.supplierPayment.create({data:{businessId,voucherNo,supplierId:supplier.id,supplierName:supplier.name,amount,method:cleanString(input.method)||null,accountId:cleanString(input.accountId)||null,referenceNo:cleanString(input.referenceNo)||null,allocation:{allocations:normalized,allocated,unallocated:roundMoney(amount-allocated)},paymentDate:dateValue(input.paymentDate)||new Date()}});await tx.supplier.update({where:{id:supplier.id},data:{balance:{decrement:amount}}});if(cleanString(input.accountId)){const account=await tx.account.findFirst({where:{id:cleanString(input.accountId),businessId}});if(account){await tx.account.update({where:{id:account.id},data:{currentBalance:{decrement:amount}}});await tx.accountTransaction.create({data:{businessId,accountId:account.id,type:"debit",amount,referenceNo:voucherNo,description:`Supplier payment to ${supplier.name}`,transactionDate:dateValue(input.paymentDate)||new Date(),sourceType:"supplier_payment",sourceId:row.id,createdByUserId:userId}});}}
+await writeAudit(tx,req,{businessId,userId,action:"supplier_payment.create",entityType:"SupplierPayment",entityId:row.id,after:plain(row)});return plain(row);});}
+export async function supplierStatement(businessId:string,supplierId:string,query:any){const supplier=await prisma.supplier.findFirst({where:{id:supplierId,businessId}});if(!supplier)throw new ApiError(404,"Supplier not found");const {from,to}=dateRange(query.from,query.to,365);const [purchases,payments]=await Promise.all([prisma.purchase.findMany({where:{businessId,supplierId,status:"POSTED",purchaseDate:{gte:from,lte:to}},orderBy:{purchaseDate:"asc"}}),prisma.supplierPayment.findMany({where:{businessId,supplierId,paymentDate:{gte:from,lte:to}},orderBy:{paymentDate:"asc"}})]);const entries=[...purchases.map(p=>({date:p.purchaseDate,ref:p.purchaseNo,debit:0,credit:Number(p.total),type:"purchase"})),...payments.map(p=>({date:p.paymentDate,ref:p.voucherNo,debit:Number(p.amount),credit:0,type:"payment"}))].sort((a,b)=>a.date.getTime()-b.date.getTime());let balance=Number(supplier.openingBalance);const rows=entries.map(e=>{balance=roundMoney(balance+e.credit-e.debit);return{...e,balance};});return plain({supplier,from,to,rows,totals:{debit:roundMoney(rows.reduce((s,r)=>s+r.debit,0)),credit:roundMoney(rows.reduce((s,r)=>s+r.credit,0)),closingBalance:balance}});}
 
-  const businessName = requiredText(input.businessName, "Business name", 120);
-  const ownerName = requiredText(input.ownerName, "Owner name", 120);
-  const email = normalizeEmail(input.email);
-  const password = validatePassword(input.password);
-  const country = requiredText(input.country, "Country", 2).toUpperCase();
-  if (!/^[A-Z]{2}$/.test(country)) throw new PublicCatalogError(400, "VALIDATION_ERROR", "Country must be a two-letter ISO code");
-  const timezone = requiredText(input.timezone, "Timezone", 80);
-  try { new Intl.DateTimeFormat("en", { timeZone: timezone }).format(); } catch { throw new PublicCatalogError(400, "VALIDATION_ERROR", "Timezone is invalid"); }
-  const baseCurrency = requiredText(input.baseCurrency, "Base currency", 3).toUpperCase();
-  const language = requiredText(input.language, "Language", 12);
-  if (!supportedLanguages.has(language)) throw new PublicCatalogError(400, "VALIDATION_ERROR", "Language is unsupported");
-  const industryCode = requiredText(input.industryCode, "Industry", 40).toLowerCase();
-  const planCode = requiredText(input.planCode, "Subscription plan", 40).toLowerCase();
-  const billingCycle = requiredText(input.billingCycle || "MONTHLY", "Billing cycle", 10).toUpperCase();
-  if (!allowedBillingCycles.has(billingCycle)) throw new PublicCatalogError(400, "VALIDATION_ERROR", "Billing cycle is unsupported");
-  const firstBranch = requiredText(input.firstBranch || "Main Branch", "First branch", 120);
-  const firstWarehouse = requiredText(input.firstWarehouse || "Main Warehouse", "First warehouse", 120);
-  const firstCounter = requiredText(input.firstCounter || "Counter 1", "First counter", 120);
-  const taxSystem = requiredText(input.taxSystem || "none", "Tax system", 20).toLowerCase();
-  if (!allowedTaxSystems.has(taxSystem)) throw new PublicCatalogError(400, "VALIDATION_ERROR", "Tax system is unsupported");
-  const taxLabel = requiredText(input.taxLabel || "Tax", "Tax label", 30);
-  const taxRegistrationNumber = optionalText(input.taxRegistrationNumber, 80);
-  const invoicePrefix = requiredText(input.invoicePrefix || "INV", "Invoice prefix", 8).toUpperCase();
-  if (!/^[A-Z0-9-]{1,8}$/.test(invoicePrefix)) throw new PublicCatalogError(400, "VALIDATION_ERROR", "Invoice prefix contains unsupported characters");
-  const printProfile = requiredText(input.printProfile || "a4", "Print profile", 12).toLowerCase();
-  if (!["a4", "80mm", "58mm"].includes(printProfile)) throw new PublicCatalogError(400, "VALIDATION_ERROR", "Print profile is unsupported");
-  if (input.acceptTerms !== true || input.acceptPrivacy !== true) {
-    throw new PublicCatalogError(400, "CONSENT_REQUIRED", "Terms and privacy acknowledgement are required");
-  }
-
-  const pack = getIndustryPack(industryCode);
-  if (!pack || !publicIndustryRegistry().some(item => item.code === industryCode)) {
-    throw new PublicCatalogError(400, "INVALID_INDUSTRY", "Selected industry is unavailable");
-  }
-  if (pack.registrationEnabled === false || !operationalCodes.has(industryCode)) {
-    throw new PublicCatalogError(409, "INDUSTRY_PREVIEW_ONLY", `${pack.name} is listed for preview but is not yet available for production onboarding`);
-  }
-
-  const [industry, plan, currency] = await Promise.all([
-    prisma.industryProfile.findUnique({ where: { code: industryCode } }),
-    prisma.subscriptionPlan.findUnique({ where: { code: planCode } }),
-    prisma.currency.findUnique({ where: { code: baseCurrency } }),
-  ]);
-  if (!industry?.active) throw new PublicCatalogError(409, "CATALOG_NOT_SEEDED", "Selected industry is not active in the deployed catalogue");
-  if (!plan?.active) throw new PublicCatalogError(409, "PLAN_UNAVAILABLE", "Selected subscription plan is unavailable");
-  if (!currency?.active) throw new PublicCatalogError(409, "CURRENCY_UNAVAILABLE", "Selected currency is unavailable");
-
-  const slug = `${slugBase(businessName)}-${crypto.randomBytes(3).toString("hex")}`;
-  const now = new Date();
-  const trialEndsAt = new Date(now.getTime() + 14 * 86400000);
-  const ipAddress = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim() || null;
-  const userAgent = String(req.headers["user-agent"] || "").slice(0, 500) || null;
-
-  try {
-    return await prisma.$transaction(async tx => {
-      const business = await tx.business.create({
-        data: {
-          name: businessName,
-          slug,
-          status: "TRIAL",
-          country,
-          timezone,
-          currency: baseCurrency,
-          subscriptionPlan: plan.code,
-          subscriptionStatus: "TRIAL",
-          trialEndsAt,
-          defaultLanguage: language,
-          onboardingState: "COMPLETED",
-          onboardingStep: 18,
-          onboardingCompletedAt: now,
-          taxLabel,
-        },
-      });
-      const branch = await tx.branch.create({ data: { businessId: business.id, name: firstBranch, code: "MAIN", country, type: pack.name } });
-      const warehouse = await tx.warehouse.create({ data: { businessId: business.id, branchId: branch.id, name: firstWarehouse, code: "MAIN" } });
-      const ownerRole = await tx.role.create({
-        data: { businessId: business.id, name: "Owner", description: "Business owner with full tenant access", isSystemRole: true, permissions: ["*"] },
-      });
-      const owner = await tx.user.create({
-        data: { businessId: business.id, branchId: branch.id, name: ownerName, email, passwordHash: hashPassword(password), preferredLanguage: language, status: "ACTIVE" },
-      });
-      await tx.userRole.create({ data: { businessId: business.id, userId: owner.id, roleId: ownerRole.id } });
-      await tx.counter.create({ data: { businessId: business.id, branchId: branch.id, name: firstCounter, code: "POS-1", cashierUserId: owner.id } });
-      await tx.businessIndustry.create({
-        data: { businessId: business.id, industryId: industry.id, provisioningState: "completed", registryVersion: INDUSTRY_REGISTRY_VERSION },
-      });
-      await tx.tenantSubscription.create({
-        data: {
-          businessId: business.id,
-          planId: plan.id,
-          status: "TRIAL",
-          billingCycle: billingCycle as "MONTHLY" | "ANNUAL",
-          startsAt: now,
-          trialEndsAt,
-          currentPeriodStart: now,
-          currentPeriodEnd: trialEndsAt,
-          isCurrent: true,
-          provider: "manual",
-        },
-      });
-      await tx.businessCurrency.create({ data: { businessId: business.id, currencyCode: baseCurrency, isBase: true, active: true } });
-      await tx.businessTaxSetting.create({
-        data: { businessId: business.id, taxSystem, taxLabel, registrationNumber: taxRegistrationNumber, pricesIncludeTax: input.pricesIncludeTax === true },
-      });
-      await tx.businessLocale.create({
-        data: { businessId: business.id, countryCode: country, languageCode: language, timezone, dateFormat: String(input.dateFormat || "yyyy-MM-dd"), numberLocale: String(input.numberLocale || "en-QA") },
-      });
-      await tx.tenantOnboarding.create({
-        data: {
-          businessId: business.id,
-          currentStep: 18,
-          completedSteps: Array.from({ length: 18 }, (_, index) => index + 1),
-          state: "COMPLETED",
-          answers: {
-            businessName,
-            ownerName,
-            email,
-            country,
-            timezone,
-            baseCurrency,
-            language,
-            industryCode,
-            planCode,
-            billingCycle,
-            branchName: firstBranch,
-            warehouseName: firstWarehouse,
-            counterName: firstCounter,
-            taxSystem,
-            printProfile,
-            sampleDataRequested: input.sampleDataRequested === true,
-          },
-          sampleDataRequested: input.sampleDataRequested === true,
-          completedAt: now,
-        },
-      });
-      await tx.industrySetting.create({ data: { businessId: business.id, key: "industry.defaults", value: pack.defaultSettings } });
-      await tx.documentCounter.createMany({
-        data: [
-          { businessId: business.id, branchId: branch.id, documentType: "INVOICE", prefix: invoicePrefix, nextNumber: 1, padding: 6 },
-          { businessId: business.id, branchId: branch.id, documentType: "QUOTATION", prefix: "QUO", nextNumber: 1, padding: 6 },
-          { businessId: business.id, branchId: branch.id, documentType: "DELIVERY_NOTE", prefix: "DN", nextNumber: 1, padding: 6 },
-        ],
-      });
-      const profileRows = [
-        { code: "invoice-a4", name: "A4 Invoice", paperSize: "A4", widthMm: 210, heightMm: 297 },
-        { code: "receipt-80", name: "80 mm Receipt", paperSize: "THERMAL", widthMm: 80, heightMm: null },
-        { code: "receipt-58", name: "58 mm Receipt", paperSize: "THERMAL", widthMm: 58, heightMm: null },
-      ];
-      for (const profile of profileRows) {
-        await tx.printProfile.create({
-          data: {
-            businessId: business.id,
-            code: profile.code,
-            name: profile.name,
-            documentType: "invoice",
-            paperSize: profile.paperSize,
-            widthMm: profile.widthMm,
-            heightMm: profile.heightMm,
-            isDefault: profile.code === (printProfile === "80mm" ? "receipt-80" : printProfile === "58mm" ? "receipt-58" : "invoice-a4"),
-            config: { fields: pack.printFields, browserPrint: true },
-            createdByUserId: owner.id,
-            updatedByUserId: owner.id,
-          },
-        });
-      }
-      for (const rule of pack.notificationRules) {
-        await tx.notificationRule.create({
-          data: {
-            businessId: business.id,
-            code: rule.code,
-            name: rule.code.split("-").map(part => part[0]?.toUpperCase() + part.slice(1)).join(" "),
-            eventType: rule.eventType,
-            channels: ["in_app"],
-            schedule: rule.daysBefore ? { daysBefore: rule.daysBefore } : undefined,
-            conditions: {},
-            template: { title: pack.name, body: `Action required for ${rule.eventType}` },
-            createdByUserId: owner.id,
-            updatedByUserId: owner.id,
-          },
-        });
-      }
-      await tx.auditLog.create({
-        data: {
-          businessId: business.id,
-          userId: owner.id,
-          action: "tenant.provisioned",
-          entityType: "Business",
-          entityId: business.id,
-          after: { industryCode, planCode, registryVersion: INDUSTRY_REGISTRY_VERSION, sampleDataRequested: input.sampleDataRequested === true },
-          ipAddress,
-          userAgent,
-        },
-      });
-      const response = {
-        business: { id: business.id, name: business.name, slug: business.slug, status: business.status },
-        owner: { email: owner.email },
-        industry: { code: pack.code, name: pack.name, registryVersion: INDUSTRY_REGISTRY_VERSION },
-        plan: { code: plan.code, name: plan.name },
-        provisioning: { state: "completed", branchId: branch.id, warehouseId: warehouse.id },
-        next: { page: "login.html", dashboard: "industry-dashboard.html" },
-      };
-      await tx.tenantProvisioningRun.create({ data: { businessId: business.id, idempotencyKey, requestHash: fingerprint, status: "completed", response } });
-      return plain(response);
-    }, { timeout: 20_000 });
-  } catch (error: any) {
-    if (error?.code === "P2002") {
-      const retry = await prisma.tenantProvisioningRun.findUnique({ where: { idempotencyKey } });
-      if (retry && retry.requestHash === fingerprint) return plain(retry.response);
-      throw new PublicCatalogError(409, "REGISTRATION_CONFLICT", "A registration with the same unique information already exists");
-    }
-    throw error;
-  }
-}
+export async function createPurchaseReturn(req:Request,businessId:string,userId:string|null,input:any){const items=normalizeItems(input.items||[{name:input.item||"Returned items",qty:input.qty||1,cost:input.cost||0,productId:input.productId,sku:input.sku}]);return prisma.$transaction(async tx=>{const purchaseId=cleanString(input.purchaseId)||null;const purchase=purchaseId?await tx.purchase.findFirst({where:{id:purchaseId,businessId}}):null;const supplier=await resolveSupplier(tx,businessId,{supplierId:input.supplierId||purchase?.supplierId,supplierName:input.supplierName||purchase?.supplierName||"Supplier"});const warehouse=await resolveWarehouse(tx,businessId,input.warehouseId||purchase?.warehouseId,purchase?.branchId);const total=roundMoney(items.reduce((s,i)=>s+i.total,0));const row=await tx.purchaseReturn.create({data:{businessId,purchaseId:purchase?.id||null,returnNo:cleanString(input.returnNo)||await nextEntityNumber(tx,"purchaseReturn","returnNo",businessId,"PRET"),supplierId:supplier.id,supplierName:supplier.name,warehouseId:warehouse.id,total,reason:cleanString(input.reason)||null,createdByUserId:userId,items:{create:items.map(i=>({businessId,productId:i.productId,sku:i.sku,productName:i.name,qty:i.qty,cost:i.cost,total:i.total}))}},include:{items:true}});for(const item of items){if(!item.productId)continue;const stock=await tx.inventoryStock.findUnique({where:{businessId_productId_warehouseId:{businessId,productId:item.productId,warehouseId:warehouse.id}}});const before=Number(stock?.qtyOnHand||0);if(before<item.qty)throw new ApiError(409,`Insufficient stock to return ${item.name}`);await tx.inventoryStock.update({where:{businessId_productId_warehouseId:{businessId,productId:item.productId,warehouseId:warehouse.id}},data:{qtyOnHand:{decrement:item.qty}}});await tx.product.update({where:{id:item.productId},data:{currentStock:{decrement:item.qty}}});await tx.stockMovement.create({data:{businessId,movementNo:await nextEntityNumber(tx,"stockMovement","movementNo",businessId,"MOV"),productId:item.productId,sku:item.sku,productName:item.name,warehouseId:warehouse.id,direction:"OUT",movementType:"PURCHASE_RETURN",referenceNo:row.returnNo,qty:item.qty,beforeQty:before,afterQty:before-item.qty,source:"purchase_return",metadata:{purchaseReturnId:row.id}}});}await tx.supplier.update({where:{id:supplier.id},data:{balance:{decrement:total}}});await writeAudit(tx,req,{businessId,userId,action:"purchase_return.create",entityType:"PurchaseReturn",entityId:row.id,after:plain(row)});return plain(row);});}
+export async function listPurchaseReturns(businessId:string){return plain(await prisma.purchaseReturn.findMany({where:{businessId},include:{items:true},orderBy:{returnDate:"desc"}}));}

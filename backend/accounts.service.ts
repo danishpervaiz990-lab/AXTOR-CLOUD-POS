@@ -1,28 +1,8 @@
-export type BillingCheckoutInput = { businessId: string; planCode: string; billingCycle: "MONTHLY" | "ANNUAL" | "CUSTOM"; returnUrl?: string };
-export type BillingCheckoutResult = { provider: string; reference: string; redirectUrl?: string; status: "pending" | "manual_review" };
-
-export interface BillingProvider {
-  readonly name: string;
-  createCheckout(input: BillingCheckoutInput): Promise<BillingCheckoutResult>;
-  verify(reference: string): Promise<{ paid: boolean; raw?: unknown }>;
-}
-
-export class ManualBillingProvider implements BillingProvider {
-  readonly name = "manual";
-  async createCheckout(input: BillingCheckoutInput): Promise<BillingCheckoutResult> {
-    return { provider: this.name, reference: `manual:${input.businessId}:${Date.now()}`, status: "manual_review" };
-  }
-  async verify(): Promise<{ paid: boolean }> { return { paid: false }; }
-}
-
-export type RateQuote = { baseCode: string; quoteCode: string; rate: number; source: string; timestamp: Date };
-export interface ExchangeRateProvider { readonly name: string; quote(baseCode: string, quoteCode: string, at?: Date): Promise<RateQuote>; }
-
-export class ManualExchangeRateProvider implements ExchangeRateProvider {
-  readonly name = "manual";
-  constructor(private readonly rate: number, private readonly timestamp = new Date()) {}
-  async quote(baseCode: string, quoteCode: string): Promise<RateQuote> {
-    if (!Number.isFinite(this.rate) || this.rate <= 0) throw new Error("A positive manual exchange rate is required");
-    return { baseCode, quoteCode, rate: this.rate, source: this.name, timestamp: this.timestamp };
-  }
-}
+import type {Request}from"express";import{prisma}from"../db/prisma.js";import{writeAudit}from"./audit.service.js";import{ApiError,cleanString,plain,requireText}from"../utils/http.js";
+export async function listSettings(businessId:string,q:any={}){const prefix=cleanString(q.prefix);const rows=await prisma.appSetting.findMany({where:{businessId,...(prefix?{key:{startsWith:prefix}}:{})},orderBy:{key:"asc"}});const values=Object.fromEntries(rows.map(r=>[r.key,plain(r.value)]));return{settings:plain(rows),values};}
+export async function getSetting(businessId:string,key:string){const row=await prisma.appSetting.findUnique({where:{businessId_key:{businessId,key}}});return row?plain(row):null;}
+export async function setSetting(req:Request,businessId:string,userId:string|null,key:string,input:any){key=requireText(key,"Setting key");const value=input&&Object.prototype.hasOwnProperty.call(input,"value")?input.value:input;if(value===undefined)throw new ApiError(400,"Setting value is required");return prisma.$transaction(async tx=>{const before=await tx.appSetting.findUnique({where:{businessId_key:{businessId,key}}});const row=await tx.appSetting.upsert({where:{businessId_key:{businessId,key}},create:{businessId,key,value},update:{value}});await writeAudit(tx,req,{businessId,userId,action:"setting.save",entityType:"AppSetting",entityId:row.id,before:before||undefined,after:row});return plain(row);});}
+export async function bulkSave(req:Request,businessId:string,userId:string|null,input:any){const values=input?.values&&typeof input.values==="object"?input.values:input?.settings&&typeof input.settings==="object"?input.settings:input;if(!values||typeof values!=="object"||Array.isArray(values))throw new ApiError(400,"Settings object is required");return prisma.$transaction(async tx=>{const saved:any[]=[];for(const[key,value]of Object.entries(values)){if(!String(key).trim())continue;saved.push(await tx.appSetting.upsert({where:{businessId_key:{businessId,key}},create:{businessId,key,value:value as any},update:{value:value as any}}));}await writeAudit(tx,req,{businessId,userId,action:"setting.bulk_save",entityType:"AppSetting",after:{keys:Object.keys(values)}});return plain(saved);});}
+export async function removeSetting(req:Request,businessId:string,userId:string|null,key:string){return prisma.$transaction(async tx=>{const row=await tx.appSetting.findUnique({where:{businessId_key:{businessId,key}}});if(!row)throw new ApiError(404,"Setting not found");await tx.appSetting.delete({where:{businessId_key:{businessId,key}}});await writeAudit(tx,req,{businessId,userId,action:"setting.delete",entityType:"AppSetting",entityId:row.id,before:row});return{key,deleted:true};});}
+export async function exportSettings(businessId:string){const data=await listSettings(businessId);return{version:1,exportedAt:new Date().toISOString(),values:data.values};}
+export async function importSettings(req:Request,businessId:string,userId:string|null,input:any){const values=input?.values||input;return bulkSave(req,businessId,userId,{values});}

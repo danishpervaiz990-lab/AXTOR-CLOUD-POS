@@ -1,77 +1,128 @@
 import type { Request } from "express";
 import { prisma } from "../db/prisma.js";
-import { hashPassword } from "../utils/password.js";
-import { ApiError, cleanString, plain, requireText } from "../utils/http.js";
 import { writeAudit } from "./audit.service.js";
-import { clearEntitlementCache } from "./entitlements.service.js";
+import { ApiError, booleanValue, cleanString, dateRange, dateValue, numberValue, plain, queryLimit, requireText, roundMoney } from "../utils/http.js";
 
-function strongPassword(password: string): boolean { return password.length >= 12 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password); }
-
-export async function listTenants(query: any) {
-  const search = cleanString(query?.search); const page = Math.max(1, Number(query?.page || 1)); const pageSize = Math.min(100, Math.max(1, Number(query?.pageSize || 25)));
-  const where: any = search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { slug: { contains: search, mode: "insensitive" } }] } : {};
-  const [total, rows] = await Promise.all([
-    prisma.business.count({ where }),
-    prisma.business.findMany({ where, include: { tenantSubscriptions: { where: { isCurrent: true }, include: { plan: true }, take: 1 }, businessIndustry: { include: { industry: true } }, _count: { select: { users: true, branches: true, warehouses: true, products: true, salesDocuments: true } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
-  ]);
-  return plain({ rows, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } });
+function normalizeType(value: unknown): string {
+  const type = String(value || "cash").trim().toLowerCase().replace(/\s+/g, "_");
+  return type || "cash";
 }
 
-export async function createTenant(req: Request, actorUserId: string | null, input: any) {
-  const name = requireText(input?.businessName, "Business name"); const slug = requireText(input?.businessSlug, "Business slug").toLowerCase(); const ownerName = requireText(input?.ownerName, "Owner name"); const email = requireText(input?.ownerEmail, "Owner email").toLowerCase(); const password = String(input?.temporaryPassword || "");
-  if (!/^[a-z0-9][a-z0-9-]{2,62}$/.test(slug)) throw new ApiError(400, "Business slug must use lowercase letters, numbers, and hyphens");
-  if (!strongPassword(password)) throw new ApiError(400, "Temporary password must be at least 12 characters with uppercase, lowercase, number, and symbol");
-  const plan = await prisma.subscriptionPlan.findUnique({ where: { code: String(input?.planCode || "basic").toLowerCase() } });
-  if (!plan?.active) throw new ApiError(400, "Subscription plan is unavailable");
-  return prisma.$transaction(async tx => {
-    const business = await tx.business.create({ data: { name, slug, status: "TRIAL", country: String(input?.country || "QA").toUpperCase(), timezone: String(input?.timezone || "Asia/Qatar"), currency: String(input?.currency || "QAR").toUpperCase(), subscriptionPlan: plan.code, subscriptionStatus: "TRIAL", trialEndsAt: new Date(Date.now() + Number(input?.trialDays || 14) * 86400000) } });
-    const role = await tx.role.create({ data: { businessId: business.id, name: "Business Owner", description: "Tenant owner with full tenant access", isSystemRole: true, permissions: ["*"] } });
-    const user = await tx.user.create({ data: { businessId: business.id, name: ownerName, email, passwordHash: hashPassword(password), mustChangePassword: true, status: "ACTIVE" } });
-    await tx.userRole.create({ data: { businessId: business.id, userId: user.id, roleId: role.id } });
-    const trialEndsAt = business.trialEndsAt || new Date(Date.now() + 14 * 86400000);
-    await tx.tenantSubscription.create({ data: { businessId: business.id, planId: plan.id, status: "TRIAL", billingCycle: String(input?.billingCycle || "MONTHLY").toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY", trialEndsAt, currentPeriodStart: new Date(), currentPeriodEnd: trialEndsAt, provider: "manual", isCurrent: true } });
-    await tx.tenantOnboarding.create({ data: { businessId: business.id, currentStep: 1, completedSteps: [], state: "NOT_STARTED", answers: {}, sampleDataRequested: false } });
-    await writeAudit(tx, req, { businessId: business.id, userId: actorUserId, action: "platform.tenant.create", entityType: "Business", entityId: business.id, after: { name, slug, ownerEmail: email, planCode: plan.code } });
-    return plain({ business, owner: { id: user.id, name: user.name, email: user.email }, temporaryPasswordMustBeChanged: true });
+function signedAmount(type: string, amount: number): number {
+  return ["debit", "deposit", "receipt", "income", "opening", "adjustment_in"].includes(type.toLowerCase()) ? amount : -amount;
+}
+
+export async function listAccounts(businessId: string, query: any = {}) {
+  const active = query.active === undefined ? undefined : booleanValue(query.active, true);
+  const rows = await prisma.account.findMany({
+    where: { businessId, ...(active === undefined ? {} : { active }), ...(cleanString(query.type) ? { type: normalizeType(query.type) } : {}) },
+    orderBy: [{ active: "desc" }, { name: "asc" }],
+  });
+  const totals = rows.reduce((a, row) => {
+    const balance = Number(row.currentBalance || 0);
+    a.balance += balance;
+    if (balance >= 0) a.positive += balance; else a.negative += Math.abs(balance);
+    return a;
+  }, { balance: 0, positive: 0, negative: 0 });
+  return { accounts: plain(rows), totals: { balance: roundMoney(totals.balance), positive: roundMoney(totals.positive), negative: roundMoney(totals.negative) } };
+}
+
+export async function getAccount(businessId: string, id: string) {
+  const row = await prisma.account.findFirst({ where: { id, businessId } });
+  if (!row) throw new ApiError(404, "Account not found");
+  return plain(row);
+}
+
+export async function createAccount(req: Request, businessId: string, userId: string | null, input: any) {
+  const name = requireText(input.name, "Account name");
+  const openingBalance = roundMoney(numberValue(input.openingBalance ?? input.balance));
+  return prisma.$transaction(async (tx) => {
+    const row = await tx.account.create({ data: {
+      businessId, name, type: normalizeType(input.type), accountNumber: cleanString(input.accountNumber),
+      bankName: cleanString(input.bankName), currency: cleanString(input.currency) || "QAR",
+      openingBalance, currentBalance: openingBalance, active: booleanValue(input.active, true),
+      metadata: input.metadata && typeof input.metadata === "object" ? input.metadata : undefined,
+    }});
+    if (openingBalance !== 0) await tx.accountTransaction.create({ data: {
+      businessId, accountId: row.id, type: openingBalance >= 0 ? "opening" : "opening_out",
+      amount: Math.abs(openingBalance), description: "Opening balance", sourceType: "account", sourceId: row.id, createdByUserId: userId,
+    }});
+    await writeAudit(tx, req, { businessId, userId, action: "account.create", entityType: "Account", entityId: row.id, after: row });
+    return plain(row);
   });
 }
 
-export async function updateTenant(req: Request, actorUserId: string | null, businessId: string, input: any) {
-  const result = await prisma.$transaction(async tx => {
-    const before = await tx.business.findUnique({ where: { id: businessId } }); if (!before) throw new ApiError(404, "Tenant not found");
-    const status = input?.status ? String(input.status).toUpperCase() : undefined; if (status && !["ACTIVE", "TRIAL", "SUSPENDED", "CANCELLED"].includes(status)) throw new ApiError(400, "Invalid tenant status");
-    const row = await tx.business.update({ where: { id: businessId }, data: { ...(status ? { status: status as any } : {}), ...(input?.maintenanceMode !== undefined ? { maintenanceMode: Boolean(input.maintenanceMode) } : {}) } });
-    if (status === "SUSPENDED" || status === "CANCELLED") await tx.authSession.updateMany({ where: { businessId, revokedAt: null }, data: { revokedAt: new Date() } });
-    await writeAudit(tx, req, { businessId, userId: actorUserId, action: "platform.tenant.update", entityType: "Business", entityId: businessId, before, after: row }); return plain(row);
+export async function updateAccount(req: Request, businessId: string, userId: string | null, id: string, input: any) {
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.account.findFirst({ where: { id, businessId } });
+    if (!before) throw new ApiError(404, "Account not found");
+    const row = await tx.account.update({ where: { id }, data: {
+      name: cleanString(input.name), type: input.type === undefined ? undefined : normalizeType(input.type),
+      accountNumber: input.accountNumber === undefined ? undefined : cleanString(input.accountNumber) || null,
+      bankName: input.bankName === undefined ? undefined : cleanString(input.bankName) || null,
+      currency: cleanString(input.currency), active: input.active === undefined ? undefined : booleanValue(input.active),
+      metadata: input.metadata === undefined ? undefined : input.metadata,
+    }});
+    await writeAudit(tx, req, { businessId, userId, action: "account.update", entityType: "Account", entityId: id, before, after: row });
+    return plain(row);
   });
-  clearEntitlementCache(businessId); return result;
 }
 
-export async function changeSubscription(req: Request, actorUserId: string | null, businessId: string, input: any) {
-  const plan = await prisma.subscriptionPlan.findUnique({ where: { code: String(input?.planCode || "").toLowerCase() } }); if (!plan?.active) throw new ApiError(400, "Subscription plan is unavailable");
-  const status = String(input?.status || "ACTIVE").toUpperCase(); if (!["TRIAL", "ACTIVE", "GRACE", "SUSPENDED", "CANCELLED", "EXPIRED"].includes(status)) throw new ApiError(400, "Invalid subscription status");
-  const result = await prisma.$transaction(async tx => {
-    await tx.tenantSubscription.updateMany({ where: { businessId, isCurrent: true }, data: { isCurrent: false } });
-    const periodDays = String(input?.billingCycle || "MONTHLY").toUpperCase() === "ANNUAL" ? 365 : 30; const startsAt = new Date(); const periodEnd = input?.periodEnd ? new Date(input.periodEnd) : new Date(Date.now() + periodDays * 86400000);
-    const row = await tx.tenantSubscription.create({ data: { businessId, planId: plan.id, status: status as any, billingCycle: String(input?.billingCycle || "MONTHLY").toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY", startsAt, currentPeriodStart: startsAt, currentPeriodEnd: periodEnd, graceEndsAt: input?.graceEndsAt ? new Date(input.graceEndsAt) : null, customLimits: input?.customLimits || undefined, provider: "manual", providerReference: cleanString(input?.reference) || null, isCurrent: true } });
-    await tx.business.update({ where: { id: businessId }, data: { subscriptionPlan: plan.code, subscriptionStatus: status, status: (status === "TRIAL" ? "TRIAL" : ["SUSPENDED", "CANCELLED"].includes(status) ? status : "ACTIVE") as any } });
-    await writeAudit(tx, req, { businessId, userId: actorUserId, action: "platform.subscription.change", entityType: "TenantSubscription", entityId: row.id, after: { planCode: plan.code, status, periodEnd, customLimits: input?.customLimits || null } }); return plain(row);
+export async function deleteAccount(req: Request, businessId: string, userId: string | null, id: string) {
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.account.findFirst({ where: { id, businessId } });
+    if (!before) throw new ApiError(404, "Account not found");
+    const linked = await tx.accountTransaction.count({ where: { businessId, accountId: id } });
+    const row = linked ? await tx.account.update({ where: { id }, data: { active: false } }) : await tx.account.delete({ where: { id } });
+    await writeAudit(tx, req, { businessId, userId, action: linked ? "account.deactivate" : "account.delete", entityType: "Account", entityId: id, before, after: row });
+    return { id, deleted: !linked, deactivated: Boolean(linked) };
   });
-  clearEntitlementCache(businessId); return result;
 }
 
-export async function saveOverride(req: Request, actorUserId: string | null, businessId: string, input: any) {
-  const featureKey = requireText(input?.featureKey, "Feature key");
-  const result = await prisma.$transaction(async tx => { if (!await tx.business.findUnique({ where: { id: businessId } })) throw new ApiError(404, "Tenant not found"); const row = await tx.tenantFeatureOverride.upsert({ where: { businessId_featureKey: { businessId, featureKey } }, create: { businessId, featureKey, enabled: input?.enabled === undefined ? null : Boolean(input.enabled), limitValue: input?.limitValue === undefined || input?.limitValue === null ? null : Number(input.limitValue), reason: cleanString(input?.reason) || null, expiresAt: input?.expiresAt ? new Date(input.expiresAt) : null }, update: { enabled: input?.enabled === undefined ? null : Boolean(input.enabled), limitValue: input?.limitValue === undefined || input?.limitValue === null ? null : Number(input.limitValue), reason: cleanString(input?.reason) || null, expiresAt: input?.expiresAt ? new Date(input.expiresAt) : null } }); await writeAudit(tx, req, { businessId, userId: actorUserId, action: "platform.feature_override", entityType: "TenantFeatureOverride", entityId: row.id, after: row }); return plain(row); });
-  clearEntitlementCache(businessId); return result;
+export async function listTransactions(businessId: string, query: any = {}) {
+  const { from, to } = dateRange(query.from, query.to, 90);
+  const rows = await prisma.accountTransaction.findMany({
+    where: { businessId, ...(cleanString(query.accountId) ? { accountId: cleanString(query.accountId) } : {}), transactionDate: { gte: from, lte: to } },
+    include: { account: { select: { id: true, name: true, type: true } } },
+    orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }], take: queryLimit(query.limit, 250, 1000),
+  });
+  return plain(rows);
 }
 
-export async function resetOnboarding(req: Request, actorUserId: string | null, businessId: string) {
-  return prisma.$transaction(async tx => { const row = await tx.tenantOnboarding.upsert({ where: { businessId }, create: { businessId, state: "NOT_STARTED", currentStep: 1, completedSteps: [], answers: {} }, update: { state: "NOT_STARTED", currentStep: 1, completedSteps: [], completedAt: null } }); await tx.business.update({ where: { id: businessId }, data: { onboardingState: "NOT_STARTED", onboardingStep: 1, onboardingCompletedAt: null } }); await writeAudit(tx, req, { businessId, userId: actorUserId, action: "platform.onboarding.reset", entityType: "TenantOnboarding", entityId: row.id, after: { reset: true } }); return plain(row); });
+export async function createTransaction(req: Request, businessId: string, userId: string | null, input: any) {
+  const accountId = requireText(input.accountId, "Account");
+  const amount = roundMoney(Math.abs(numberValue(input.amount)));
+  if (amount <= 0) throw new ApiError(400, "Amount must be greater than zero");
+  const type = normalizeType(input.type || "deposit");
+  return prisma.$transaction(async (tx) => {
+    const account = await tx.account.findFirst({ where: { id: accountId, businessId, active: true } });
+    if (!account) throw new ApiError(404, "Account not found");
+    const change = signedAmount(type, amount);
+    const row = await tx.accountTransaction.create({ data: {
+      businessId, accountId, type, amount, referenceNo: cleanString(input.referenceNo), description: cleanString(input.description),
+      transactionDate: dateValue(input.transactionDate) || new Date(), sourceType: cleanString(input.sourceType) || "manual",
+      sourceId: cleanString(input.sourceId), createdByUserId: userId,
+    }});
+    const updated = await tx.account.update({ where: { id: accountId }, data: { currentBalance: { increment: change } } });
+    await writeAudit(tx, req, { businessId, userId, action: "account.transaction.create", entityType: "AccountTransaction", entityId: row.id, after: row });
+    return { transaction: plain(row), account: plain(updated) };
+  });
 }
 
-export async function revokeSessions(req: Request, actorUserId: string | null, businessId: string) {
-  const result = await prisma.authSession.updateMany({ where: { businessId, revokedAt: null }, data: { revokedAt: new Date() } });
-  await prisma.auditLog.create({ data: { businessId, userId: actorUserId, action: "platform.sessions.revoke", entityType: "AuthSession", after: { count: result.count }, ipAddress: String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim() || null, userAgent: String(req.headers["user-agent"] || "").slice(0, 500) || null } });
-  return { revoked: result.count };
+export async function reconcile(req: Request, businessId: string, userId: string | null, id: string, input: any) {
+  const target = roundMoney(numberValue(input.balance ?? input.currentBalance));
+  return prisma.$transaction(async (tx) => {
+    const account = await tx.account.findFirst({ where: { id, businessId } });
+    if (!account) throw new ApiError(404, "Account not found");
+    const current = Number(account.currentBalance || 0);
+    const difference = roundMoney(target - current);
+    if (difference !== 0) await tx.accountTransaction.create({ data: {
+      businessId, accountId: id, type: difference > 0 ? "adjustment_in" : "adjustment_out", amount: Math.abs(difference),
+      description: cleanString(input.description) || "Account reconciliation", transactionDate: dateValue(input.date) || new Date(),
+      sourceType: "reconciliation", sourceId: id, createdByUserId: userId,
+    }});
+    const updated = await tx.account.update({ where: { id }, data: { currentBalance: target } });
+    await writeAudit(tx, req, { businessId, userId, action: "account.reconcile", entityType: "Account", entityId: id, before: account, after: updated });
+    return { account: plain(updated), adjustment: difference };
+  });
 }

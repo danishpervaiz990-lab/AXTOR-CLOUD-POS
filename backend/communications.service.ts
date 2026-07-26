@@ -1,22 +1,293 @@
-import {prisma}from"../db/prisma.js";import{ApiError,cleanString,dateRange,monthRange,plain,roundMoney}from"../utils/http.js";
-function range(q:any){if(cleanString(q.month)){const m=monthRange(q.month);return{from:m.start,to:new Date(m.end.getTime()-1)}}if(cleanString(q.year)){const y=Number(q.year);return{from:new Date(Date.UTC(y,0,1)),to:new Date(Date.UTC(y+1,0,1)-1)}}return dateRange(q.from,q.to,30)}
-function money(v:any){return roundMoney(Number(v||0))}function sum(rows:any[],key:string){return money(rows.reduce((a,r)=>a+Number(r[key]||0),0))}function cell(v:any){return v instanceof Date?v.toISOString():v}
-function result(title:string,columns:any[],rows:any[],summary:any[]=[]){return{title,columns,rows:rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[k,cell(v)]))),summary}}
-export async function options(businessId:string){const[branches,customers,products,suppliers,salesmen]=await Promise.all([prisma.branch.findMany({where:{businessId,active:true},select:{id:true,name:true}}),prisma.customer.findMany({where:{businessId,active:true},select:{id:true,name:true}}),prisma.product.findMany({where:{businessId,active:true,deleted:false},select:{id:true,name:true,sku:true}}),prisma.supplier.findMany({where:{businessId,active:true},select:{id:true,name:true}}),prisma.salesman.findMany({where:{businessId,active:true},select:{id:true,name:true}})]);return plain({branches,customers,products,suppliers,salesmen});}
-async function sales(businessId:string,q:any,withItems=false):Promise<any[]>{const{from,to}=range(q);const where:any={businessId,createdAt:{gte:from,lte:to},status:{notIn:["DRAFT","CANCELLED","VOID"]}};if(cleanString(q.branchId))where.branchId=cleanString(q.branchId);if(cleanString(q.customerId))where.customerId=cleanString(q.customerId);if(cleanString(q.salesmanId))where.salesmanId=cleanString(q.salesmanId);return prisma.salesDocument.findMany({where,include:withItems?{items:true}:undefined,orderBy:{createdAt:"desc"}});}
-export async function runReport(businessId:string,id:string,q:any={}){switch(id){
-case"daily-sales":{const docs=await sales(businessId,q);return result("Daily Sale Report",[{key:"date",label:"Date"},{key:"documentNo",label:"Invoice"},{key:"customer",label:"Customer"},{key:"salesman",label:"Salesman"},{key:"payment",label:"Payment"},{key:"total",label:"Total"},{key:"paid",label:"Paid"},{key:"balance",label:"Balance"}],docs.map(d=>({date:d.createdAt,documentNo:d.documentNo,customer:d.customerName,salesman:d.salesmanName||"-",payment:d.paymentMethod||"-",total:money(d.total),paid:money(d.paid),balance:money(d.balance)})),[{label:"Sales",value:sum(docs,"total")},{label:"Paid",value:sum(docs,"paid")},{label:"Outstanding",value:sum(docs,"balance")},{label:"Invoices",value:docs.length}]);}
-case"sale-products":{const docs=await sales(businessId,q,true),map=new Map<string,any>();for(const d of docs)for(const i of d.items){if(cleanString(q.productId)&&i.productId!==q.productId)continue;const k=i.productId||i.sku||i.name,r=map.get(k)||{sku:i.sku||"-",product:i.name,qty:0,sales:0,cost:0,profit:0};r.qty+=Number(i.qty);r.sales+=Number(i.total);const p=await prisma.product.findFirst({where:{businessId,id:i.productId||undefined},select:{costPrice:true}});r.cost+=Number(p?.costPrice||0)*Number(i.qty);r.profit=r.sales-r.cost;map.set(k,r)}const rows=[...map.values()].map(r=>({...r,qty:Number(r.qty.toFixed(3)),sales:money(r.sales),cost:money(r.cost),profit:money(r.profit)}));return result("Sale Report by Products",[{key:"sku",label:"SKU"},{key:"product",label:"Product"},{key:"qty",label:"Qty"},{key:"sales",label:"Sales"},{key:"cost",label:"Cost"},{key:"profit",label:"Profit"}],rows,[{label:"Sales",value:sum(rows,"sales")},{label:"Cost",value:sum(rows,"cost")},{label:"Profit",value:sum(rows,"profit")}]);}
-case"sale-customer":{const docs=await sales(businessId,q),map=new Map<string,any>();for(const d of docs){const k=d.customerId||d.customerName,r=map.get(k)||{customer:d.customerName,invoices:0,sales:0,paid:0,balance:0};r.invoices++;r.sales+=Number(d.total);r.paid+=Number(d.paid);r.balance+=Number(d.balance);map.set(k,r)}const rows=[...map.values()].map(r=>({...r,sales:money(r.sales),paid:money(r.paid),balance:money(r.balance)}));return result("Sale Report by Customer",[{key:"customer",label:"Customer"},{key:"invoices",label:"Invoices"},{key:"sales",label:"Sales"},{key:"paid",label:"Paid"},{key:"balance",label:"Balance"}],rows,[{label:"Customers",value:rows.length},{label:"Sales",value:sum(rows,"sales")},{label:"Outstanding",value:sum(rows,"balance")}]);}
-case"sales-return":{const{from,to}=range(q);const rows=await prisma.salesReturn.findMany({where:{businessId,returnDate:{gte:from,lte:to},...(cleanString(q.customerId)?{customerId:cleanString(q.customerId)}:{})},include:{items:true,sourceSalesDocument:{select:{documentNo:true}}},orderBy:{returnDate:"desc"}});return result("Sales Return Report",[{key:"date",label:"Date"},{key:"returnNo",label:"Return No"},{key:"invoice",label:"Invoice"},{key:"customer",label:"Customer"},{key:"qty",label:"Qty"},{key:"amount",label:"Amount"},{key:"status",label:"Status"}],rows.map(r=>({date:r.returnDate,returnNo:r.returnNo,invoice:r.sourceSalesDocument.documentNo,customer:r.customerName,qty:r.items.reduce((a,i)=>a+Number(i.returnQty),0),amount:money(r.total),status:r.status})),[{label:"Returns",value:rows.length},{label:"Return Amount",value:sum(rows,"total")}]);}
-case"stock-valuation":{const stocks=await prisma.inventoryStock.findMany({where:{businessId,...(cleanString(q.warehouseId)?{warehouseId:cleanString(q.warehouseId)}:{})}}),products=await prisma.product.findMany({where:{businessId,deleted:false}}),pmap=new Map(products.map(p=>[p.id,p]));const rows=stocks.map(s=>{const p=pmap.get(s.productId);const qty=Number(s.qtyOnHand),cost=Number(p?.costPrice||0),retail=Number(p?.price||0);return{sku:p?.sku||"-",product:p?.name||"Unknown",warehouse:s.warehouseId,qty,cost,stockValue:money(qty*cost),retailValue:money(qty*retail)}});return result("Stock Valuation Report",[{key:"sku",label:"SKU"},{key:"product",label:"Product"},{key:"warehouse",label:"Warehouse"},{key:"qty",label:"Qty"},{key:"cost",label:"Cost"},{key:"stockValue",label:"Stock Value"},{key:"retailValue",label:"Retail Value"}],rows,[{label:"Stock Value",value:sum(rows,"stockValue")},{label:"Retail Value",value:sum(rows,"retailValue")},{label:"Products",value:rows.length}]);}
-case"purchase-report":{const{from,to}=range(q);const where:any={businessId,purchaseDate:{gte:from,lte:to}};if(cleanString(q.supplierId))where.supplierId=cleanString(q.supplierId);const rows=await prisma.purchase.findMany({where,orderBy:{purchaseDate:"desc"}});return result("Purchase Report",[{key:"date",label:"Date"},{key:"purchaseNo",label:"Purchase No"},{key:"supplier",label:"Supplier"},{key:"status",label:"Status"},{key:"total",label:"Total"},{key:"paid",label:"Paid"},{key:"balance",label:"Payable"}],rows.map(r=>({date:r.purchaseDate,purchaseNo:r.purchaseNo,supplier:r.supplierName,status:r.status,total:money(r.total),paid:money(r.paid),balance:money(r.balance)})),[{label:"Purchases",value:sum(rows,"total")},{label:"Paid",value:sum(rows,"paid")},{label:"Payable",value:sum(rows,"balance")}]);}
-case"tax-report":{const docs=await sales(businessId,q);return result("Tax Report",[{key:"date",label:"Date"},{key:"documentNo",label:"Invoice"},{key:"customer",label:"Customer"},{key:"subtotal",label:"Subtotal"},{key:"tax",label:"Tax"},{key:"total",label:"Total"}],docs.map(d=>({date:d.createdAt,documentNo:d.documentNo,customer:d.customerName,subtotal:money(d.subtotal),tax:money(d.tax),total:money(d.total)})),[{label:"Taxable Sales",value:sum(docs,"subtotal")},{label:"Tax",value:sum(docs,"tax")},{label:"Total",value:sum(docs,"total")}]);}
-case"expense-report":{const{from,to}=range(q);const rows=await prisma.expense.findMany({where:{businessId,expenseDate:{gte:from,lte:to},...(cleanString(q.branchId)?{branchId:cleanString(q.branchId)}:{})},orderBy:{expenseDate:"desc"}});return result("Expense Report",[{key:"date",label:"Date"},{key:"category",label:"Category"},{key:"description",label:"Description"},{key:"reference",label:"Reference"},{key:"amount",label:"Amount"}],rows.map(r=>({date:r.expenseDate,category:r.category,description:r.description||"-",reference:r.referenceNo||"-",amount:money(r.amount)})),[{label:"Expenses",value:sum(rows,"amount")},{label:"Entries",value:rows.length}]);}
-case"profit-loss":{const docs=await sales(businessId,q,true),{from,to}=range(q),expenses=await prisma.expense.findMany({where:{businessId,expenseDate:{gte:from,lte:to}}});let revenue=0,cogs=0;const productIds=[...new Set(docs.flatMap(d=>d.items.map((i:any)=>i.productId).filter(Boolean)))] as string[],ps=await prisma.product.findMany({where:{businessId,id:{in:productIds}},select:{id:true,costPrice:true}}),pm=new Map(ps.map(p=>[p.id,Number(p.costPrice)]));for(const d of docs){revenue+=Number(d.total);for(const i of d.items)cogs+=(pm.get(i.productId||"")||0)*Number(i.qty)}const exp=sum(expenses,"amount"),gross=money(revenue-cogs),net=money(gross-exp);return result("Profit & Loss Report",[{key:"line",label:"Account"},{key:"amount",label:"Amount"}],[{line:"Sales Revenue",amount:money(revenue)},{line:"Cost of Goods Sold",amount:money(cogs)},{line:"Gross Profit",amount:gross},{line:"Operating Expenses",amount:exp},{line:"Net Profit",amount:net}],[{label:"Revenue",value:money(revenue)},{label:"Gross Profit",value:gross},{label:"Net Profit",value:net}]);}
-case"trial-balance":{const accounts=await prisma.account.findMany({where:{businessId,active:true}});const rows=accounts.map(a=>{const b=Number(a.currentBalance);return{account:a.name,type:a.type,debit:b>=0?money(b):0,credit:b<0?money(Math.abs(b)):0}});return result("Trial Balance",[{key:"account",label:"Account"},{key:"type",label:"Type"},{key:"debit",label:"Debit"},{key:"credit",label:"Credit"}],rows,[{label:"Debit",value:sum(rows,"debit")},{label:"Credit",value:sum(rows,"credit")}]);}
-case"balance-sheet":{const accounts=await prisma.account.findMany({where:{businessId,active:true}}),customers=await prisma.customer.aggregate({where:{businessId,active:true},_sum:{balance:true}}),suppliers=await prisma.supplier.aggregate({where:{businessId,active:true},_sum:{balance:true}}),stock=await prisma.inventoryStock.findMany({where:{businessId}}),products=await prisma.product.findMany({where:{businessId},select:{id:true,costPrice:true}}),pm=new Map(products.map(p=>[p.id,Number(p.costPrice)]));const cash=accounts.reduce((a,r)=>a+Number(r.currentBalance),0),inventory=stock.reduce((a,s)=>a+Number(s.qtyOnHand)*(pm.get(s.productId)||0),0),receivables=Number(customers._sum.balance||0),payables=Number(suppliers._sum.balance||0),assets=money(cash+inventory+receivables),liabilities=money(payables),equity=money(assets-liabilities);return result("Balance Sheet",[{key:"section",label:"Section"},{key:"line",label:"Line"},{key:"amount",label:"Amount"}],[{section:"Assets",line:"Cash & Bank",amount:money(cash)},{section:"Assets",line:"Inventory",amount:money(inventory)},{section:"Assets",line:"Receivables",amount:money(receivables)},{section:"Liabilities",line:"Supplier Payables",amount:liabilities},{section:"Equity",line:"Net Assets",amount:equity}],[{label:"Assets",value:assets},{label:"Liabilities",value:liabilities},{label:"Equity",value:equity}]);}
-case"general-ledger":{const{from,to}=range(q);const[txs,pays,supPays,expenses]=await Promise.all([prisma.accountTransaction.findMany({where:{businessId,transactionDate:{gte:from,lte:to}},include:{account:{select:{name:true}}}}),prisma.customerPayment.findMany({where:{businessId,paymentDate:{gte:from,lte:to}}}),prisma.supplierPayment.findMany({where:{businessId,paymentDate:{gte:from,lte:to}}}),prisma.expense.findMany({where:{businessId,expenseDate:{gte:from,lte:to}}})]);const rows:any[]=[];for(const t of txs)rows.push({date:t.transactionDate,source:t.sourceType||"account",reference:t.referenceNo||"-",description:t.description||t.account.name,debit:["debit","deposit","receipt","income","opening","adjustment_in"].includes(t.type)?money(t.amount):0,credit:["debit","deposit","receipt","income","opening","adjustment_in"].includes(t.type)?0:money(t.amount)});if(!txs.length){for(const p of pays)rows.push({date:p.paymentDate,source:"customer payment",reference:p.receiptNo,description:p.customerName,debit:money(p.amount),credit:0});for(const p of supPays)rows.push({date:p.paymentDate,source:"supplier payment",reference:p.voucherNo,description:p.supplierName,debit:0,credit:money(p.amount)});for(const e of expenses)rows.push({date:e.expenseDate,source:"expense",reference:e.referenceNo||"-",description:e.category,debit:0,credit:money(e.amount)})}rows.sort((a,b)=>new Date(b.date).getTime()-new Date(a.date).getTime());return result("General Ledger Report",[{key:"date",label:"Date"},{key:"source",label:"Source"},{key:"reference",label:"Reference"},{key:"description",label:"Description"},{key:"debit",label:"Debit"},{key:"credit",label:"Credit"}],rows,[{label:"Debit",value:sum(rows,"debit")},{label:"Credit",value:sum(rows,"credit")}]);}
-case"salesman-commission":{const{month}=monthRange(q.month),payouts=await prisma.commissionPayout.findMany({where:{businessId,month,...(cleanString(q.salesmanId)?{salesmanId:cleanString(q.salesmanId)}:{})},include:{salesman:true}});return result("Salesman Commission Report",[{key:"salesman",label:"Salesman"},{key:"month",label:"Month"},{key:"sales",label:"Sales"},{key:"achievement",label:"Achievement %"},{key:"commission",label:"Commission"},{key:"bonus",label:"Bonus"},{key:"payout",label:"Payout"},{key:"status",label:"Status"}],payouts.map(p=>({salesman:p.salesman.name,month:p.month,sales:money(p.grossSales),achievement:money(p.achievementPct),commission:money(p.commissionAmount),bonus:money(p.bonusAmount),payout:money(p.totalPayout),status:p.status})),[{label:"Gross Sales",value:sum(payouts,"grossSales")},{label:"Total Payout",value:sum(payouts,"totalPayout")}]);}
-case"customer-profit-loss":{const docs=await sales(businessId,q,true),ids=[...new Set(docs.flatMap(d=>d.items.map((i:any)=>i.productId).filter(Boolean)))] as string[],ps=await prisma.product.findMany({where:{businessId,id:{in:ids}},select:{id:true,costPrice:true}}),pm=new Map(ps.map(p=>[p.id,Number(p.costPrice)])),map=new Map<string,any>();for(const d of docs){const k=d.customerId||d.customerName,r=map.get(k)||{customer:d.customerName,sales:0,cogs:0,profit:0,outstanding:0};r.sales+=Number(d.total);r.outstanding+=Number(d.balance);for(const i of d.items)r.cogs+=(pm.get(i.productId||"")||0)*Number(i.qty);r.profit=r.sales-r.cogs;map.set(k,r)}const rows=[...map.values()].map(r=>({...r,sales:money(r.sales),cogs:money(r.cogs),profit:money(r.profit),outstanding:money(r.outstanding)}));return result("Customer Profit/Loss Report",[{key:"customer",label:"Customer"},{key:"sales",label:"Sales"},{key:"cogs",label:"COGS"},{key:"profit",label:"Profit"},{key:"outstanding",label:"Outstanding"}],rows,[{label:"Sales",value:sum(rows,"sales")},{label:"Profit",value:sum(rows,"profit")},{label:"Outstanding",value:sum(rows,"outstanding")}]);}
-default:throw new ApiError(404,"Unknown report");}}
+import type { Request } from "express";
+import { prisma } from "../db/prisma.js";
+import { loadUserAccess, requirePermission } from "./access.service.js";
+import { loadEntitlements } from "./entitlements.service.js";
+import { writeAudit } from "./audit.service.js";
+import { ApiError, cleanString, plain, requireText } from "../utils/http.js";
+import { getIndustryPack } from "../industry/registry.js";
+
+export const SUPPORTED_LANGUAGES = [
+  { code: "en", name: "English", direction: "ltr", productionReady: true },
+  { code: "ar", name: "العربية", direction: "rtl", productionReady: true },
+  { code: "zh-CN", name: "简体中文", direction: "ltr", productionReady: true },
+  { code: "hi", name: "हिन्दी", direction: "ltr", productionReady: true },
+  { code: "ur", name: "اردو", direction: "rtl", productionReady: true },
+  { code: "hinglish", name: "Hinglish", direction: "ltr", productionReady: true },
+  { code: "sw", name: "Kiswahili", direction: "ltr", productionReady: true },
+  { code: "fr", name: "Français", direction: "ltr", productionReady: true },
+  { code: "es", name: "Español", direction: "ltr", productionReady: true },
+  { code: "pt", name: "Português", direction: "ltr", productionReady: true },
+];
+
+const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
+  "Business Owner": ["*"],
+  Administrator: ["sales_documents.*", "products.*", "customers.*", "purchases.*", "inventory.*", "reports.*", "settings.*", "users.*"],
+  Manager: ["sales_documents.*", "products.view", "customers.*", "purchases.*", "inventory.*", "reports.view", "approvals.*"],
+  Accountant: ["sales_documents.view", "payments.*", "refunds.*", "accounts.*", "expenses.*", "reports.financial"],
+  Cashier: ["sales_documents.create", "sales_documents.save_draft", "sales_documents.post", "payments.receive", "products.view", "customers.view", "customers.create", "shifts.open", "shifts.close"],
+  Salesperson: ["sales_documents.create", "sales_documents.save_draft", "sales_documents.view", "products.view", "customers.view"],
+  "Warehouse User": ["products.view", "inventory.view", "inventory.adjust", "inventory.transfer", "purchases.receive"],
+  "Purchase User": ["products.view", "suppliers.*", "purchases.*", "inventory.view"],
+  Pharmacist: ["sales_documents.*", "products.view", "inventory.view", "pharmacy.batch_manage", "pharmacy.restricted_products"],
+  Waiter: ["restaurant.orders.create", "restaurant.orders.view", "sales_documents.create", "products.view"],
+  "Kitchen User": ["restaurant.kitchen.view", "restaurant.kitchen.update"],
+  "Factory Supervisor": ["manufacturing.*", "inventory.*", "products.view", "purchases.view"],
+  Auditor: ["reports.*", "audit.view", "sales_documents.view", "purchases.view", "inventory.view", "accounts.view"],
+  "Read Only": ["dashboard.view", "products.view", "customers.view", "sales_documents.view", "reports.view"],
+};
+
+function asObject(value: unknown): Record<string, any> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {}; }
+function arrayOfStrings(value: unknown): string[] { return Array.isArray(value) ? [...new Set(value.map(item => String(item).trim()).filter(Boolean))] : []; }
+
+export async function catalog() {
+  const [plans, industries, currencies] = await Promise.all([
+    prisma.subscriptionPlan.findMany({ where: { active: true }, include: { features: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.industryProfile.findMany({ where: { active: true }, include: { features: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.currency.findMany({ where: { active: true }, orderBy: { code: "asc" } }),
+  ]);
+  return plain({ plans, industries, currencies, languages: SUPPORTED_LANGUAGES });
+}
+
+export async function context(businessId: string, userId: string | null) {
+  const [business, user, access, entitlement, industry, currencies, rates, locale, tax, onboarding, announcements] = await Promise.all([
+    prisma.business.findUnique({ where: { id: businessId } }),
+    userId ? prisma.user.findFirst({ where: { id: userId, businessId }, select: { id: true, name: true, email: true, preferredLanguage: true } }) : null,
+    userId ? loadUserAccess(prisma, businessId, userId) : null,
+    loadEntitlements(prisma, businessId),
+    prisma.businessIndustry.findUnique({ where: { businessId }, include: { industry: { include: { features: true } } } }),
+    prisma.businessCurrency.findMany({ where: { businessId, active: true }, include: { currency: true }, orderBy: [{ isBase: "desc" }, { currencyCode: "asc" }] }),
+    prisma.exchangeRate.findMany({ where: { businessId }, orderBy: { effectiveAt: "desc" }, take: 50 }),
+    prisma.businessLocale.findUnique({ where: { businessId } }),
+    prisma.businessTaxSetting.findUnique({ where: { businessId } }),
+    prisma.tenantOnboarding.findUnique({ where: { businessId } }),
+    prisma.appSetting.findMany({ where: { businessId, key: { startsWith: "announcement." } }, orderBy: { updatedAt: "desc" }, take: 5 }),
+  ]);
+  const features = { ...entitlement.features };
+  const industryFeatures = Object.fromEntries((industry?.industry?.features || []).map(feature => [feature.featureKey, { enabled: Boolean(feature.enabled), config: feature.config || null }]));
+  return plain({ business, user, access: access ? { ...access, permissions: [...access.permissions] } : null, plan: entitlement.plan, subscription: entitlement.subscription, features, industryFeatures, limits: entitlement.limits, readOnly: entitlement.readOnly, industry, currencies, rates, locale, tax, onboarding, announcements, languages: SUPPORTED_LANGUAGES, platform: { version: process.env.APP_VERSION || "2026.07-global-saas", environment: process.env.NODE_ENV || "development", supportEmail: process.env.SUPPORT_EMAIL || null, supportUrl: process.env.SUPPORT_URL || null } });
+}
+
+export async function saveOnboarding(req: Request, businessId: string, userId: string | null, input: any) {
+  return prisma.$transaction(async tx => {
+    const access = await loadUserAccess(tx, businessId, userId);
+    requirePermission(access, "settings.onboarding", true);
+    const current = await tx.tenantOnboarding.findUnique({ where: { businessId } });
+    const currentAnswers = asObject(current?.answers);
+    const answers = { ...currentAnswers, ...asObject(input?.answers || input) };
+    const step = Math.min(20, Math.max(1, Number(input?.currentStep || input?.step || current?.currentStep || 1)));
+    const completedSteps = arrayOfStrings(input?.completedSteps).map(Number).filter(value => value >= 1 && value <= 20);
+    const row = await tx.tenantOnboarding.upsert({
+      where: { businessId },
+      create: { businessId, currentStep: step, completedSteps, state: "IN_PROGRESS", answers, sampleDataRequested: Boolean(input?.sampleDataRequested) },
+      update: { currentStep: step, completedSteps, state: "IN_PROGRESS", answers, ...(input?.sampleDataRequested !== undefined ? { sampleDataRequested: Boolean(input.sampleDataRequested) } : {}) },
+    });
+    await tx.business.update({ where: { id: businessId }, data: { onboardingState: "IN_PROGRESS", onboardingStep: step } });
+    await writeAudit(tx, req, { businessId, userId: access.userId, action: "onboarding.progress", entityType: "TenantOnboarding", entityId: row.id, after: { step, completedSteps } });
+    return plain(row);
+  });
+}
+
+export async function completeOnboarding(req: Request, businessId: string, userId: string | null, input: any) {
+  return prisma.$transaction(async tx => {
+    const access = await loadUserAccess(tx, businessId, userId);
+    requirePermission(access, "settings.onboarding", true);
+    const existing = await tx.tenantOnboarding.findUnique({ where: { businessId } });
+    const answers = { ...asObject(existing?.answers), ...asObject(input?.answers || input) };
+    const businessName = requireText(answers.businessName, "Business name");
+    const industryCode = requireText(answers.industryCode, "Industry").toLowerCase();
+    const country = String(answers.country || "QA").toUpperCase();
+    const timezone = requireText(answers.timezone || "Asia/Qatar", "Time zone");
+    const baseCurrency = String(answers.baseCurrency || "QAR").toUpperCase();
+    const language = String(answers.language || "en");
+    if (!SUPPORTED_LANGUAGES.some(item => item.code === language)) throw new ApiError(400, "Unsupported language");
+    const [industry, plan, currency] = await Promise.all([
+      tx.industryProfile.findUnique({ where: { code: industryCode } }),
+      tx.subscriptionPlan.findUnique({ where: { code: String(answers.planCode || "basic").toLowerCase() } }),
+      tx.currency.findUnique({ where: { code: baseCurrency } }),
+    ]);
+    if (!industry?.active) throw new ApiError(400, "Selected industry is unavailable");
+    if (!plan?.active) throw new ApiError(400, "Selected subscription plan is unavailable");
+    if (!currency?.active) throw new ApiError(400, "Selected base currency is unavailable");
+
+    const requestedCurrencies = [baseCurrency, ...arrayOfStrings(answers.additionalCurrencies).map(code => code.toUpperCase())];
+    const enabledCurrencies = [...new Set(requestedCurrencies)];
+    if (plan.maxCurrencies !== null && enabledCurrencies.length > Number(plan.maxCurrencies)) throw new ApiError(403, `The ${plan.name} plan allows ${plan.maxCurrencies} currencies`);
+    const validCurrencyCount = await tx.currency.count({ where: { code: { in: enabledCurrencies }, active: true } });
+    if (validCurrencyCount !== enabledCurrencies.length) throw new ApiError(400, "One or more selected currencies are invalid");
+
+    const tax = asObject(answers.tax);
+    // A Custom / Enterprise tenant is a manually provisioned paid deployment,
+    // not a self-service trial.  Other plans retain the normal trial flow.
+    const subscriptionStatus = plan.code === "enterprise" ? "ACTIVE" : "TRIAL";
+    await tx.business.update({ where: { id: businessId }, data: { name: businessName, country, timezone, currency: baseCurrency, defaultLanguage: language, numberLocale: String(answers.numberLocale || `${language}-${country}`), dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), taxLabel: String(tax.label || "Tax"), onboardingState: "COMPLETED", onboardingStep: 20, onboardingCompletedAt: new Date(), subscriptionPlan: plan.code, subscriptionStatus, status: subscriptionStatus === "ACTIVE" ? "ACTIVE" : "TRIAL", trialEndsAt: subscriptionStatus === "ACTIVE" ? null : undefined } });
+    await tx.user.update({ where: { id: access.userId }, data: { preferredLanguage: language } });
+    const selectedPack = getIndustryPack(industryCode);
+    if (!selectedPack) throw new ApiError(400, "Selected industry does not have a supported workflow registry");
+    const previousIndustry = await tx.businessIndustry.findUnique({ where: { businessId }, include: { industry: true } });
+    if (previousIndustry && previousIndustry.industryId !== industry.id) {
+      const transactionCount = await tx.salesDocument.count({ where: { businessId } });
+      if (transactionCount > 0 && !Boolean(answers.confirmIndustryChange)) {
+        throw new ApiError(409, "Industry cannot be changed after transactions exist without an owner-confirmed impact review", {
+          currentIndustry: previousIndustry.industry.code,
+          requestedIndustry: industryCode,
+          transactionCount,
+          confirmationField: "confirmIndustryChange",
+        });
+      }
+      if (transactionCount > 0 && !(access.isOwner || access.isAdmin || access.permissions.has("settings.industry_change"))) {
+        throw new ApiError(403, "Owner or platform-authorized permission is required to change industry after go-live");
+      }
+    }
+    await tx.businessIndustry.upsert({ where: { businessId }, create: { businessId, industryId: industry.id }, update: { industryId: industry.id } });
+    await tx.businessLocale.upsert({ where: { businessId }, create: { businessId, countryCode: country, timezone, languageCode: language, dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), numberLocale: String(answers.numberLocale || `${language}-${country}`) }, update: { countryCode: country, timezone, languageCode: language, dateFormat: String(answers.dateFormat || "yyyy-MM-dd"), numberLocale: String(answers.numberLocale || `${language}-${country}`) } });
+    await tx.businessTaxSetting.upsert({ where: { businessId }, create: { businessId, taxSystem: String(tax.system || "none"), taxLabel: String(tax.label || "Tax"), registrationNumber: cleanString(tax.registrationNumber) || null, pricesIncludeTax: Boolean(tax.pricesIncludeTax), config: tax }, update: { taxSystem: String(tax.system || "none"), taxLabel: String(tax.label || "Tax"), registrationNumber: cleanString(tax.registrationNumber) || null, pricesIncludeTax: Boolean(tax.pricesIncludeTax), config: tax } });
+    const setupSettings: Record<string, any> = {
+      "company.profile": { name: businessName, logoUrl: cleanString(answers.logoUrl) || null, country, timezone },
+      "invoice.template": { id: String(answers.invoiceTemplate || "standard"), industryCode },
+      "documents.numbering": { invoicePrefix: String(answers.invoicePrefix || "INV"), quotationPrefix: String(answers.quotationPrefix || "QUO"), deliveryPrefix: String(answers.deliveryPrefix || "DN") },
+      "terminal.openShiftRequired": selectedPack.defaultSettings.openShiftRequired
+        ?? ["retail", "grocery", "hardware_paint", "pharmacy"].includes(selectedPack.code),
+      "sales.allowNegativeStock": selectedPack.defaultSettings.allowNegativeStock ?? false,
+    };
+    for (const [key, value] of Object.entries(setupSettings)) await tx.appSetting.upsert({ where: { businessId_key: { businessId, key } }, create: { businessId, key, value }, update: { value } });
+    await tx.businessCurrency.deleteMany({ where: { businessId } });
+    await tx.businessCurrency.createMany({ data: enabledCurrencies.map(code => ({ businessId, currencyCode: code, isBase: code === baseCurrency, active: true })) });
+
+    const branchName = String(answers.branchName || "Main Branch").trim();
+    let branch = await tx.branch.findFirst({ where: { businessId, name: branchName } });
+    if (!branch) branch = await tx.branch.create({ data: { businessId, name: branchName, code: "MAIN", country, type: industry.name, active: true } });
+    const warehouseName = String(answers.warehouseName || "Main Warehouse").trim();
+    let warehouse = await tx.warehouse.findFirst({ where: { businessId, name: warehouseName } });
+    if (!warehouse) warehouse = await tx.warehouse.create({ data: { businessId, branchId: branch.id, name: warehouseName, code: "MAIN", active: true } });
+    if (!await tx.counter.findFirst({ where: { businessId, branchId: branch.id } })) await tx.counter.create({ data: { businessId, branchId: branch.id, name: "Counter 1", code: "C1", status: "ACTIVE" } });
+    if (!await tx.account.findFirst({ where: { businessId, name: "Main Cash" } })) await tx.account.create({ data: { businessId, name: "Main Cash", type: "cash", currency: baseCurrency, active: true } });
+    for (const [name, permissions] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) await tx.role.upsert({ where: { businessId_name: { businessId, name } }, create: { businessId, name, isSystemRole: true, permissions }, update: { isSystemRole: true, permissions } });
+    for (const [name, permissions] of Object.entries(selectedPack.defaultRoles)) {
+      await tx.role.upsert({ where: { businessId_name: { businessId, name } }, create: { businessId, name, isSystemRole: true, permissions }, update: { isSystemRole: true, permissions } });
+    }
+    await tx.industrySetting.upsert({
+      where: { businessId_key: { businessId, key: "industry.defaults" } },
+      create: { businessId, key: "industry.defaults", value: selectedPack.defaultSettings },
+      update: { value: selectedPack.defaultSettings },
+    });
+    const printProfiles = [
+      { code: "a4-invoice", name: "A4 Sales Invoice", documentType: "invoice", paperSize: "A4", widthMm: 210, heightMm: 297, margin: 8, isDefault: true },
+      { code: "a4-quotation", name: "A4 Quotation", documentType: "quotation", paperSize: "A4", widthMm: 210, heightMm: 297, margin: 8, isDefault: true },
+      { code: "a4-delivery-note", name: "A4 Delivery Note", documentType: "delivery_note", paperSize: "A4", widthMm: 210, heightMm: 297, margin: 8, isDefault: true },
+      { code: "a4-credit-note", name: "A4 Credit Note / Refund", documentType: "credit_note", paperSize: "A4", widthMm: 210, heightMm: 297, margin: 8, isDefault: true },
+      { code: "thermal-80", name: "80 mm Thermal Receipt", documentType: "receipt", paperSize: "80MM", widthMm: 80, heightMm: null, margin: 2, isDefault: true },
+      { code: "thermal-58", name: "58 mm Thermal Receipt", documentType: "receipt", paperSize: "58MM", widthMm: 58, heightMm: null, margin: 2, isDefault: false },
+    ];
+    for (const profile of printProfiles) {
+      await tx.printProfile.upsert({
+        where: { businessId_code: { businessId, code: profile.code } },
+        create: {
+          businessId, code: profile.code, name: profile.name, documentType: profile.documentType, paperSize: profile.paperSize,
+          widthMm: profile.widthMm, heightMm: profile.heightMm, marginTopMm: profile.margin, marginRightMm: profile.margin,
+          marginBottomMm: profile.margin, marginLeftMm: profile.margin, isDefault: profile.isDefault,
+          config: { showOperationalContext: true, showLegalDetails: true, showPaymentSummary: true, printFields: selectedPack.printFields },
+          createdByUserId: access.userId, updatedByUserId: access.userId,
+        },
+        update: { name: profile.name, documentType: profile.documentType, paperSize: profile.paperSize, active: true },
+      });
+    }
+    for (const rule of selectedPack.notificationRules) {
+      await tx.notificationRule.upsert({
+        where: { businessId_code: { businessId, code: rule.code } },
+        create: {
+          businessId, code: rule.code, name: rule.code.split("-").map(part => part[0].toUpperCase() + part.slice(1)).join(" "),
+          eventType: rule.eventType, channels: ["in_app"], conditions: rule.daysBefore ? { daysBefore: rule.daysBefore } : {},
+          template: { title: selectedPack.name, message: `Action required for ${rule.eventType}` }, active: true,
+          createdByUserId: access.userId, updatedByUserId: access.userId,
+        },
+        update: { eventType: rule.eventType, conditions: rule.daysBefore ? { daysBefore: rule.daysBefore } : {}, active: true },
+      });
+    }
+    for (const documentType of ["INVOICE", "QUOTATION", "DELIVERY_NOTE"] as const) { const prefix = documentType === "INVOICE" ? String(answers.invoicePrefix || "INV") : documentType === "QUOTATION" ? String(answers.quotationPrefix || "QUO") : String(answers.deliveryPrefix || "DN"); const counter = await tx.documentCounter.findFirst({ where: { businessId, branchId: null, documentType } }); if (counter) await tx.documentCounter.update({ where: { id: counter.id }, data: { prefix } }); else await tx.documentCounter.create({ data: { businessId, branchId: null, documentType, prefix, nextNumber: 1, padding: 6 } }); }
+
+    await tx.tenantSubscription.updateMany({ where: { businessId, isCurrent: true }, data: { isCurrent: false } });
+    const trialEndsAt = subscriptionStatus === "TRIAL" ? new Date(Date.now() + 14 * 86400000) : null;
+    const periodEnd = subscriptionStatus === "TRIAL" ? trialEndsAt : new Date(Date.now() + 365 * 86400000);
+    await tx.tenantSubscription.create({ data: { businessId, planId: plan.id, status: subscriptionStatus, billingCycle: String(answers.billingCycle || "MONTHLY").toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY", startsAt: new Date(), trialEndsAt, currentPeriodStart: new Date(), currentPeriodEnd: periodEnd, isCurrent: true, provider: "manual" } });
+    const sampleDataRequested = Boolean(answers.sampleDataRequested || existing?.sampleDataRequested);
+    if (sampleDataRequested) {
+      await tx.product.createMany({ data: [{ businessId, sku: "SAMPLE-001", name: "Sample Product", unit: "PCS", price: 10, costPrice: 6, currentStock: 20, openingStock: 20 }, { businessId, sku: "SAMPLE-002", name: "Sample Service", unit: "JOB", price: 50, costPrice: 0, currentStock: 0, openingStock: 0 }], skipDuplicates: true });
+      if (!await tx.customer.findFirst({ where: { businessId, code: "SAMPLE-CUST" } })) await tx.customer.create({ data: { businessId, code: "SAMPLE-CUST", name: "Sample Customer", active: true } });
+    }
+    const onboarding = await tx.tenantOnboarding.upsert({ where: { businessId }, create: { businessId, currentStep: 20, completedSteps: Array.from({ length: 20 }, (_, index) => index + 1), state: "COMPLETED", answers, sampleDataRequested, completedAt: new Date() }, update: { currentStep: 20, completedSteps: Array.from({ length: 20 }, (_, index) => index + 1), state: "COMPLETED", answers, sampleDataRequested, completedAt: new Date() } });
+    await writeAudit(tx, req, { businessId, userId: access.userId, action: "onboarding.completed", entityType: "TenantOnboarding", entityId: onboarding.id, after: { industryCode, planCode: plan.code, baseCurrency, language, sampleDataRequested } });
+    return plain({ onboarding, branch, warehouse, trialEndsAt, subscriptionStatus, redirect: "index.html" });
+  }, { timeout: 30000 });
+}
+
+export async function saveExchangeRate(req: Request, businessId: string, userId: string | null, input: any) {
+  return prisma.$transaction(async tx => {
+    const access = await loadUserAccess(tx, businessId, userId); requirePermission(access, "settings.currencies", true);
+    const baseCode = String(input?.baseCode || "").toUpperCase(); const quoteCode = String(input?.quoteCode || "").toUpperCase(); const rate = Number(input?.rate);
+    if (!baseCode || !quoteCode || baseCode === quoteCode || !Number.isFinite(rate) || rate <= 0) throw new ApiError(400, "Valid base currency, quote currency, and positive rate are required");
+    const enabled = await tx.businessCurrency.count({ where: { businessId, currencyCode: { in: [baseCode, quoteCode] }, active: true } });
+    if (enabled !== 2) throw new ApiError(400, "Both currencies must be enabled for this business");
+    const row = await tx.exchangeRate.create({ data: { businessId, baseCode, quoteCode, rate, source: "manual", effectiveAt: input?.effectiveAt ? new Date(input.effectiveAt) : new Date() } });
+    await writeAudit(tx, req, { businessId, userId: access.userId, action: "currency.rate.create", entityType: "ExchangeRate", entityId: row.id, after: row });
+    return plain(row);
+  });
+}
+
+export async function savePreferences(req: Request, businessId: string, userId: string | null, input: any) {
+  const language = String(input?.language || "");
+  if (!SUPPORTED_LANGUAGES.some(item => item.code === language)) throw new ApiError(400, "Unsupported language");
+  return prisma.$transaction(async tx => {
+    const access = await loadUserAccess(tx, businessId, userId);
+    const user = await tx.user.update({ where: { id: access.userId }, data: { preferredLanguage: language } });
+    if (input?.setBusinessDefault) {
+      requirePermission(access, "settings.localization", true);
+      await tx.business.update({ where: { id: businessId }, data: { defaultLanguage: language } });
+      await tx.businessLocale.upsert({ where: { businessId }, create: { businessId, languageCode: language }, update: { languageCode: language } });
+    }
+    await writeAudit(tx, req, { businessId, userId: access.userId, action: "localization.preference", entityType: "User", entityId: user.id, after: { preferredLanguage: language, setBusinessDefault: Boolean(input?.setBusinessDefault) } });
+    return { preferredLanguage: language };
+  });
+}
+
+export async function setBusinessCurrencies(req: Request, businessId: string, userId: string | null, input: any) {
+  return prisma.$transaction(async tx => {
+    const access = await loadUserAccess(tx, businessId, userId); requirePermission(access, "settings.currencies", true);
+    const baseCurrency = String(input?.baseCurrency || "").toUpperCase(); const codes = [...new Set([baseCurrency, ...arrayOfStrings(input?.currencies).map(code => code.toUpperCase())])].filter(Boolean);
+    if (!baseCurrency || !codes.length) throw new ApiError(400, "Base currency and enabled currencies are required");
+    const entitlement = await loadEntitlements(tx, businessId); const limit = entitlement.limits.currencies;
+    if (limit !== null && codes.length > limit) throw new ApiError(403, `Current plan allows ${limit} currencies`, { upgradeRequired: true, limit });
+    if (await tx.currency.count({ where: { code: { in: codes }, active: true } }) !== codes.length) throw new ApiError(400, "One or more currencies are invalid");
+    await tx.businessCurrency.updateMany({ where: { businessId }, data: { isBase: false, active: false } });
+    for (const code of codes) await tx.businessCurrency.upsert({ where: { businessId_currencyCode: { businessId, currencyCode: code } }, create: { businessId, currencyCode: code, isBase: code === baseCurrency, active: true }, update: { isBase: code === baseCurrency, active: true } });
+    await tx.business.update({ where: { id: businessId }, data: { currency: baseCurrency } });
+    await writeAudit(tx, req, { businessId, userId: access.userId, action: "currency.configuration", entityType: "BusinessCurrency", after: { baseCurrency, currencies: codes } });
+    return plain(await tx.businessCurrency.findMany({ where: { businessId, active: true }, include: { currency: true }, orderBy: [{ isBase: "desc" }, { currencyCode: "asc" }] }));
+  });
+}
+
+export async function listTaxRates(businessId: string) { return plain(await prisma.taxRate.findMany({ where: { businessId }, orderBy: [{ active: "desc" }, { name: "asc" }] })); }
+
+export async function saveTaxRate(req: Request, businessId: string, userId: string | null, id: string | null, input: any) {
+  return prisma.$transaction(async tx => {
+    const access = await loadUserAccess(tx, businessId, userId); requirePermission(access, "settings.tax", true);
+    const rate = Number(input?.rate); if (!Number.isFinite(rate) || rate < 0 || rate > 100) throw new ApiError(400, "Tax rate must be between 0 and 100");
+    const data = { name: requireText(input?.name, "Tax name"), label: String(input?.label || "Tax"), rate, inclusive: Boolean(input?.inclusive), zeroRated: Boolean(input?.zeroRated), active: input?.active === undefined ? true : Boolean(input.active) };
+    const before = id ? await tx.taxRate.findFirst({ where: { id, businessId } }) : null; if (id && !before) throw new ApiError(404, "Tax rate not found");
+    const row = id ? await tx.taxRate.update({ where: { id }, data }) : await tx.taxRate.create({ data: { businessId, ...data } });
+    await writeAudit(tx, req, { businessId, userId: access.userId, action: id ? "tax_rate.update" : "tax_rate.create", entityType: "TaxRate", entityId: row.id, before: before || undefined, after: row }); return plain(row);
+  });
+}
+
+export async function exportTenantConfig(businessId: string) {
+  const [business, settings, industry, currencies, locale, tax, roles, counters] = await Promise.all([
+    prisma.business.findUnique({ where: { id: businessId }, select: { name: true, legalName: true, slug: true, country: true, timezone: true, currency: true, defaultLanguage: true, dateFormat: true, numberLocale: true, taxLabel: true } }),
+    prisma.appSetting.findMany({ where: { businessId }, select: { key: true, value: true } }),
+    prisma.businessIndustry.findUnique({ where: { businessId }, include: { industry: { select: { code: true, name: true } } } }),
+    prisma.businessCurrency.findMany({ where: { businessId }, select: { currencyCode: true, isBase: true, active: true } }),
+    prisma.businessLocale.findUnique({ where: { businessId } }),
+    prisma.businessTaxSetting.findUnique({ where: { businessId } }),
+    prisma.role.findMany({ where: { businessId }, select: { name: true, description: true, permissions: true } }),
+    prisma.documentCounter.findMany({ where: { businessId }, select: { branchId: true, documentType: true, prefix: true, nextNumber: true, padding: true } }),
+  ]);
+  return plain({ format: "axtor-tenant-config", version: 1, exportedAt: new Date().toISOString(), business, settings, industry, currencies, locale, tax, roles, counters, excludes: ["passwords", "tokens", "secrets", "payment credentials", "transaction records"] });
+}

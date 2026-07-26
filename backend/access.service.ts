@@ -1,14 +1,93 @@
-import type { Request } from "express";
 import { prisma } from "../db/prisma.js";
-import { writeAudit } from "./audit.service.js";
-import { ApiError, booleanValue, cleanString, numberValue, plain, requireText } from "../utils/http.js";
+import { plain, roundMoney } from "../utils/http.js";
 
-export async function listSuppliers(businessId: string, query: any) {
-  const q=cleanString(query.q); const active=query.active===undefined?undefined:booleanValue(query.active,true);
-  const rows=await prisma.supplier.findMany({where:{businessId,...(active===undefined?{}:{active}),...(q?{OR:[{name:{contains:q,mode:"insensitive"}},{company:{contains:q,mode:"insensitive"}},{phone:{contains:q,mode:"insensitive"}},{email:{contains:q,mode:"insensitive"}}]}:{})},orderBy:{name:"asc"}});
-  return plain(rows);
+function qatarDayBounds(date = new Date()): { start: Date; end: Date } {
+  const local = new Date(date.getTime() + 3 * 3600000);
+  const y = local.getUTCFullYear();
+  const m = local.getUTCMonth();
+  const d = local.getUTCDate();
+  return {
+    start: new Date(Date.UTC(y, m, d) - 3 * 3600000),
+    end: new Date(Date.UTC(y, m, d + 1) - 3 * 3600000),
+  };
 }
-export async function getSupplier(businessId:string,id:string){const row=await prisma.supplier.findFirst({where:{id,businessId}});if(!row)throw new ApiError(404,"Supplier not found");return plain(row);}
-export async function createSupplier(req:Request,businessId:string,userId:string|null,input:any){return prisma.$transaction(async tx=>{const row=await tx.supplier.create({data:{businessId,name:requireText(input.name,"Supplier name"),company:cleanString(input.company)||null,phone:cleanString(input.phone)||null,email:cleanString(input.email)||null,address:cleanString(input.address)||null,creditDays:Math.max(0,Math.floor(numberValue(input.creditDays,30))),openingBalance:numberValue(input.openingBalance),balance:numberValue(input.balance,input.openingBalance),active:booleanValue(input.active,true)}});await writeAudit(tx,req,{businessId,userId,action:"supplier.create",entityType:"Supplier",entityId:row.id,after:plain(row)});return plain(row);});}
-export async function updateSupplier(req:Request,businessId:string,userId:string|null,id:string,input:any){return prisma.$transaction(async tx=>{const before=await tx.supplier.findFirst({where:{id,businessId}});if(!before)throw new ApiError(404,"Supplier not found");const row=await tx.supplier.update({where:{id},data:{...(input.name!==undefined?{name:requireText(input.name,"Supplier name")}:{}) ,...(input.company!==undefined?{company:cleanString(input.company)||null}:{}),...(input.phone!==undefined?{phone:cleanString(input.phone)||null}:{}),...(input.email!==undefined?{email:cleanString(input.email)||null}:{}),...(input.address!==undefined?{address:cleanString(input.address)||null}:{}),...(input.creditDays!==undefined?{creditDays:Math.max(0,Math.floor(numberValue(input.creditDays,30)))}:{}),...(input.openingBalance!==undefined?{openingBalance:numberValue(input.openingBalance)}:{}),...(input.balance!==undefined?{balance:numberValue(input.balance)}:{}),...(input.active!==undefined?{active:booleanValue(input.active,before.active)}:{})}});await writeAudit(tx,req,{businessId,userId,action:"supplier.update",entityType:"Supplier",entityId:id,before:plain(before),after:plain(row)});return plain(row);});}
-export async function deleteSupplier(req:Request,businessId:string,userId:string|null,id:string){return prisma.$transaction(async tx=>{const before=await tx.supplier.findFirst({where:{id,businessId}});if(!before)throw new ApiError(404,"Supplier not found");const row=await tx.supplier.update({where:{id},data:{active:false}});await writeAudit(tx,req,{businessId,userId,action:"supplier.deactivate",entityType:"Supplier",entityId:id,before:plain(before),after:plain(row)});return plain(row);});}
+
+function startOfQatarMonth(date = new Date()): Date {
+  const local = new Date(date.getTime() + 3 * 3600000);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) - 3 * 3600000);
+}
+
+function validSalesWhere(businessId: string, from?: Date, to?: Date): any {
+  return {
+    businessId,
+    documentType: "INVOICE",
+    status: { notIn: ["DRAFT", "CANCELLED", "VOID"] },
+    ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
+  };
+}
+
+export async function getDashboardSummary(businessId: string): Promise<any> {
+  const now = new Date();
+  const today = qatarDayBounds(now);
+  const weekStart = new Date(today.start.getTime() - 6 * 86400000);
+  const monthStart = startOfQatarMonth(now);
+
+  const [todayAgg, weekAgg, monthAgg, lowStockProducts, products, receivableAgg, recentInvoices, weeklyDocs, categoryItems, salesmanAgg, salesmen] = await Promise.all([
+    prisma.salesDocument.aggregate({ where: validSalesWhere(businessId, today.start, today.end), _sum: { total: true, tax: true }, _count: { _all: true } }),
+    prisma.salesDocument.aggregate({ where: validSalesWhere(businessId, weekStart, today.end), _sum: { total: true }, _count: { _all: true } }),
+    prisma.salesDocument.aggregate({ where: validSalesWhere(businessId, monthStart), _sum: { total: true }, _count: { _all: true } }),
+    prisma.product.findMany({ where: { businessId, deleted: false, active: true }, select: { id: true, sku: true, name: true, currentStock: true, minStock: true } }),
+    prisma.product.findMany({ where: { businessId, deleted: false, active: true }, select: { currentStock: true, costPrice: true } }),
+    prisma.salesDocument.aggregate({ where: { ...validSalesWhere(businessId), balance: { gt: 0 } }, _sum: { balance: true } }),
+    prisma.salesDocument.findMany({ where: validSalesWhere(businessId), include: { items: true }, orderBy: { createdAt: "desc" }, take: 10 }),
+    prisma.salesDocument.findMany({ where: validSalesWhere(businessId, weekStart, today.end), select: { total: true, createdAt: true } }),
+    prisma.salesDocumentItem.findMany({ where: { businessId, salesDocument: validSalesWhere(businessId, today.start, today.end) }, select: { productId: true, name: true, total: true } }),
+    prisma.salesDocument.groupBy({ by: ["salesmanId", "salesmanName"], where: { ...validSalesWhere(businessId, monthStart), salesmanId: { not: null } }, _sum: { total: true }, _count: { _all: true }, orderBy: { _sum: { total: "desc" } }, take: 10 }),
+    prisma.salesman.findMany({ where: { businessId, active: true }, select: { id: true, name: true } }),
+  ]);
+
+  const lowStock = lowStockProducts.filter((p) => Number(p.currentStock) <= Number(p.minStock));
+  const stockValue = products.reduce((sum, p) => sum + Number(p.currentStock) * Number(p.costPrice), 0);
+  const dailyMap = new Map<string, number>();
+  for (let i = 0; i < 7; i += 1) {
+    const date = new Date(weekStart.getTime() + i * 86400000 + 3 * 3600000);
+    dailyMap.set(date.toISOString().slice(0, 10), 0);
+  }
+  weeklyDocs.forEach((doc) => {
+    const key = new Date(doc.createdAt.getTime() + 3 * 3600000).toISOString().slice(0, 10);
+    dailyMap.set(key, (dailyMap.get(key) || 0) + Number(doc.total));
+  });
+
+  const productIds = [...new Set(categoryItems.map((item) => item.productId).filter(Boolean))] as string[];
+  const categoryProducts = productIds.length
+    ? await prisma.product.findMany({ where: { businessId, id: { in: productIds } }, select: { id: true, category: true } })
+    : [];
+  const categoryByProduct = new Map(categoryProducts.map((p) => [p.id, p.category || "Uncategorized"]));
+  const categoryMap = new Map<string, number>();
+  categoryItems.forEach((item) => {
+    const category = (item.productId && categoryByProduct.get(item.productId)) || "Uncategorized";
+    categoryMap.set(category, (categoryMap.get(category) || 0) + Number(item.total));
+  });
+
+  const salesmanNameMap = new Map(salesmen.map((s) => [s.id, s.name]));
+  return plain({
+    today: {
+      sales: roundMoney(Number(todayAgg._sum.total || 0)),
+      tax: roundMoney(Number(todayAgg._sum.tax || 0)),
+      invoices: todayAgg._count._all,
+    },
+    week: { sales: roundMoney(Number(weekAgg._sum.total || 0)), invoices: weekAgg._count._all },
+    month: { sales: roundMoney(Number(monthAgg._sum.total || 0)), invoices: monthAgg._count._all },
+    inventory: { stockValue: roundMoney(stockValue), lowStockCount: lowStock.length, lowStock: lowStock.slice(0, 20) },
+    receivables: { outstanding: roundMoney(Number(receivableAgg._sum.balance || 0)) },
+    recentInvoices,
+    weeklySales: [...dailyMap.entries()].map(([date, total]) => ({ date, total: roundMoney(total) })),
+    categorySales: [...categoryMap.entries()].map(([category, total]) => ({ category, total: roundMoney(total) })),
+    leaderboard: salesmanAgg.map((row: any) => ({
+      salesmanId: row.salesmanId,
+      salesmanName: row.salesmanName || salesmanNameMap.get(row.salesmanId) || "Salesman",
+      sales: roundMoney(Number(row._sum.total || 0)),
+      invoiceCount: row._count._all,
+    })),
+  });
+}
