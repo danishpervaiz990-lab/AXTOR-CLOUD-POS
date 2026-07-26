@@ -1,30 +1,12 @@
 import type { Request, Response } from "express";
-import * as service from "../services/industry.service.js";
-import { handleError, tenant } from "../utils/http.js";
+import * as service from "../services/platform-admin.service.js";
+import { handleError } from "../utils/http.js";
 
-const run = (fn: (req: Request, context: { businessId: string; userId: string | null }) => Promise<any>) => async (req: Request, res: Response) => {
-  try {
-    const context = tenant(req);
-    return res.json({ ok: true, data: await fn(req, context) });
-  } catch (error) {
-    return handleError(res, error);
-  }
-};
-
-export const registry = run((_req, context) => service.registry(context.businessId, context.userId));
-export const summary = run((_req, context) => service.summary(context.businessId, context.userId));
-export const listRecords = run((req, context) => service.listRecords(context.businessId, context.userId, req.query));
-export const getRecord = run((req, context) => service.getRecord(context.businessId, context.userId, req.params.id));
-export const createRecord = run((req, context) => service.createRecord(req, context.businessId, context.userId, req.body));
-export const updateRecord = run((req, context) => service.updateRecord(req, context.businessId, context.userId, req.params.id, req.body));
-export const archiveRecord = run((req, context) => service.archiveRecord(req, context.businessId, context.userId, req.params.id));
-export const listBatches = run((req, context) => service.listBatches(context.businessId, context.userId, req.query));
-export const createBatch = run((req, context) => service.createBatch(req, context.businessId, context.userId, req.body));
-export const updateBatch = run((req, context) => service.updateBatch(req, context.businessId, context.userId, req.params.id, req.body));
-export const listPrintProfiles = run((_req, context) => service.listPrintProfiles(context.businessId, context.userId));
-export const createPrintProfile = run((req, context) => service.savePrintProfile(req, context.businessId, context.userId, null, req.body));
-export const updatePrintProfile = run((req, context) => service.savePrintProfile(req, context.businessId, context.userId, req.params.id, req.body));
-export const listNotificationRules = run((_req, context) => service.listNotificationRules(context.businessId, context.userId));
-export const createNotificationRule = run((req, context) => service.saveNotificationRule(req, context.businessId, context.userId, null, req.body));
-export const updateNotificationRule = run((req, context) => service.saveNotificationRule(req, context.businessId, context.userId, req.params.id, req.body));
-export const evaluateNotificationRules = run((req, context) => service.evaluateNotificationRules(req, context.businessId, context.userId));
+const run = (fn: (req: Request) => Promise<any>, status = 200) => async (req: Request, res: Response) => { try { res.status(status).json({ ok: true, data: await fn(req) }); } catch (error) { handleError(res, error); } };
+export const listTenants = run(req => service.listTenants(req.query));
+export const createTenant = run(req => service.createTenant(req, req.tenant?.userId || null, req.body), 201);
+export const updateTenant = run(req => service.updateTenant(req, req.tenant?.userId || null, req.params.businessId, req.body));
+export const changeSubscription = run(req => service.changeSubscription(req, req.tenant?.userId || null, req.params.businessId, req.body));
+export const saveOverride = run(req => service.saveOverride(req, req.tenant?.userId || null, req.params.businessId, req.body));
+export const resetOnboarding = run(req => service.resetOnboarding(req, req.tenant?.userId || null, req.params.businessId));
+export const revokeSessions = run(req => service.revokeSessions(req, req.tenant?.userId || null, req.params.businessId));

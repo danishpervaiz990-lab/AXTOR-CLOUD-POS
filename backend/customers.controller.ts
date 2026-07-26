@@ -1,12 +1,1 @@
-import type { Request, Response } from "express";
-import * as service from "../services/platform-admin.service.js";
-import { handleError } from "../utils/http.js";
-
-const run = (fn: (req: Request) => Promise<any>, status = 200) => async (req: Request, res: Response) => { try { res.status(status).json({ ok: true, data: await fn(req) }); } catch (error) { handleError(res, error); } };
-export const listTenants = run(req => service.listTenants(req.query));
-export const createTenant = run(req => service.createTenant(req, req.tenant?.userId || null, req.body), 201);
-export const updateTenant = run(req => service.updateTenant(req, req.tenant?.userId || null, req.params.businessId, req.body));
-export const changeSubscription = run(req => service.changeSubscription(req, req.tenant?.userId || null, req.params.businessId, req.body));
-export const saveOverride = run(req => service.saveOverride(req, req.tenant?.userId || null, req.params.businessId, req.body));
-export const resetOnboarding = run(req => service.resetOnboarding(req, req.tenant?.userId || null, req.params.businessId));
-export const revokeSessions = run(req => service.revokeSessions(req, req.tenant?.userId || null, req.params.businessId));
+import type {Request,Response}from"express";import * as s from"../services/promotions.service.js";import{handleError,tenant}from"../utils/http.js";const go=(fn:any)=>(async(req:Request,res:Response)=>{try{const t=tenant(req);res.json({ok:true,data:await fn(req,t)});}catch(e){handleError(res,e);}});export const list=go((r:any,t:any)=>s.listPromotions(t.businessId,r.query));export const create=go((r:any,t:any)=>s.createPromotion(r,t.businessId,t.userId,r.body));export const update=go((r:any,t:any)=>s.updatePromotion(r,t.businessId,t.userId,r.params.id,r.body));export const remove=go((r:any,t:any)=>s.deletePromotion(r,t.businessId,t.userId,r.params.id));export const validate=go((r:any,t:any)=>s.validatePromotion(t.businessId,r.body));

@@ -1,14 +1,38 @@
 import type { Request, Response } from "express";
-import * as service from "../services/salesmen.service.js";
-import { handleError, tenant } from "../utils/http.js";
+import * as service from "../services/public-catalog.service.js";
 
-export async function list(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.listSalesmen(t.businessId,req.query)}); } catch(e){handleError(res,e);} }
-export async function get(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.getSalesman(t.businessId,req.params.id,req.query.month)}); } catch(e){handleError(res,e);} }
-export async function create(req: Request, res: Response) { try { const t=tenant(req); res.status(201).json({ok:true,data:await service.createSalesman(req,t.businessId,t.userId,req.body)}); } catch(e){handleError(res,e);} }
-export async function update(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.updateSalesman(req,t.businessId,t.userId,req.params.id,req.body)}); } catch(e){handleError(res,e);} }
-export async function remove(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.deleteSalesman(req,t.businessId,t.userId,req.params.id)}); } catch(e){handleError(res,e);} }
-export async function target(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.upsertTarget(req,t.businessId,t.userId,req.params.id,req.body)}); } catch(e){handleError(res,e);} }
-export async function copyTargets(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.copyTargets(req,t.businessId,t.userId,req.body.fromMonth,req.body.toMonth)}); } catch(e){handleError(res,e);} }
-export async function performance(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.performanceReport(t.businessId,req.query.month)}); } catch(e){handleError(res,e);} }
-export async function payouts(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.listPayouts(t.businessId,req.query.month,true)}); } catch(e){handleError(res,e);} }
-export async function updatePayout(req: Request, res: Response) { try { const t=tenant(req); res.json({ok:true,data:await service.updatePayout(req,t.businessId,t.userId,req.params.id,req.body)}); } catch(e){handleError(res,e);} }
+function fail(res: Response, error: unknown) {
+  if (error instanceof service.PublicCatalogError) {
+    res.status(error.status).json({
+      ok: false,
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        referenceId: res.locals.requestId,
+      },
+    });
+    return;
+  }
+  console.error("Public catalogue request failed:", error);
+  res.status(500).json({
+    ok: false,
+    error: {
+      code: "INTERNAL_ERROR",
+      message: "Unable to complete the request",
+      referenceId: res.locals.requestId,
+    },
+  });
+}
+
+export async function catalog(_req: Request, res: Response) {
+  try { res.json({ ok: true, data: await service.catalogue() }); } catch (error) { fail(res, error); }
+}
+
+export async function industry(req: Request, res: Response) {
+  try { res.json({ ok: true, data: service.industryDetail(req.params.code) }); } catch (error) { fail(res, error); }
+}
+
+export async function register(req: Request, res: Response) {
+  try { res.status(201).json({ ok: true, data: await service.register(req, req.body || {}) }); } catch (error) { fail(res, error); }
+}

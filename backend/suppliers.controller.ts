@@ -2,6 +2,32 @@ import type { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
 import { prisma } from '../db/prisma.js';
 
+type ProductLike = {
+  id: string;
+  businessId: string;
+  sku: string;
+  barcode: string | null;
+  qrCode: string | null;
+  code: string | null;
+  itemCode: string | null;
+  productCode: string | null;
+  name: string;
+  category: string | null;
+  brand: string | null;
+  unit: string | null;
+  price: unknown;
+  costPrice: unknown;
+  minStock: unknown;
+  openingStock: unknown;
+  currentStock: unknown;
+  deleted: boolean;
+  active: boolean;
+  imageUrl: string | null;
+  customFields: Prisma.JsonValue | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 function getBusinessId(req: Request, res: Response): string | null {
   const businessId = req.tenant?.businessId;
 
@@ -24,7 +50,7 @@ function cleanString(value: unknown): string | undefined {
   return text || undefined;
 }
 
-function parseMoney(value: unknown, fallback = 0): number {
+function parseNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
 
   if (!Number.isFinite(parsed)) {
@@ -34,57 +60,66 @@ function parseMoney(value: unknown, fallback = 0): number {
   return parsed;
 }
 
-function parseIntValue(value: unknown, fallback = 30): number {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
+function parseBoolean(value: unknown, fallback: boolean): boolean {
+  if (value === undefined || value === null) {
     return fallback;
   }
 
-  return Math.trunc(parsed);
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const text = String(value).trim().toLowerCase();
+
+  if (text === 'true') {
+    return true;
+  }
+
+  if (text === 'false') {
+    return false;
+  }
+
+  return fallback;
 }
 
-function formatCustomer(customer: {
-  id: string;
-  businessId: string;
-  name: string;
-  code: string | null;
-  company: string | null;
-  phone: string | null;
-  email: string | null;
-  type: string | null;
-  address: string | null;
-  creditLimit: unknown;
-  creditDays: number;
-  openingBalance: unknown;
-  balance: unknown;
-  status: string | null;
-  active: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
+function formatProduct(product: ProductLike) {
   return {
-    id: customer.id,
-    businessId: customer.businessId,
-    name: customer.name,
-    code: customer.code,
-    company: customer.company,
-    phone: customer.phone,
-    email: customer.email,
-    type: customer.type,
-    address: customer.address,
-    creditLimit: Number(customer.creditLimit),
-    creditDays: customer.creditDays,
-    openingBalance: Number(customer.openingBalance),
-    balance: Number(customer.balance),
-    status: customer.status,
-    active: customer.active,
-    createdAt: customer.createdAt,
-    updatedAt: customer.updatedAt
+    id: product.id,
+    businessId: product.businessId,
+    sku: product.sku,
+    barcode: product.barcode,
+    qrCode: product.qrCode,
+    code: product.code,
+    itemCode: product.itemCode,
+    productCode: product.productCode,
+    name: product.name,
+    category: product.category,
+    brand: product.brand,
+    unit: product.unit,
+    price: Number(product.price),
+    costPrice: Number(product.costPrice),
+    minStock: Number(product.minStock),
+    openingStock: Number(product.openingStock),
+    currentStock: Number(product.currentStock),
+    deleted: product.deleted,
+    active: product.active,
+    imageUrl: product.imageUrl,
+    customFields: product.customFields,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt
   };
 }
 
-export async function listCustomers(req: Request, res: Response): Promise<void> {
+function isUniqueError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
+  );
+}
+
+export async function listProducts(req: Request, res: Response): Promise<void> {
   try {
     const businessId = getBusinessId(req, res);
 
@@ -94,10 +129,17 @@ export async function listCustomers(req: Request, res: Response): Promise<void> 
 
     const q = cleanString(req.query.q);
     const activeQuery = cleanString(req.query.active);
+    const deletedQuery = cleanString(req.query.deleted);
 
-    const where: Prisma.CustomerWhereInput = {
+    const where: Prisma.ProductWhereInput = {
       businessId
     };
+
+    if (deletedQuery === 'true') {
+      where.deleted = true;
+    } else {
+      where.deleted = false;
+    }
 
     if (activeQuery === 'true') {
       where.active = true;
@@ -110,7 +152,19 @@ export async function listCustomers(req: Request, res: Response): Promise<void> 
     if (q) {
       where.OR = [
         {
-          name: {
+          sku: {
+            contains: q,
+            mode: 'insensitive'
+          }
+        },
+        {
+          barcode: {
+            contains: q,
+            mode: 'insensitive'
+          }
+        },
+        {
+          qrCode: {
             contains: q,
             mode: 'insensitive'
           }
@@ -122,19 +176,31 @@ export async function listCustomers(req: Request, res: Response): Promise<void> 
           }
         },
         {
-          company: {
+          itemCode: {
             contains: q,
             mode: 'insensitive'
           }
         },
         {
-          phone: {
+          productCode: {
             contains: q,
             mode: 'insensitive'
           }
         },
         {
-          email: {
+          name: {
+            contains: q,
+            mode: 'insensitive'
+          }
+        },
+        {
+          category: {
+            contains: q,
+            mode: 'insensitive'
+          }
+        },
+        {
+          brand: {
             contains: q,
             mode: 'insensitive'
           }
@@ -142,7 +208,7 @@ export async function listCustomers(req: Request, res: Response): Promise<void> 
       ];
     }
 
-    const customers = await prisma.customer.findMany({
+    const products = await prisma.product.findMany({
       where,
       orderBy: {
         createdAt: 'desc'
@@ -152,22 +218,22 @@ export async function listCustomers(req: Request, res: Response): Promise<void> 
 
     res.json({
       ok: true,
-      count: customers.length,
-      customers: customers.map(formatCustomer)
+      count: products.length,
+      products: products.map(formatProduct)
     });
   } catch (error) {
-    console.error('List customers failed:', error);
+    console.error('List products failed:', error);
 
     res.status(500).json({
       ok: false,
       error: {
-        message: 'Failed to list customers'
+        message: 'Failed to list products'
       }
     });
   }
 }
 
-export async function getCustomer(req: Request, res: Response): Promise<void> {
+export async function getProduct(req: Request, res: Response): Promise<void> {
   try {
     const businessId = getBusinessId(req, res);
 
@@ -181,24 +247,24 @@ export async function getCustomer(req: Request, res: Response): Promise<void> {
       res.status(400).json({
         ok: false,
         error: {
-          message: 'Customer id is required'
+          message: 'Product id is required'
         }
       });
       return;
     }
 
-    const customer = await prisma.customer.findFirst({
+    const product = await prisma.product.findFirst({
       where: {
         id,
         businessId
       }
     });
 
-    if (!customer) {
+    if (!product) {
       res.status(404).json({
         ok: false,
         error: {
-          message: 'Customer not found'
+          message: 'Product not found'
         }
       });
       return;
@@ -206,21 +272,21 @@ export async function getCustomer(req: Request, res: Response): Promise<void> {
 
     res.json({
       ok: true,
-      customer: formatCustomer(customer)
+      product: formatProduct(product)
     });
   } catch (error) {
-    console.error('Get customer failed:', error);
+    console.error('Get product failed:', error);
 
     res.status(500).json({
       ok: false,
       error: {
-        message: 'Failed to get customer'
+        message: 'Failed to get product'
       }
     });
   }
 }
 
-export async function createCustomer(req: Request, res: Response): Promise<void> {
+export async function createProduct(req: Request, res: Response): Promise<void> {
   try {
     const businessId = getBusinessId(req, res);
 
@@ -228,60 +294,87 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
       return;
     }
 
+    const sku = cleanString(req.body?.sku);
     const name = cleanString(req.body?.name);
 
-    if (!name) {
+    if (!sku) {
       res.status(400).json({
         ok: false,
         error: {
-          message: 'Customer name is required'
+          message: 'Product SKU is required'
         }
       });
       return;
     }
 
-    const openingBalance = parseMoney(req.body?.openingBalance, 0);
-    const balance =
-      req.body?.balance === undefined || req.body?.balance === null
-        ? openingBalance
-        : parseMoney(req.body?.balance, openingBalance);
+    if (!name) {
+      res.status(400).json({
+        ok: false,
+        error: {
+          message: 'Product name is required'
+        }
+      });
+      return;
+    }
 
-    const customer = await prisma.customer.create({
+    const openingStock = parseNumber(req.body?.openingStock, 0);
+    const currentStock =
+      req.body?.currentStock === undefined || req.body?.currentStock === null
+        ? openingStock
+        : parseNumber(req.body?.currentStock, openingStock);
+
+    const product = await prisma.product.create({
       data: {
         businessId,
-        name,
+        sku,
+        barcode: cleanString(req.body?.barcode),
+        qrCode: cleanString(req.body?.qrCode),
         code: cleanString(req.body?.code),
-        company: cleanString(req.body?.company),
-        phone: cleanString(req.body?.phone),
-        email: cleanString(req.body?.email)?.toLowerCase(),
-        type: cleanString(req.body?.type) || 'Retail',
-        address: cleanString(req.body?.address),
-        creditLimit: parseMoney(req.body?.creditLimit, 0),
-        creditDays: parseIntValue(req.body?.creditDays, 30),
-        openingBalance,
-        balance,
-        status: cleanString(req.body?.status) || 'active',
-        active: req.body?.active === undefined ? true : Boolean(req.body?.active)
+        itemCode: cleanString(req.body?.itemCode),
+        productCode: cleanString(req.body?.productCode),
+        name,
+        category: cleanString(req.body?.category),
+        brand: cleanString(req.body?.brand),
+        unit: cleanString(req.body?.unit) || 'PCS',
+        price: parseNumber(req.body?.price, 0),
+        costPrice: parseNumber(req.body?.costPrice, 0),
+        minStock: parseNumber(req.body?.minStock, 0),
+        openingStock,
+        currentStock,
+        deleted: false,
+        active: parseBoolean(req.body?.active, true),
+        imageUrl: cleanString(req.body?.imageUrl),
+        customFields: req.body?.customFields ?? undefined
       }
     });
 
     res.status(201).json({
       ok: true,
-      customer: formatCustomer(customer)
+      product: formatProduct(product)
     });
   } catch (error) {
-    console.error('Create customer failed:', error);
+    console.error('Create product failed:', error);
+
+    if (isUniqueError(error)) {
+      res.status(409).json({
+        ok: false,
+        error: {
+          message: 'Product SKU already exists for this business'
+        }
+      });
+      return;
+    }
 
     res.status(500).json({
       ok: false,
       error: {
-        message: 'Failed to create customer'
+        message: 'Failed to create product'
       }
     });
   }
 }
 
-export async function updateCustomer(req: Request, res: Response): Promise<void> {
+export async function updateProduct(req: Request, res: Response): Promise<void> {
   try {
     const businessId = getBusinessId(req, res);
 
@@ -295,13 +388,13 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
       res.status(400).json({
         ok: false,
         error: {
-          message: 'Customer id is required'
+          message: 'Product id is required'
         }
       });
       return;
     }
 
-    const existing = await prisma.customer.findFirst({
+    const existing = await prisma.product.findFirst({
       where: {
         id,
         businessId
@@ -312,13 +405,29 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
       res.status(404).json({
         ok: false,
         error: {
-          message: 'Customer not found'
+          message: 'Product not found'
         }
       });
       return;
     }
 
-    const data: Prisma.CustomerUpdateInput = {};
+    const data: Prisma.ProductUncheckedUpdateInput = {};
+
+    if (req.body?.sku !== undefined) {
+      const sku = cleanString(req.body?.sku);
+
+      if (!sku) {
+        res.status(400).json({
+          ok: false,
+          error: {
+            message: 'Product SKU cannot be empty'
+          }
+        });
+        return;
+      }
+
+      data.sku = sku;
+    }
 
     if (req.body?.name !== undefined) {
       const name = cleanString(req.body?.name);
@@ -327,7 +436,7 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
         res.status(400).json({
           ok: false,
           error: {
-            message: 'Customer name cannot be empty'
+            message: 'Product name cannot be empty'
           }
         });
         return;
@@ -336,55 +445,75 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
       data.name = name;
     }
 
+    if (req.body?.barcode !== undefined) {
+      data.barcode = cleanString(req.body?.barcode) || null;
+    }
+
+    if (req.body?.qrCode !== undefined) {
+      data.qrCode = cleanString(req.body?.qrCode) || null;
+    }
+
     if (req.body?.code !== undefined) {
       data.code = cleanString(req.body?.code) || null;
     }
 
-    if (req.body?.company !== undefined) {
-      data.company = cleanString(req.body?.company) || null;
+    if (req.body?.itemCode !== undefined) {
+      data.itemCode = cleanString(req.body?.itemCode) || null;
     }
 
-    if (req.body?.phone !== undefined) {
-      data.phone = cleanString(req.body?.phone) || null;
+    if (req.body?.productCode !== undefined) {
+      data.productCode = cleanString(req.body?.productCode) || null;
     }
 
-    if (req.body?.email !== undefined) {
-      data.email = cleanString(req.body?.email)?.toLowerCase() || null;
+    if (req.body?.category !== undefined) {
+      data.category = cleanString(req.body?.category) || null;
     }
 
-    if (req.body?.type !== undefined) {
-      data.type = cleanString(req.body?.type) || 'Retail';
+    if (req.body?.brand !== undefined) {
+      data.brand = cleanString(req.body?.brand) || null;
     }
 
-    if (req.body?.address !== undefined) {
-      data.address = cleanString(req.body?.address) || null;
+    if (req.body?.unit !== undefined) {
+      data.unit = cleanString(req.body?.unit) || 'PCS';
     }
 
-    if (req.body?.creditLimit !== undefined) {
-      data.creditLimit = parseMoney(req.body?.creditLimit, 0);
+    if (req.body?.price !== undefined) {
+      data.price = parseNumber(req.body?.price, Number(existing.price));
     }
 
-    if (req.body?.creditDays !== undefined) {
-      data.creditDays = parseIntValue(req.body?.creditDays, existing.creditDays);
+    if (req.body?.costPrice !== undefined) {
+      data.costPrice = parseNumber(req.body?.costPrice, Number(existing.costPrice));
     }
 
-    if (req.body?.openingBalance !== undefined) {
-      data.openingBalance = parseMoney(req.body?.openingBalance, Number(existing.openingBalance));
+    if (req.body?.minStock !== undefined) {
+      data.minStock = parseNumber(req.body?.minStock, Number(existing.minStock));
     }
 
-    if (req.body?.balance !== undefined) {
-      data.balance = parseMoney(req.body?.balance, Number(existing.balance));
+    if (req.body?.openingStock !== undefined) {
+      data.openingStock = parseNumber(req.body?.openingStock, Number(existing.openingStock));
     }
 
-    if (req.body?.status !== undefined) {
-      data.status = cleanString(req.body?.status) || 'active';
+    if (req.body?.currentStock !== undefined) {
+      data.currentStock = parseNumber(req.body?.currentStock, Number(existing.currentStock));
     }
 
     if (req.body?.active !== undefined) {
-      data.active = Boolean(req.body?.active);
+      data.active = parseBoolean(req.body?.active, existing.active);
     }
 
-    const customer = await prisma.customer.update({
+    if (req.body?.deleted !== undefined) {
+      data.deleted = parseBoolean(req.body?.deleted, existing.deleted);
+    }
+
+    if (req.body?.imageUrl !== undefined) {
+      data.imageUrl = cleanString(req.body?.imageUrl) || null;
+    }
+
+    if (req.body?.customFields !== undefined) {
+      data.customFields = req.body?.customFields ?? null;
+    }
+
+    const product = await prisma.product.update({
       where: {
         id: existing.id
       },
@@ -393,21 +522,31 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
 
     res.json({
       ok: true,
-      customer: formatCustomer(customer)
+      product: formatProduct(product)
     });
   } catch (error) {
-    console.error('Update customer failed:', error);
+    console.error('Update product failed:', error);
+
+    if (isUniqueError(error)) {
+      res.status(409).json({
+        ok: false,
+        error: {
+          message: 'Product SKU already exists for this business'
+        }
+      });
+      return;
+    }
 
     res.status(500).json({
       ok: false,
       error: {
-        message: 'Failed to update customer'
+        message: 'Failed to update product'
       }
     });
   }
 }
 
-export async function deleteCustomer(req: Request, res: Response): Promise<void> {
+export async function deleteProduct(req: Request, res: Response): Promise<void> {
   try {
     const businessId = getBusinessId(req, res);
 
@@ -421,13 +560,13 @@ export async function deleteCustomer(req: Request, res: Response): Promise<void>
       res.status(400).json({
         ok: false,
         error: {
-          message: 'Customer id is required'
+          message: 'Product id is required'
         }
       });
       return;
     }
 
-    const existing = await prisma.customer.findFirst({
+    const existing = await prisma.product.findFirst({
       where: {
         id,
         businessId
@@ -438,33 +577,33 @@ export async function deleteCustomer(req: Request, res: Response): Promise<void>
       res.status(404).json({
         ok: false,
         error: {
-          message: 'Customer not found'
+          message: 'Product not found'
         }
       });
       return;
     }
 
-    const customer = await prisma.customer.update({
+    const product = await prisma.product.update({
       where: {
         id: existing.id
       },
       data: {
         active: false,
-        status: 'inactive'
+        deleted: true
       }
     });
 
     res.json({
       ok: true,
-      customer: formatCustomer(customer)
+      product: formatProduct(product)
     });
   } catch (error) {
-    console.error('Delete customer failed:', error);
+    console.error('Delete product failed:', error);
 
     res.status(500).json({
       ok: false,
       error: {
-        message: 'Failed to delete customer'
+        message: 'Failed to delete product'
       }
     });
   }

@@ -1,58 +1,21 @@
--- Release B operational expansion: additive tables only
+# QA Test Matrix
 
-CREATE TABLE "gym_trainers" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "employee_no" TEXT, "full_name" TEXT NOT NULL, "phone" TEXT, "specialties" TEXT, "active" BOOLEAN NOT NULL DEFAULT true, "revision" INTEGER NOT NULL DEFAULT 1, "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updated_at" TIMESTAMP(3) NOT NULL);
-CREATE UNIQUE INDEX "gym_trainers_business_id_employee_no_key" ON "gym_trainers"("business_id","employee_no");
-CREATE INDEX "gym_trainers_business_id_active_idx" ON "gym_trainers"("business_id","active");
-ALTER TABLE "gym_trainers" ADD CONSTRAINT "gym_trainers_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-CREATE TABLE "gym_classes" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "trainer_id" TEXT, "name" TEXT NOT NULL, "room" TEXT, "start_at" TIMESTAMP(3) NOT NULL, "end_at" TIMESTAMP(3) NOT NULL, "capacity" INTEGER NOT NULL DEFAULT 20, "status" TEXT NOT NULL DEFAULT 'scheduled', "revision" INTEGER NOT NULL DEFAULT 1, "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updated_at" TIMESTAMP(3) NOT NULL);
-CREATE INDEX "gym_classes_business_id_start_at_end_at_idx" ON "gym_classes"("business_id","start_at","end_at");
-ALTER TABLE "gym_classes" ADD CONSTRAINT "gym_classes_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "gym_classes" ADD CONSTRAINT "gym_classes_trainer_id_fkey" FOREIGN KEY ("trainer_id") REFERENCES "gym_trainers"("id") ON DELETE SET NULL;
-CREATE TABLE "gym_class_bookings" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "class_id" TEXT NOT NULL, "member_id" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT 'booked', "booked_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE UNIQUE INDEX "gym_class_bookings_business_id_class_id_member_id_key" ON "gym_class_bookings"("business_id","class_id","member_id");
-ALTER TABLE "gym_class_bookings" ADD CONSTRAINT "gym_class_bookings_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "gym_class_bookings" ADD CONSTRAINT "gym_class_bookings_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "gym_classes"("id") ON DELETE CASCADE;
-ALTER TABLE "gym_class_bookings" ADD CONSTRAINT "gym_class_bookings_member_id_fkey" FOREIGN KEY ("member_id") REFERENCES "gym_members"("id") ON DELETE RESTRICT;
-CREATE TABLE "gym_check_ins" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "member_id" TEXT NOT NULL, "trainer_id" TEXT, "method" TEXT NOT NULL DEFAULT 'manual', "checked_in_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "checked_out_at" TIMESTAMP(3));
-CREATE INDEX "gym_check_ins_business_id_checked_in_at_idx" ON "gym_check_ins"("business_id","checked_in_at");
-ALTER TABLE "gym_check_ins" ADD CONSTRAINT "gym_check_ins_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "gym_check_ins" ADD CONSTRAINT "gym_check_ins_member_id_fkey" FOREIGN KEY ("member_id") REFERENCES "gym_members"("id") ON DELETE RESTRICT;
-ALTER TABLE "gym_check_ins" ADD CONSTRAINT "gym_check_ins_trainer_id_fkey" FOREIGN KEY ("trainer_id") REFERENCES "gym_trainers"("id") ON DELETE SET NULL;
-CREATE TABLE "school_student_guardians" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "student_id" TEXT NOT NULL, "guardian_id" TEXT NOT NULL, "is_primary" BOOLEAN NOT NULL DEFAULT false);
-CREATE UNIQUE INDEX "school_student_guardians_business_id_student_id_guardian_id_key" ON "school_student_guardians"("business_id","student_id","guardian_id");
-ALTER TABLE "school_student_guardians" ADD CONSTRAINT "school_student_guardians_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "school_student_guardians" ADD CONSTRAINT "school_student_guardians_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "school_students"("id") ON DELETE CASCADE;
-ALTER TABLE "school_student_guardians" ADD CONSTRAINT "school_student_guardians_guardian_id_fkey" FOREIGN KEY ("guardian_id") REFERENCES "school_guardians"("id") ON DELETE CASCADE;
-CREATE TABLE "school_attendance" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "student_id" TEXT NOT NULL, "class_section_id" TEXT NOT NULL, "attendance_date" TIMESTAMP(3) NOT NULL, "status" TEXT NOT NULL, "note" TEXT, "recorded_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE UNIQUE INDEX "school_attendance_business_id_student_id_class_section_id_attendance_date_key" ON "school_attendance"("business_id","student_id","class_section_id","attendance_date");
-ALTER TABLE "school_attendance" ADD CONSTRAINT "school_attendance_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "school_attendance" ADD CONSTRAINT "school_attendance_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "school_students"("id") ON DELETE RESTRICT;
-ALTER TABLE "school_attendance" ADD CONSTRAINT "school_attendance_class_section_id_fkey" FOREIGN KEY ("class_section_id") REFERENCES "school_class_sections"("id") ON DELETE RESTRICT;
-CREATE TABLE "school_fee_heads" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "code" TEXT NOT NULL, "name" TEXT NOT NULL, "active" BOOLEAN NOT NULL DEFAULT true);
-CREATE UNIQUE INDEX "school_fee_heads_business_id_code_key" ON "school_fee_heads"("business_id","code");
-ALTER TABLE "school_fee_heads" ADD CONSTRAINT "school_fee_heads_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-CREATE TABLE "school_student_fees" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "student_id" TEXT NOT NULL, "fee_head_id" TEXT NOT NULL, "due_date" TIMESTAMP(3) NOT NULL, "amount" DECIMAL(14,2) NOT NULL, "paid_amount" DECIMAL(14,2) NOT NULL DEFAULT 0, "status" TEXT NOT NULL DEFAULT 'due', "revision" INTEGER NOT NULL DEFAULT 1);
-CREATE INDEX "school_student_fees_business_id_status_due_date_idx" ON "school_student_fees"("business_id","status","due_date");
-ALTER TABLE "school_student_fees" ADD CONSTRAINT "school_student_fees_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "school_student_fees" ADD CONSTRAINT "school_student_fees_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "school_students"("id") ON DELETE RESTRICT;
-ALTER TABLE "school_student_fees" ADD CONSTRAINT "school_student_fees_fee_head_id_fkey" FOREIGN KEY ("fee_head_id") REFERENCES "school_fee_heads"("id") ON DELETE RESTRICT;
-CREATE TABLE "school_fee_payments" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "student_fee_id" TEXT NOT NULL, "amount" DECIMAL(14,2) NOT NULL, "payment_method" TEXT NOT NULL, "reference" TEXT, "paid_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "idempotency_key" TEXT);
-CREATE UNIQUE INDEX "school_fee_payments_business_id_idempotency_key_key" ON "school_fee_payments"("business_id","idempotency_key");
-ALTER TABLE "school_fee_payments" ADD CONSTRAINT "school_fee_payments_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "school_fee_payments" ADD CONSTRAINT "school_fee_payments_student_fee_id_fkey" FOREIGN KEY ("student_fee_id") REFERENCES "school_student_fees"("id") ON DELETE RESTRICT;
-CREATE TABLE "clinic_consents" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "patient_id" TEXT NOT NULL, "consent_type" TEXT NOT NULL, "confirmed" BOOLEAN NOT NULL DEFAULT true, "confirmed_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "expires_at" TIMESTAMP(3), "note" TEXT);
-ALTER TABLE "clinic_consents" ADD CONSTRAINT "clinic_consents_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "clinic_consents" ADD CONSTRAINT "clinic_consents_patient_id_fkey" FOREIGN KEY ("patient_id") REFERENCES "clinic_patients"("id") ON DELETE CASCADE;
-CREATE TABLE "clinic_queue_entries" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "patient_id" TEXT NOT NULL, "practitioner_id" TEXT, "appointment_id" TEXT, "queue_no" INTEGER NOT NULL, "status" TEXT NOT NULL DEFAULT 'waiting', "checked_in_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "called_at" TIMESTAMP(3), "completed_at" TIMESTAMP(3));
-CREATE INDEX "clinic_queue_entries_business_id_status_checked_in_at_idx" ON "clinic_queue_entries"("business_id","status","checked_in_at");
-ALTER TABLE "clinic_queue_entries" ADD CONSTRAINT "clinic_queue_entries_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "clinic_queue_entries" ADD CONSTRAINT "clinic_queue_entries_patient_id_fkey" FOREIGN KEY ("patient_id") REFERENCES "clinic_patients"("id") ON DELETE RESTRICT;
-ALTER TABLE "clinic_queue_entries" ADD CONSTRAINT "clinic_queue_entries_practitioner_id_fkey" FOREIGN KEY ("practitioner_id") REFERENCES "clinic_practitioners"("id") ON DELETE SET NULL;
-ALTER TABLE "clinic_queue_entries" ADD CONSTRAINT "clinic_queue_entries_appointment_id_fkey" FOREIGN KEY ("appointment_id") REFERENCES "clinic_appointments"("id") ON DELETE SET NULL;
-CREATE TABLE "clinic_services" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "code" TEXT NOT NULL, "name" TEXT NOT NULL, "price" DECIMAL(14,2) NOT NULL, "active" BOOLEAN NOT NULL DEFAULT true);
-CREATE UNIQUE INDEX "clinic_services_business_id_code_key" ON "clinic_services"("business_id","code");
-ALTER TABLE "clinic_services" ADD CONSTRAINT "clinic_services_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-CREATE TABLE "clinic_follow_ups" ("id" TEXT PRIMARY KEY, "business_id" TEXT NOT NULL, "patient_id" TEXT NOT NULL, "practitioner_id" TEXT, "due_at" TIMESTAMP(3) NOT NULL, "reason" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT 'pending', "completed_at" TIMESTAMP(3), "revision" INTEGER NOT NULL DEFAULT 1);
-ALTER TABLE "clinic_follow_ups" ADD CONSTRAINT "clinic_follow_ups_business_id_fkey" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE;
-ALTER TABLE "clinic_follow_ups" ADD CONSTRAINT "clinic_follow_ups_patient_id_fkey" FOREIGN KEY ("patient_id") REFERENCES "clinic_patients"("id") ON DELETE RESTRICT;
-ALTER TABLE "clinic_follow_ups" ADD CONSTRAINT "clinic_follow_ups_practitioner_id_fkey" FOREIGN KEY ("practitioner_id") REFERENCES "clinic_practitioners"("id") ON DELETE SET NULL;
+| Area | Test | Result |
+| --- | --- | --- |
+| Railway config | Only one `npm ci` across install/build phases | Passed |
+| Backend install | Clean npm 10 dependency install | Passed |
+| Prisma | Validate and generate | Passed |
+| TypeScript | Typecheck and build | Passed |
+| Runtime | `node dist/server.js` | Passed |
+| Health | `/health` HTTP 200 | Passed |
+| Route mounts | Core + A–D families reject unauthenticated requests with 401 | Passed |
+| Frontend JS | External and inline syntax | Passed |
+| Frontend HTML | Structure, duplicate IDs and local asset references | Passed |
+| Service worker | Precache references exist; API bypass present | Passed |
+| Migrations | Isolated PostgreSQL-compatible chain, with noted pgcrypto limitation | Conditional |
+| Authenticated core CRUD | Products, customers, sales and payments | Staging required |
+| Money/stock | Sale, return, refund, purchase and stock posting | Staging required |
+| Tenant isolation | Cross-tenant ID rejection | Staging required |
+| Role enforcement | Cashier/manager/owner matrix | Staging required |
+| Printing | A4, 80 mm, 58 mm and Ctrl+P | Browser/printer test required |
+| Industry workflows | Full Gym through Wholesale scenarios | Staging required |

@@ -1,89 +1,21 @@
-import type { NextFunction, Request, Response } from 'express';
-import { verifyAuthToken } from '../utils/auth-token.js';
-import { prisma } from '../db/prisma.js';
-import { loadEntitlements } from '../services/entitlements.service.js';
+import type { NextFunction, Request, Response } from "express";
+import { prisma } from "../db/prisma.js";
 
-const ROUTE_FEATURES: Array<[string, string]> = [
-  ['/api/v1/purchases', 'purchases.*'], ['/api/v1/expenses', 'expenses.*'], ['/api/v1/accounts', 'accounts.*'], ['/api/v1/promotions', 'promotions.basic'], ['/api/v1/loyalty', 'loyalty.basic'], ['/api/v1/approvals', 'approvals.basic']
-];
-
-function entitled(features: Record<string, { enabled: boolean }>, key: string): boolean {
-  if (features['*']?.enabled || features[key]?.enabled) return true;
-  const parts = key.split('.');
-  for (let index = parts.length - 1; index > 0; index -= 1) if (features[parts.slice(0, index).join('.') + '.*']?.enabled) return true;
-  return false;
+function configuredEmails(): Set<string> {
+  return new Set(String(process.env.PLATFORM_ADMIN_EMAILS || "").split(",").map(value => value.trim().toLowerCase()).filter(Boolean));
 }
 
-function getBearerToken(req: Request): string | null {
-  const header = req.header('authorization') || '';
-
-  if (!header.toLowerCase().startsWith('bearer ')) {
-    return null;
+export async function requirePlatformAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const businessId = req.tenant?.businessId;
+    const userId = req.tenant?.userId;
+    if (!businessId || !userId) { res.status(401).json({ ok: false, error: { message: "Platform authentication required" } }); return; }
+    const allowlist = configuredEmails();
+    if (!allowlist.size) { res.status(503).json({ ok: false, error: { message: "Platform administration is not configured" } }); return; }
+    const user = await prisma.user.findFirst({ where: { id: userId, businessId, status: "ACTIVE" }, select: { email: true } });
+    if (!user || !allowlist.has(user.email.toLowerCase())) { res.status(403).json({ ok: false, error: { message: "Platform administrator access required" } }); return; }
+    next();
+  } catch {
+    res.status(500).json({ ok: false, error: { message: "Unable to verify platform administrator" } });
   }
-
-  const token = header.slice(7).trim();
-
-  return token || null;
-}
-
-export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const token = getBearerToken(req);
-
-  if (!token) {
-    res.status(401).json({
-      ok: false,
-      error: {
-        message: 'Authentication required'
-      }
-    });
-    return;
-  }
-
-  const payload = verifyAuthToken(token);
-
-  if (!payload) {
-    res.status(401).json({
-      ok: false,
-      error: {
-        message: 'Invalid or expired token'
-      }
-    });
-    return;
-  }
-
-  if (payload.sessionId) {
-    const session = await prisma.authSession.findFirst({ where: { id: payload.sessionId, businessId: payload.businessId, userId: payload.userId }, include: { user: { select: { mustChangePassword: true } } } });
-    if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) {
-      res.status(401).json({ ok: false, error: { message: 'Session has expired or been revoked' } });
-      return;
-    }
-    if (session.user.mustChangePassword && !req.originalUrl.startsWith('/api/v1/auth/change-password') && !req.originalUrl.startsWith('/api/v1/auth/logout') && !req.originalUrl.startsWith('/api/v1/auth/me')) {
-      res.status(403).json({ ok: false, error: { message: 'Password change required', details: { passwordChangeRequired: true } } });
-      return;
-    }
-    const stale = Date.now() - session.lastSeenAt.getTime() > 5 * 60 * 1000;
-    if (stale) void prisma.authSession.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
-  }
-
-  req.tenant = {
-    businessId: payload.businessId,
-    businessSlug: payload.businessSlug,
-    userId: payload.userId,
-    source: 'auth'
-  };
-
-  const entitlements = await loadEntitlements(prisma, payload.businessId);
-  const requiredFeature = ROUTE_FEATURES.find(([prefix]) => req.originalUrl.startsWith(prefix))?.[1];
-  if (requiredFeature && !entitled(entitlements.features, requiredFeature)) {
-    res.status(403).json({ ok: false, error: { message: 'Feature is not included in the current subscription', details: { featureKey: requiredFeature, upgradeRequired: true } } });
-    return;
-  }
-  const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-  const exemptWrite = req.originalUrl.startsWith('/api/v1/auth/') || req.originalUrl.startsWith('/api/v1/platform-admin/');
-  if (isWrite && !exemptWrite && entitlements.readOnly) {
-    res.status(402).json({ ok: false, error: { message: 'Subscription is read-only. Renew or contact support.' } });
-    return;
-  }
-
-  next();
 }

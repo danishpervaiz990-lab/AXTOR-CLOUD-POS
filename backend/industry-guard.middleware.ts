@@ -1,21 +1,50 @@
+import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
-import { prisma } from "../db/prisma.js";
 
-function configuredEmails(): Set<string> {
-  return new Set(String(process.env.PLATFORM_ADMIN_EMAILS || "").split(",").map(value => value.trim().toLowerCase()).filter(Boolean));
+type Bucket = { count: number; resetAt: number };
+const loginBuckets = new Map<string, Bucket>();
+const registrationBuckets = new Map<string, Bucket>();
+
+export function requestId(req: Request, res: Response, next: NextFunction): void {
+  const incoming = String(req.header("x-request-id") || "").trim();
+  const id = /^[a-zA-Z0-9._:-]{8,100}$/.test(incoming) ? incoming : crypto.randomUUID();
+  res.setHeader("X-Request-Id", id);
+  res.locals.requestId = id;
+  next();
 }
 
-export async function requirePlatformAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const businessId = req.tenant?.businessId;
-    const userId = req.tenant?.userId;
-    if (!businessId || !userId) { res.status(401).json({ ok: false, error: { message: "Platform authentication required" } }); return; }
-    const allowlist = configuredEmails();
-    if (!allowlist.size) { res.status(503).json({ ok: false, error: { message: "Platform administration is not configured" } }); return; }
-    const user = await prisma.user.findFirst({ where: { id: userId, businessId, status: "ACTIVE" }, select: { email: true } });
-    if (!user || !allowlist.has(user.email.toLowerCase())) { res.status(403).json({ ok: false, error: { message: "Platform administrator access required" } }); return; }
-    next();
-  } catch {
-    res.status(500).json({ ok: false, error: { message: "Unable to verify platform administrator" } });
+export function loginRateLimit(req: Request, res: Response, next: NextFunction): void {
+  const now = Date.now();
+  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const key = `${ip}:${email}`;
+  const current = loginBuckets.get(key);
+  const bucket = !current || current.resetAt <= now ? { count: 0, resetAt: now + 15 * 60 * 1000 } : current;
+  bucket.count += 1;
+  loginBuckets.set(key, bucket);
+  if (loginBuckets.size > 5000) for (const [bucketKey, value] of loginBuckets) if (value.resetAt <= now) loginBuckets.delete(bucketKey);
+  res.setHeader("RateLimit-Limit", "10");
+  res.setHeader("RateLimit-Remaining", String(Math.max(0, 10 - bucket.count)));
+  if (bucket.count > 10) { res.setHeader("Retry-After", String(Math.ceil((bucket.resetAt - now) / 1000))); res.status(429).json({ ok: false, error: { message: "Too many login attempts. Please wait and try again.", referenceId: res.locals.requestId } }); return; }
+  next();
+}
+
+export function registrationRateLimit(req: Request, res: Response, next: NextFunction): void {
+  const now = Date.now();
+  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const key = `${ip}:${email}`;
+  const current = registrationBuckets.get(key);
+  const bucket = !current || current.resetAt <= now ? { count: 0, resetAt: now + 60 * 60 * 1000 } : current;
+  bucket.count += 1;
+  registrationBuckets.set(key, bucket);
+  if (registrationBuckets.size > 5000) for (const [bucketKey, value] of registrationBuckets) if (value.resetAt <= now) registrationBuckets.delete(bucketKey);
+  res.setHeader("RateLimit-Limit", "5");
+  res.setHeader("RateLimit-Remaining", String(Math.max(0, 5 - bucket.count)));
+  if (bucket.count > 5) {
+    res.setHeader("Retry-After", String(Math.ceil((bucket.resetAt - now) / 1000)));
+    res.status(429).json({ ok: false, error: { code: "REGISTRATION_RATE_LIMIT", message: "Too many registration attempts. Please wait and try again.", referenceId: res.locals.requestId } });
+    return;
   }
+  next();
 }
