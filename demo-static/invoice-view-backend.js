@@ -1,226 +1,1360 @@
-/* Axtor POS Cloud - Invoice template engine and designer demo */
-(function(){
-  'use strict';
+/**
+ * Axtor POS Cloud
+ * Phase 5 — Sales Returns Backend Integration
+ * Phase 5B — Real Backend Return Posting
+ *
+ * Full replace file.
+ * Frontend only.
+ * No backend/Railway changes.
+ * Green theme safe.
+ * Retro theme safe.
+ */
 
-  const APP_DB_KEY='axtorAdvancedDemoDB';
-  const DEFAULT_TAX_RATE=5;
-  const LEGACY_DB_KEY='axtorDemoDB';
-  const KEYS={
-    company:'companySettings', invoice:'invoiceSettings', designer:'invoiceDesignerSettings', selected:'selectedInvoiceTemplate',
-    customerPrefs:'customerInvoicePreferences', printHistory:'invoicePrintHistory', previewHistory:'invoicePreviewHistory',
-    exports:'invoiceTemplateExports', columns:'invoiceColumnSettings'
+(function () {
+  "use strict";
+
+  const API_BASE_URL = window.AxtorAPI.getApiBaseUrl();
+  const TOKEN_KEY = "axtorAuthToken";
+
+  const state = {
+    initialized: false,
+    loading: false,
+    posting: false,
+    invoices: [],
+    returns: [],
+    selectedInvoice: null,
+    returnItems: new Map(),
+    searchText: "",
+    lastReturnId: "",
+    lastReturnNo: "",
+    refundPosting: false,
+    refundInvoice: null,
+    returnIdempotencyKey: null,
+    refundIdempotencyKey: null,
   };
 
-  const templateList=[
-    {id:'modern-a4',name:'Modern A4 Invoice',use:'Retail, wholesale and general trading',size:'A4',badge:'Recommended'},
-    {id:'compact-a4',name:'Compact A4 Invoice',use:'Fast counter invoice with more rows',size:'A4',badge:''},
-    {id:'paint-store',name:'Paint Store Invoice',use:'Automotive paint, garage and color matching',size:'A4',badge:'Paint Store'},
-    {id:'thermal-80',name:'Thermal Receipt 80mm',use:'POS terminal receipt printer',size:'80mm',badge:'Terminal'},
-    {id:'tax-invoice',name:'Tax Invoice',use:'VAT/tax-ready invoice structure',size:'A4',badge:'Tax'},
-    {id:'delivery-invoice',name:'Delivery Invoice',use:'Delivery note and driver handover',size:'A4',badge:''},
-    {id:'quotation',name:'Quotation Template',use:'Quotation and estimate print layout',size:'A4',badge:''},
-    {id:'minimal',name:'Minimal Invoice',use:'Simple clean invoice for quick print',size:'A4',badge:''},
-    {id:'letterhead',name:'Professional Letterhead Invoice',use:'Premium corporate letterhead style',size:'A4',badge:'Premium'},
-    {id:'bilingual',name:'Bilingual English/Arabic Invoice',use:'Qatar bilingual customer print',size:'A4',badge:'Arabic Ready'}
-  ];
+  window.AxtorReturnsBackend = {
+    exists: true,
+    version: "20260710-production-returns-financial-summary",
+    init,
+    refresh: loadBackendInvoices,
+    loadBackendInvoices,
+    postBackendReturn,
+    openRefundModal,
+    postCustomerRefund,
+    getState: function () {
+      return state;
+    },
+  };
 
-  const defaultCompany={companyName:'Axtor Trading',legalBusinessName:'Axtor Trading W.L.L',crNumber:'',taxNumber:'',phone:'77790896',whatsapp:'77790896',email:'sales@axtortrading.com',website:'www.axtortrading.com',address:'Street 24, Al Attiyah Street, Industrial Area',city:'Doha',country:'Qatar',bankName:'Commercial Bank of Qatar',bankAccount:'',iban:'',paymentInstructions:'Please arrange payment by cash, card, bank transfer or approved credit terms.',footerNote:'Thank you for choosing Axtor Trading.',terms:'Goods once sold are returnable only according to the company return policy.',logoData:'',stampData:'',signatureData:'',currency:'QAR',currencySymbol:'QAR '};
-  const defaultInvoice={invoicePrefix:'INV-',nextInvoiceNumber:'0001',quotationPrefix:'QT-',deliveryPrefix:'DO-',creditPrefix:'CN-',returnPrefix:'RET-',defaultInvoiceTemplate:'modern-a4',defaultQuotationTemplate:'quotation',defaultReceiptTemplate:'thermal-80',defaultPrintSize:'A4',defaultLanguage:'Bilingual',showLogo:true,showTaxNumber:true,showCrNumber:true,showCustomerBalance:true,showSalesman:true,showBarcode:true,showQr:true,showPaymentTerms:true,showBankDetails:true,showSignatureBox:true,showStamp:true,showFooterNote:true,autoPrint:false,autoPreview:true,savePdfDemo:true,copyLabel:'Original',vatEnabled:true,taxRate:DEFAULT_TAX_RATE};
-  const defaultDesigner={templateBase:'modern-a4',primaryColor:'#0f9f78',accentColor:'#113d32',headerStyle:'Modern',logoPosition:'Left',tableDensity:'Comfortable',fontSize:'Normal',borderStyle:'Soft',footerStyle:'Terms and signature',showLogo:true,showStamp:true,showSignature:true,showBankDetails:true,showTaxNumber:true,showCrNumber:true,showBarcode:true,showQr:true,showCustomerBalance:true,showPaymentTerms:true,showFooterNote:true,columns:{sku:true,barcode:false,brand:true,name:true,category:false,colorCode:true,batchNo:false,expiryDate:false,unit:true,qty:true,rate:true,discount:true,tax:true,total:true,warehouse:false}};
-  const defaultCustomerPrefs={};
-
-  function $(s,r=document){return r.querySelector(s)}
-  function $$(s,r=document){return Array.from(r.querySelectorAll(s))}
-  function clone(x){return JSON.parse(JSON.stringify(x))}
-  function read(k,fallback){try{return JSON.parse(localStorage.getItem(k))??clone(fallback)}catch(e){return clone(fallback)}}
-  function write(k,v){localStorage.setItem(k,JSON.stringify(v)); return v}
-  function merge(target, defaults){let changed=false; Object.keys(defaults).forEach(k=>{ if(target[k]===undefined){target[k]=clone(defaults[k]); changed=true;} else if(defaults[k] && typeof defaults[k]==='object' && !Array.isArray(defaults[k]) && target[k] && typeof target[k]==='object' && !Array.isArray(target[k])){ if(merge(target[k], defaults[k])) changed=true; }}); return changed}
-  function num(v){const n=Number(v); return isFinite(n)?n:0}
-  function appDb(){let d={}; try{d=JSON.parse(localStorage.getItem(APP_DB_KEY)||'{}')||{}}catch(e){d={}} return d}
-  function saveAppDb(d){localStorage.setItem(APP_DB_KEY,JSON.stringify(d));}
-  function legacyDb(){let d={}; try{d=JSON.parse(localStorage.getItem(LEGACY_DB_KEY)||'{}')||{}}catch(e){d={}} return d}
-  function salesmanName(id){const sm=(appDb().salesmen||[]).find(s=>String(s.id)===String(id)); return sm?sm.name:''}
-  function resolveSalesman(data){const byId=data?.salesmanId?salesmanName(data.salesmanId):''; return byId || String(data?.salesman||'').trim()}
-  function audit(action,before='-',after='-'){const d=appDb(); d.auditEvents=d.auditEvents||[]; d.auditEvents.unshift({user:'Local User',action,before,after,time:new Date().toLocaleString(),device:'Local browser / localStorage',approval:'Not required'}); saveAppDb(d)}
-  function toast(msg,type='success'){const t=document.createElement('div'); t.className='position-fixed bottom-0 end-0 m-3 alert alert-'+type+' shadow'; t.style.zIndex=9999; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2400)}
-  function fallbackCopy(text){try{const ta=document.createElement('textarea'); ta.value=text; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.left='-9999px'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); return true;}catch(e){return false;}}
-  function copyText(text){if(navigator.clipboard?.writeText){return navigator.clipboard.writeText(text).catch(()=>fallbackCopy(text));} return Promise.resolve(fallbackCopy(text));}
-  function money(n){const c=getCompany(); return (c.currencySymbol||'QAR ')+num(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
-  function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-  function stripSalesmanColumn(obj){if(!obj || typeof obj!=='object') return false; let changed=false; if(obj.salesman!==undefined){delete obj.salesman; changed=true;} if(obj.columns && typeof obj.columns==='object' && obj.columns.salesman!==undefined){delete obj.columns.salesman; changed=true;} return changed}
-  function restoreNameColumn(cols){if(!cols || typeof cols!=='object') return false; let changed=false; if(cols.name!==true){cols.name=true; changed=true;} if(cols.salesman!==undefined){delete cols.salesman; changed=true;} return changed}
-  function migrateDesignerColumns(obj){if(!obj || typeof obj!=='object') return false; let changed=stripSalesmanColumn(obj); if(obj.columns && typeof obj.columns==='object') changed=restoreNameColumn(obj.columns)||changed; return changed}
-  function firstText(){for(const v of arguments){const s=String(v??'').trim(); if(s) return s;} return ''}
-  function resolveItemName(item){return firstText(item?.name,item?.product,item?.productName,item?.itemName,item?.description,'Item')}
-  function resolveCustomerPhone(data){const direct=firstText(data?.customerPhone,data?.customerMobile,data?.phone,data?.mobile,data?.whatsapp); if(direct && direct!=='-') return direct; const name=String(data?.customer||'').trim(); if(name){const sources=[appDb(),legacyDb()]; for(const src of sources){const c=(src.customers||[]).find(x=>String(x.name||'').trim()===name); const ph=firstText(c?.phone,c?.mobile,c?.whatsapp); if(ph && ph!=='-') return ph; }} return name==='Walk-in Customer'?'77790000':''}
-
-  function ensure(){
-    const c=read(KEYS.company,defaultCompany); let companyChanged=merge(c,defaultCompany);
-    if(c.crNumber==='CR-000000-DEMO'){c.crNumber='';companyChanged=true}
-    if(c.taxNumber==='VAT-0000-DEMO'){c.taxNumber='';companyChanged=true}
-    if(String(c.terms||'').includes('Demo invoice only.')){c.terms=String(c.terms).replace(' Demo invoice only.','');companyChanged=true}
-    if(companyChanged) write(KEYS.company,c);
-    const i=read(KEYS.invoice,defaultInvoice); if(merge(i,defaultInvoice)) write(KEYS.invoice,i);
-    const de=read(KEYS.designer,defaultDesigner); const deMerged=merge(de,defaultDesigner); const deMigrated=migrateDesignerColumns(de); if(deMerged||deMigrated) write(KEYS.designer,de);
-    if(!localStorage.getItem(KEYS.selected)) localStorage.setItem(KEYS.selected, i.defaultInvoiceTemplate||'modern-a4');
-    const cp=read(KEYS.customerPrefs,defaultCustomerPrefs); if(merge(cp,defaultCustomerPrefs)) write(KEYS.customerPrefs,cp);
-    [KEYS.printHistory,KEYS.previewHistory,KEYS.exports].forEach(k=>{if(!localStorage.getItem(k)) write(k,[])});
-    const cols=read(KEYS.columns, defaultDesigner.columns); const colsMerged=merge(cols, defaultDesigner.columns); const colsMigrated=restoreNameColumn(cols); if(!localStorage.getItem(KEYS.columns) || colsMerged || colsMigrated) write(KEYS.columns, cols);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
   }
 
-  function getCompany(){ensure(); return read(KEYS.company,defaultCompany)}
-  function getInvoice(){ensure(); return read(KEYS.invoice,defaultInvoice)}
-  function getDesigner(){ensure(); const d=read(KEYS.designer,defaultDesigner); migrateDesignerColumns(d); return d}
+  function init() {
+    if (state.initialized) return;
+    state.initialized = true;
 
-  function sampleData(kind='invoice', customerName){
-    const d=appDb(); const legacy=legacyDb();
-    const customer=customerName || (d.customers&&d.customers[0]&&d.customers[0].name) || (legacy.customers&&legacy.customers[0]&&legacy.customers[0].name) || '';
-    const invoice=getInvoice();
-    const items=[
-      {sku:'AX-2K-040',barcode:'629100001040',brand:'',category:'Automotive Paint',name:'Sample Product',product:'Sample Product',colorCode:'',shade:'Super White',formula:' Super White',batchNo:'B-2406',expiryDate:'2027-06-30',unit:'LTR',qty:2,rate:95,discount:0,taxRate:DEFAULT_TAX_RATE,warehouse:'Main WH'},
-      {sku:'CC-HS-1L',barcode:'629100001055',brand:'',category:' Coat',name:'Sample Product 1L',product:'Sample Product 1L',colorCode:'',shade:'High solid gloss',formula:'',batchNo:'C-1120',expiryDate:'2027-05-15',unit:'PCS',qty:1,rate:55,discount:0,taxRate:DEFAULT_TAX_RATE,warehouse:'Main WH'},
-      {sku:'TN-NC-5L',barcode:'629100001038',brand:'',category:'Thinner',name:'Sample Product',product:'Sample Product',colorCode:'N/A',shade:'',formula:'N/A',batchNo:'',expiryDate:'2027-01-20',unit:'PCS',qty:2,rate:38,discount:0,taxRate:DEFAULT_TAX_RATE,warehouse:'Main WH'}
-    ];
-    const sub=items.reduce((s,x)=>s+num(x.qty)*num(x.rate),0), disc=10, taxable=sub-disc, tax=invoice.vatEnabled?taxable*(num(invoice.taxRate||DEFAULT_TAX_RATE)/100):0, grand=taxable+tax;
-    const type={quotation:'Quotation',delivery:'Delivery Note','delivery-invoice':'Delivery Note','tax-invoice':'Tax Invoice'}[kind]||'Invoice';
-    const firstSalesman=(d.salesmen||[]).find(s=>s.active!==false);
-    return {type,invoiceNo:(kind==='quotation'?invoice.quotationPrefix:kind==='delivery'||kind==='delivery-invoice'?invoice.deliveryPrefix:kind==='return'?invoice.returnPrefix:invoice.invoicePrefix)+(invoice.nextInvoiceNumber||'0001'),date:new Date().toLocaleDateString(),time:new Date().toLocaleTimeString(),customer,customerPhone:resolveCustomerPhone({customer})||'',customerTax:'',customerBalance:0,creditLimit:0,salesmanId:firstSalesman?.id||'',salesman:firstSalesman?.name||'',cashier:'Cashier',branch:'',vehicleRef:'',colorMatchingNote:'',thinnerRatio:'',deliveryAddress:'',paymentMethod:'Cash / Card / Credit',paid:grand,balance:0,subtotal:sub,discount:disc,tax,grand,total:grand,amount:grand,items};
+    ensureStyles();
+    ensureToastContainer();
+    ensureReturnsPanel();
+    bindEvents();
+    loadBackendInvoices();
+    loadReturnHistory();
+
+    console.log("AxtorReturnsBackend loaded:", window.AxtorReturnsBackend.version);
   }
 
-  function normalizeItem(x, invoiceTaxRate){
-    x=x||{};
-    const qty=num(x.qty ?? x.quantity ?? 1) || 1;
-    const rate=num(x.rate ?? x.price ?? x.unitPrice ?? x.amount ?? x.total);
-    const discount=num(x.discount ?? x.lineDiscount);
-    const taxRate=x.taxRate!==undefined?num(x.taxRate):num(invoiceTaxRate||0);
-    const base=Math.max(0,(qty*rate)-discount);
-    const tax=x.tax!==undefined?num(x.tax):base*taxRate/100;
-    const total=x.total!==undefined?num(x.total):base+tax;
-    const name=resolveItemName(x);
-    const product=firstText(x.product,x.productName,x.name,x.itemName,x.description,name);
-    return Object.assign({}, x, {name, product, productName:firstText(x.productName,name), itemName:firstText(x.itemName,name), qty, rate, discount, taxRate, tax, total, unit:x.unit||'PCS'});
+  function bindEvents() {
+    document.addEventListener("input", function (e) {
+      if (e.target && e.target.id === "axtorReturnInvoiceSearch") {
+        state.searchText = e.target.value || "";
+        renderInvoiceList();
+        return;
+      }
+
+      if (e.target && e.target.matches("[data-return-qty]")) {
+        const lineKey = e.target.getAttribute("data-return-qty");
+        setReturnQty(lineKey, e.target.value);
+        return;
+      }
+
+      if (e.target && e.target.id === "axtorReturnReason") {
+        updateSummary();
+        return;
+      }
+    });
+
+    document.addEventListener("click", function (e) {
+      const refreshBtn = e.target.closest("[data-returns-refresh]");
+      if (refreshBtn) {
+        e.preventDefault();
+        loadBackendInvoices(true);
+        loadReturnHistory();
+        return;
+      }
+
+      const selectBtn = e.target.closest("[data-return-select-invoice]");
+      if (selectBtn) {
+        e.preventDefault();
+        selectInvoice(selectBtn.getAttribute("data-return-select-invoice"));
+        return;
+      }
+
+      const refundBtn = e.target.closest("[data-refund-invoice]");
+      if (refundBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        openRefundModal(refundBtn.getAttribute("data-refund-invoice"));
+        return;
+      }
+
+      const refundSubmitBtn = e.target.closest("[data-refund-submit]");
+      if (refundSubmitBtn) {
+        e.preventDefault();
+        postCustomerRefund();
+        return;
+      }
+
+      const clearBtn = e.target.closest("[data-returns-clear]");
+      if (clearBtn) {
+        e.preventDefault();
+        clearReturnPreview();
+        return;
+      }
+
+      const previewBtn = e.target.closest("[data-returns-preview]");
+      if (previewBtn) {
+        e.preventDefault();
+        previewReturnPayload();
+        return;
+      }
+
+      const postBtn = e.target.closest("[data-returns-post]");
+      if (postBtn) {
+        e.preventDefault();
+        postBackendReturn();
+        return;
+      }
+    });
   }
 
-  function normalizeData(templateId, opts={}){
-    const inv=getInvoice();
-    const base=sampleData(opts.kind||templateId, opts.customer);
-    const directData = (!opts.data && (opts.invoiceNo || opts.no || opts.id || Array.isArray(opts.items) || opts.amount!==undefined || opts.total!==undefined || opts.grand!==undefined)) ? opts : null;
-    const source=Object.assign({}, opts.data||directData||{});
-    if(source.no && !source.invoiceNo) source.invoiceNo=source.no;
-    if(source.documentNo && !source.invoiceNo) source.invoiceNo=source.documentNo;
-    if(source.id && !source.invoiceNo) source.invoiceNo=source.id;
-    const rawDocType=String(source.documentType||'').toLowerCase().replace(/[\s-]+/g,'_');
-    if(!source.documentType){
-      const ref=String(source.invoiceNo||source.no||source.id||'');
-      source.documentType=ref.startsWith('QTN-')?'quotation':(ref.startsWith('DN-')?'delivery_note':'invoice');
-    } else if(rawDocType==='dn'||rawDocType==='delivery'||rawDocType==='deliverynote') source.documentType='delivery_note';
-    else if(rawDocType==='quote'||rawDocType==='qtn') source.documentType='quotation';
-    const docTitleMap={invoice:'Sales Invoice',quotation:'Quotation',delivery_note:'Delivery Note'};
-    source.documentTitle=source.documentTitle||docTitleMap[source.documentType]||'Sales Invoice';
-    if(source.paymentType && !source.paymentMethod) source.paymentMethod=source.paymentType;
-    source.lpoNo=String(source.lpoNo || source.customerLpoNo || source.customerPoNo || source.poNo || '').trim();
-    source.customerLpoNo=source.lpoNo; source.customerPoNo=source.lpoNo; source.poNo=source.lpoNo;
-    if(source.total!==undefined && source.grand===undefined) source.grand=source.total;
-    if(source.amount!==undefined && source.grand===undefined) source.grand=source.amount;
-    let data=Object.assign({}, base, source);
-    data.customerPhone=resolveCustomerPhone(data)||data.customerPhone||'';
-    let items=Array.isArray(source.items)?source.items:(Array.isArray(source.draftItems)?source.draftItems:null);
-    if(!items || !items.length){
-      const grand=num(data.grand ?? data.total ?? data.amount);
-      const tax=num(data.tax ?? data.taxAmount);
-      const net=Math.max(0, grand-tax);
-      items=[{sku:data.invoiceNo||'', brand:'', name:data.status==='Draft'?'Draft invoice':'Invoice sale', product:data.status==='Draft'?'Draft invoice':'Invoice sale', unit:'Invoice', qty:1, rate:net||grand, discount:0, taxRate:0, tax, total:grand||net}];
+  async function backendGet(path) {
+    return backendRequest("GET", path);
+  }
+
+  async function backendPost(path, body) {
+    return backendRequest("POST", path, body);
+  }
+
+  async function backendRequest(method, path, body) {
+    if (window.AxtorAPI && typeof window.AxtorAPI.request === "function") {
+      return window.AxtorAPI.request(method, path, body);
     }
-    data.items=items.map(x=>normalizeItem(x, inv.vatEnabled?inv.taxRate:0));
-    const calcSub=data.items.reduce((s,x)=>s+(num(x.qty)*num(x.rate)),0);
-    const calcDiscount=data.items.reduce((s,x)=>s+num(x.discount),0) + num(data.invoiceDiscount);
-    const calcTax=data.items.reduce((s,x)=>s+num(x.tax),0);
-    const calcGrand=data.items.reduce((s,x)=>s+num(x.total),0) - num(data.invoiceDiscount);
-    data.subtotal=data.subtotal!==undefined?num(data.subtotal):calcSub;
-    data.discount=data.discount!==undefined?num(data.discount):calcDiscount;
-    data.tax=data.tax!==undefined?num(data.tax):calcTax;
-    data.grand=data.grand!==undefined?num(data.grand):calcGrand;
-    data.total=data.total!==undefined?num(data.total):data.grand;
-    data.amount=data.amount!==undefined?num(data.amount):data.grand;
-    data.paid=data.paid!==undefined?num(data.paid):data.grand;
-    data.balance=data.balance!==undefined?num(data.balance):Math.max(0,data.grand-data.paid);
+
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      window.location.replace("login.html?reason=authentication-required");
+      throw new Error("Authentication required. Redirecting to login.");
+    }
+
+    const res = await fetch(API_BASE_URL + path, {
+      method: method,
+      headers: {
+        Accept: "application/json",
+        ...(method === "GET" ? {} : { "Content-Type": "application/json" }),
+        Authorization: "Bearer " + token,
+      },
+      ...(method === "GET" ? {} : { body: JSON.stringify(body || {}) }),
+    });
+
+    const data = await res.json().catch(function () {
+      return null;
+    });
+
+    if (res.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      window.location.replace("login.html?reason=session-expired");
+      throw new Error("Session expired. Redirecting to login.");
+    }
+
+    if (!res.ok) {
+      throw new Error(data?.error?.message || data?.message || "Backend request failed");
+    }
+
     return data;
   }
 
-  function visibleColumns(templateId){
-    const des=getDesigner();
-    const cols=Object.assign({}, defaultDesigner.columns, read(KEYS.columns,des.columns), des.columns||{});
-    restoreNameColumn(cols);
-    if(templateId==='thermal-80') return ['name','qty','rate','total'];
-    if(templateId==='paint-store') return ['sku','brand','name','colorCode','shade','unit','qty','rate','discount','tax','total'];
-    return Object.keys(cols).filter(k=>k!=='salesman' && cols[k]);
+  async function loadBackendInvoices(manual) {
+    ensureReturnsPanel();
+
+    const tbody = document.getElementById("axtorReturnInvoicesTbody");
+    const status = document.getElementById("axtorReturnsStatus");
+
+    state.loading = true;
+
+    if (status) {
+      status.className = "small text-muted";
+      status.innerHTML = inlineSpinner("Loading backend invoices...");
+    }
+
+    if (tbody) {
+      tbody.innerHTML =
+        '<tr><td colspan="11" class="text-center py-4 text-muted">' +
+        inlineSpinner("Loading invoices...") +
+        "</td></tr>";
+    }
+
+    try {
+      const response = await backendGet("/api/v1/sales-documents");
+      const docs = normalizeList(response);
+
+      state.invoices = docs
+        .filter(isInvoice)
+        .sort(function (a, b) {
+          return new Date(b.rawDate || 0).getTime() - new Date(a.rawDate || 0).getTime();
+        });
+
+      renderInvoiceList();
+
+      if (status) {
+        status.className = "small text-success";
+        status.innerHTML = "Backend invoices loaded: <strong>" + state.invoices.length + "</strong>";
+      }
+
+      if (manual) {
+        showToast("Invoices refreshed", state.invoices.length + " invoice(s) loaded.", "success");
+      }
+    } catch (err) {
+      console.error("Returns backend invoice load failed:", err);
+
+      if (status) {
+        status.className = "small text-danger";
+        status.textContent = err.message || "Failed to load invoices";
+      }
+
+      if (tbody) {
+        tbody.innerHTML =
+          '<tr><td colspan="11" class="text-center py-4 text-danger">Failed to load backend invoices.</td></tr>';
+      }
+
+      showToast("Invoice load failed", err.message || "Unable to load backend invoices.", "danger");
+    } finally {
+      state.loading = false;
+    }
   }
 
-  const labelMap={sku:'SKU',barcode:'Barcode',brand:'Brand',category:'Category',name:'Product Name',product:'Product',colorCode:'Color Code',shade:'Shade / Formula',batchNo:'Batch No',expiryDate:'Expiry',unit:'Unit',qty:'Qty',rate:'Rate',discount:'Discount',tax:'Tax',total:'Total',warehouse:'Warehouse'};
+  async function loadReturnHistory() {
+    const body = document.getElementById("axtorReturnHistoryTbody");
+    if (!body) return;
 
-  function tableHtml(items, templateId){
-    const essential=new Set(['name','product','qty','rate','discount','tax','total']);
-    const cols=visibleColumns(templateId).filter(c=>c!=='salesman' && (essential.has(c) || items.some(x=>String(x[c]??'').trim() && String(x[c])!=='0')));
-    return `<table class="inv-table"><thead><tr>${cols.map(c=>`<th>${labelMap[c]||c}</th>`).join('')}</tr></thead><tbody>${items.map(x=>`<tr>${cols.map(c=>{let v=x[c]; if(c==='name'||c==='product') v=resolveItemName(x); if(c==='total') v=money(x.total); if(c==='tax') v=money(x.tax); if(c==='rate'||c==='discount') v=money(v||0); return `<td>${esc(v)}</td>`}).join('')}</tr>`).join('')}</tbody></table>`;
+    try {
+      const response = await backendGet("/api/v1/sales-returns");
+      const data = unwrapData(response);
+      const rows = Array.isArray(data)
+        ? data
+        : data?.items || data?.returns || data?.rows || data?.results || [];
+
+      state.returns = rows.map(normalizeReturn).filter(function (row) {
+        return !!row.id;
+      });
+
+      renderReturnHistory();
+    } catch (err) {
+      console.warn("Return history load skipped:", err);
+      body.innerHTML =
+        '<tr><td colspan="5" class="text-center py-3 text-muted">Return history unavailable or empty.</td></tr>';
+    }
   }
 
-  function brandBlock(c,inv){const logo=inv.showLogo&&c.logoData?`<img class="inv-logo" src="${c.logoData}">`:`<div class="inv-logo-mark">A</div>`; return `<div class="inv-brand">${logo}<div><h2>${esc(c.companyName)}</h2><p>${esc(c.address)}, ${esc(c.city)}, ${esc(c.country)}<br>${esc(c.phone)} • ${esc(c.email)} ${inv.showCrNumber?`<br>CR: ${esc(c.crNumber)}`:''} ${inv.showTaxNumber?` • Tax: ${esc(c.taxNumber)}`:''}</p></div></div>`}
-  function totalsBlock(data){return `<div class="inv-totals"><div><span>Subtotal</span><strong>${money(data.subtotal)}</strong></div><div><span>Discount</span><strong>${money(data.discount)}</strong></div><div><span>Tax</span><strong>${money(data.tax)}</strong></div><div class="grand"><span>Grand Total</span><strong>${money(data.grand)}</strong></div><div><span>Paid</span><strong>${money(data.paid)}</strong></div><div><span>Balance Due</span><strong>${money(data.balance)}</strong></div></div>`}
-  function salesmanFooterBlock(inv, name){return inv.showSalesman && name ? `<div><b>Salesman</b><br>${esc(name)}</div>` : ''}
-  function footerBlock(c,inv,salesman,data={}){
-    const info=[salesmanFooterBlock(inv,salesman), inv.showBankDetails?`<div><b>Bank Details</b><br>${esc(c.bankName)}<br>A/C: ${esc(c.bankAccount)}<br>IBAN: ${esc(c.iban)}</div>`:'', inv.showPaymentTerms?`<div><b>Payment Instructions</b><br>${esc(c.paymentInstructions)}</div>`:''].filter(Boolean).join('');
-    const companyImages=`${inv.showStamp&&c.stampData?`<img src="${c.stampData}" alt="Company stamp">`:''}${inv.showSignatureBox&&c.signatureData?`<img src="${c.signatureData}" alt="Account signature">`:''}`;
-    const companyBox=`<div class="signature-card"><h4>Company Stamp &amp; Account Signature</h4>${companyImages?`<div class="signature-images">${companyImages}</div>`:''}<div class="signature-line"><span>Company Stamp:</span></div><div class="signature-line"><span>Account Signature:</span></div><div class="signature-space"></div></div>`;
-    const customerBox=`<div class="signature-card"><h4>Customer Acknowledgement</h4><div class="signature-detail"><span>Customer Name:</span><strong>${esc(data.customer||'Walk-in Customer')}</strong></div><div class="signature-detail"><span>Customer Phone:</span><strong>${esc(resolveCustomerPhone(data)||'-')}</strong></div><div class="signature-line"><span>Customer Stamp:</span></div><div class="signature-line"><span>Customer Signature:</span></div><div class="signature-space"></div></div>`;
-    return `${info?`<div class="inv-footer-grid">${info}</div>`:''}<div class="inv-signature-grid">${companyBox}${customerBox}</div>${inv.showFooterNote?`<p class="inv-note">${esc(c.footerNote)}<br>${esc(c.terms)}</p>`:''}`;
+  function renderInvoiceList() {
+    const tbody = document.getElementById("axtorReturnInvoicesTbody");
+    const count = document.getElementById("axtorReturnsCount");
+    if (!tbody) return;
+
+    const search = String(state.searchText || "").toLowerCase().trim();
+
+    const rows = state.invoices.filter(function (doc) {
+      if (!search) return true;
+      return [
+        doc.documentNoText,
+        doc.customerText,
+        doc.dateText,
+        doc.statusText,
+        doc.returnStatusText,
+        doc.refundStatus,
+        doc.paymentStatus,
+        doc.returnedAmount,
+        doc.returnCount,
+        doc.lpoText,
+        doc.poText,
+        doc.amount,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(search);
+    });
+
+    if (count) count.textContent = rows.length + " shown";
+
+    if (!rows.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="11" class="text-center py-4 text-muted">No backend invoices found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows
+      .map(function (doc) {
+        const active =
+          state.selectedInvoice && String(state.selectedInvoice.id) === String(doc.id);
+
+        return `
+          <tr class="${active ? "axtor-return-selected-row" : ""}">
+            <td class="axtor-return-sticky-invoice"><strong>${escapeHtml(doc.documentNoText)}</strong></td>
+            <td>${escapeHtml(doc.customerText)}</td>
+            <td>${escapeHtml(doc.dateText)}</td>
+            <td class="text-end"><strong>${money(doc.amount)}</strong></td>
+            <td class="text-end">${money(doc.paidAmount)}</td>
+            <td class="text-end">${money(doc.returnedAmount)}</td>
+            <td class="text-end">${money(doc.refundedAmount)}</td>
+            <td class="text-end ${doc.refundBalance > 0 ? "fw-bold text-warning" : "text-muted"}">${money(doc.refundBalance)}</td>
+            <td class="text-end"><strong>${money(doc.netRetained)}</strong></td>
+            <td class="axtor-financial-status-cell">
+              <div>${statusBadge(doc.paymentStatus || doc.statusText)}</div>
+              <div>${returnBadge(doc)}</div>
+              <div>${refundBadge(doc)}</div>
+              ${doc.refundBalance > 0 ? `<div><span class="badge text-bg-warning">Refund Balance · ${money(doc.refundBalance)}</span></div>` : ""}
+            </td>
+            <td class="text-end axtor-return-sticky-action">
+              <div class="d-flex flex-wrap justify-content-end gap-1">
+                <button type="button" class="btn btn-sm ${isFullyReturned(doc) ? "btn-outline-secondary" : "btn-outline-success"}" data-return-select-invoice="${escapeAttr(doc.id)}" ${state.posting || isFullyReturned(doc) ? "disabled" : ""}>
+                  ${isFullyReturned(doc) ? "Fully Returned" : "Select"}
+                </button>
+                ${doc.refundBalance > 0 ? `<button type="button" class="btn btn-sm btn-warning" data-refund-invoice="${escapeAttr(doc.id)}">Refund Customer</button>` : `<button type="button" class="btn btn-sm btn-outline-secondary" disabled>${toNumber(doc.returnedAmount) > 0 ? "Fully Refunded" : "No Refund"}</button>`}
+                <button type="button" class="btn btn-sm btn-outline-primary" data-sales-view-id="${escapeAttr(doc.id)}">View</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
   }
 
-  function baseCss(des){return `<style>body{font-family:Inter,Arial,sans-serif;background:#eef5f0;margin:0;padding:22px;color:#17231d}.invoice-sheet{max-width:980px;margin:auto;background:white;border:1px solid #dbe8e1;border-radius:18px;padding:28px;box-shadow:0 12px 32px rgba(9,64,45,.12);font-size:${des.fontSize==='Small'?'12px':des.fontSize==='Large'?'15px':'13px'}}.invoice-sheet.compact{font-size:12px}.invoice-sheet.minimal{box-shadow:none;border-radius:4px}.invoice-sheet.thermal{width:302px;max-width:302px;padding:12px;border-radius:0;font-size:12px}.inv-head{display:flex;justify-content:space-between;gap:20px;border-bottom:3px solid ${des.primaryColor};padding-bottom:14px;margin-bottom:16px}.inv-brand{display:flex;align-items:center;gap:12px}.inv-brand h2{margin:0;color:${des.primaryColor};font-size:24px}.inv-brand p,.muted{color:#64766d;margin:4px 0;line-height:1.45}.inv-logo{max-height:66px;max-width:110px}.inv-logo-mark{width:54px;height:54px;border-radius:16px;background:${des.primaryColor};color:#fff;display:grid;place-items:center;font-size:28px;font-weight:900}.inv-title{text-align:right}.inv-title h1{margin:0;color:${des.accentColor};font-size:28px}.copy-label{display:inline-block;border:1px solid ${des.primaryColor};color:${des.primaryColor};padding:4px 9px;border-radius:999px;font-weight:800}.inv-box-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:15px 0}.inv-footer-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0 12px}.inv-footer-grid>div{border:1px solid #dcebe3;border-radius:14px;padding:12px;background:#fbfffd}.inv-box{border:1px solid #dcebe3;border-radius:14px;padding:12px;background:#fbfffd}.inv-table{width:100%;border-collapse:collapse;margin-top:14px}.inv-table th{background:${des.primaryColor};color:white;text-align:left;padding:${des.tableDensity==='Ultra compact'?'5px':des.tableDensity==='Compact'?'7px':'10px'};font-size:.92em}.inv-table td{border-bottom:1px solid #e8f0ec;padding:${des.tableDensity==='Ultra compact'?'5px':des.tableDensity==='Compact'?'7px':'10px'};vertical-align:top}.inv-totals{margin-left:auto;width:310px;border:1px solid #dcebe3;border-radius:14px;overflow:hidden;margin-top:16px}.inv-totals div{display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid #eef5f1}.inv-totals .grand{background:${des.accentColor};color:white;font-size:1.1em}.inv-signature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}.signature-card{border:1.5px solid #9fb7aa;border-radius:12px;min-height:136px;padding:12px;background:#fff;page-break-inside:avoid;break-inside:avoid}.signature-card h4{margin:0 0 9px;color:${des.accentColor};font-size:14px}.signature-detail{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #eef5f1;padding:4px 0}.signature-detail span,.signature-line span{color:#64766d}.signature-line{min-height:25px;border-bottom:1px dashed #9fb7aa;padding-top:8px}.signature-space{min-height:32px}.signature-images{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0}.signature-images img{max-height:52px;max-width:125px;object-fit:contain}.qr-box,.barcode-box{border:1px dashed #9fb7aa;width:92px;height:92px;display:grid;place-items:center;color:#6b7c73;font-size:11px}.inv-note{font-size:12px;color:#66756d;border-top:1px solid #e5eee9;margin-top:15px;padding-top:10px}.bilingual .ar{text-align:right;direction:rtl;color:#31443b}.letterhead .inv-head{border:0;background:linear-gradient(90deg,${des.primaryColor},${des.accentColor});color:white;border-radius:16px;padding:18px}.letterhead .inv-brand h2,.letterhead .inv-title h1,.letterhead .inv-brand p{color:white}.thermal .inv-head{display:block;text-align:center;border-bottom:1px dashed #333}.thermal .inv-brand{display:block}.thermal .inv-logo-mark{margin:0 auto 5px;width:38px;height:38px;border-radius:50%;font-size:18px}.thermal .inv-table th{background:#fff;color:#111;border-top:1px dashed #333;border-bottom:1px dashed #333}.thermal .inv-table td{padding:4px;border-bottom:0}.thermal .inv-totals{width:100%;border:0;border-radius:0}.thermal .inv-totals .grand{background:#111;color:#fff}.thermal .inv-footer-grid,.thermal .inv-signature-grid{display:grid;grid-template-columns:1fr;gap:8px;margin:10px 0}.thermal .inv-footer-grid>div,.thermal .signature-card{border-radius:6px;padding:8px;min-height:auto}.thermal .signature-card h4{font-size:12px}.thermal .signature-detail{display:block}.thermal .signature-line{min-height:20px}.thermal .signature-space{min-height:18px}.thermal .signature-images img{max-height:34px;max-width:80px}.print-actions{display:none}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{background:white!important;padding:0}.invoice-sheet{box-shadow:none;border:0;background:white!important;border-radius:0;max-width:none}.inv-signature-grid,.inv-footer-grid{page-break-inside:avoid;break-inside:avoid}.signature-card{page-break-inside:avoid;break-inside:avoid}.no-print{display:none!important}}</style>`}
+  async function selectInvoice(id) {
+    const doc = state.invoices.find(function (x) {
+      return String(x.id) === String(id);
+    });
 
-  function render(templateId, opts={}){
-    ensure();
-    const c=getCompany(), des=getDesigner();
-    let inv=getInvoice();
-    inv=Object.assign({}, inv, {showLogo:des.showLogo, showStamp:des.showStamp, showBankDetails:des.showBankDetails, showTaxNumber:des.showTaxNumber, showCrNumber:des.showCrNumber, showBarcode:des.showBarcode, showQr:des.showQr, showCustomerBalance:des.showCustomerBalance, showPaymentTerms:des.showPaymentTerms, showFooterNote:des.showFooterNote, showSignatureBox:des.showSignature});
-    const data=normalizeData(templateId, opts);
-    const resolvedSalesman=resolveSalesman(data);
-    const cls=[templateId==='thermal-80'?'thermal':'',templateId==='compact-a4'?'compact':'',templateId==='minimal'?'minimal':'',templateId==='letterhead'?'letterhead':'',templateId==='bilingual'?'bilingual':''].join(' ');
-    const title=data.documentTitle || (data.documentType==='quotation'?'Quotation':data.documentType==='delivery_note'?'Delivery Note':(templateId==='tax-invoice'?'Tax Invoice':templateId==='quotation'?'Quotation':templateId==='delivery-invoice'?'Delivery Note':templateId==='thermal-80'?'Receipt':'Sales Invoice'));
+    if (!doc) {
+      showToast("Invoice not found", "Please refresh and try again.", "danger");
+      return;
+    }
 
-    if(templateId==='thermal-80') return baseCss(des)+`<div class="invoice-sheet thermal"><div class="inv-head">${brandBlock(c,inv)}<p>${esc(data.branch)}<br>${esc(data.invoiceNo)} • ${esc(data.time||data.date)}</p></div><p><b>Counter:</b> ${esc(data.counter||'-')}<br><b>Cashier:</b> ${esc(data.cashier||'-')}<br><b>Customer:</b> ${esc(data.customer)}${data.lpoNo?`<br><b>LPO No:</b> ${esc(data.lpoNo)}`:''}</p>${tableHtml(data.items,'thermal-80')}${totalsBlock(data)}<p><b>Payment:</b> ${esc(data.paymentMethod)}${data.dueDate?`<br><b>Due Date:</b> ${esc(data.dueDate)}`:''}</p>${inv.showQr?`<div class="qr-box" style="margin:auto">QR<br>${esc(data.invoiceNo)}</div>`:''}${footerBlock(c,inv,resolvedSalesman,data)}<p style="text-align:center">Thank you!</p></div>`;
+    if (isFullyReturned(doc)) {
+      showToast("Fully returned", "This invoice is already fully returned.", "warning");
+      return;
+    }
 
-    const bilingual=templateId==='bilingual'?`<div class="ar"><b>فاتورة / Invoice</b><br>التاريخ / Date: ${esc(data.date)}<br>العميل / Customer: ${esc(data.customer)}${data.lpoNo?`<br>LPO: ${esc(data.lpoNo)}`:''}<br>الإجمالي / Total: ${money(data.grand)}</div>`:'';
-    const paint=templateId==='paint-store'?`<div class="inv-box-grid"><div class="inv-box"><b>Vehicle / Project Reference</b><br>${esc(data.vehicleRef)}<br><b>Color Matching Note</b><br>${esc(data.colorMatchingNote)}</div><div class="inv-box"><b>Thinner Ratio</b><br>${esc(data.thinnerRatio)}<br><b>Delivery Address</b><br>${esc(data.deliveryAddress)}</div></div>`:'';
-    const tax=templateId==='tax-invoice'?`<div class="inv-box-grid"><div class="inv-box"><b>Taxable Amount:</b> ${money(data.subtotal-data.discount)}<br><b>Tax %:</b> ${esc(inv.taxRate)}%<br><b>Tax Amount:</b> ${money(data.tax)}</div><div class="inv-box"><b>Customer Tax No:</b> ${esc(data.customerTax)}<br><b>Net Amount:</b> ${money(data.subtotal-data.discount)}<br><small>Demo structure only, no real tax filing.</small></div></div>`:'';
+    state.selectedInvoice = doc;
+    state.returnIdempotencyKey = createKey("return", doc.id);
+    state.returnItems.clear();
 
-    return baseCss(des)+`<div class="invoice-sheet ${cls}"><div class="inv-head">${brandBlock(c,inv)}<div class="inv-title"><h1>${title}${templateId==='bilingual'?' / فاتورة':''}</h1><p><span class="copy-label">${esc(inv.copyLabel)}</span></p><p><b>${esc(data.invoiceNo)}</b><br>Invoice Date: ${esc(data.date)}${data.dueDate?`<br>Due Date: ${esc(data.dueDate)}`:''}</p></div></div>${bilingual}<div class="inv-box-grid"><div class="inv-box"><b>Bill To / العميل</b><br><strong>${esc(data.customer)}</strong>${data.customerPhone?`<br>Phone: ${esc(data.customerPhone)}`:''}${data.deliveryAddress?`<br>${esc(data.deliveryAddress)}`:''}${inv.showCustomerBalance?`<br>Account Balance: ${money(data.customerBalance)}`:''}</div><div class="inv-box"><b>Document Details</b><br>Status: ${esc(data.status||data.paymentStatus||'-')}<br>Branch: ${esc(data.branch||'-')}${data.warehouse?`<br>Warehouse: ${esc(data.warehouse)}`:''}<br>Payment: ${esc(data.paymentMethod||'-')}${resolvedSalesman?`<br>Salesman: ${esc(resolvedSalesman)}`:''}${data.lpoNo?`<br>LPO No: ${esc(data.lpoNo)}`:''}${data.customerPoNo?`<br>Customer PO: ${esc(data.customerPoNo)}`:''}${data.poNo?`<br>PO No: ${esc(data.poNo)}`:''}${data.referenceNo?`<br>Reference: ${esc(data.referenceNo)}`:''}</div></div>${paint}${tax}${tableHtml(data.items,templateId)}<div style="display:flex;gap:20px;align-items:flex-start;justify-content:space-between"><div>${inv.showQr?`<div class="qr-box">QR<br>${esc(data.invoiceNo)}</div>`:''}${inv.showBarcode?`<div class="barcode-box" style="width:180px;height:42px;margin-top:8px">Document ${esc(data.invoiceNo)}</div>`:''}</div>${totalsBlock(data)}</div>${data.customerNotes?`<div class="inv-box" style="margin-top:14px"><b>Customer Notes</b><br>${esc(data.customerNotes)}</div>`:''}${footerBlock(c,inv,resolvedSalesman,data)}</div>`;
+    const lines = Array.isArray(doc.lines) ? doc.lines : [];
+    lines.forEach(function (line, index) {
+      const key = line.id || line.productId || "line-" + index;
+      state.returnItems.set(String(key), {
+        key: String(key),
+        productId: line.productId || "",
+        salesDocumentItemId: line.id || null,
+        name: line.name || "Item",
+        sku: line.sku || "-",
+        soldQty: toNumber(line.qty || line.quantity),
+        returnQty: 0,
+        rate: toNumber(line.rate || line.unitPrice),
+        total: 0,
+      });
+    });
+
+    renderInvoiceList();
+    renderSelectedInvoice();
+    updateSummary();
+
+    showToast("Invoice selected", doc.documentNoText + " loaded for return.", "success");
   }
 
-  function openPrint(html){const w=window.open('','_blank','width=1000,height=780'); if(!w){toast('Popup blocked. Allow popups to print.','warning'); return;} w.document.write(`<!doctype html><html><head><title>Axtor Document Print</title></head><body>${html}<script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>`); w.document.close();}
-  function ensureModal(){let m=$('#axtorInvoicePreviewModal'); if(m) return m; document.body.insertAdjacentHTML('beforeend',`<div class="modal fade" id="axtorInvoicePreviewModal" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold">Document Preview</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body bg-light"><iframe id="axtorInvoiceFrame" style="width:100%;height:72vh;border:0;background:white;border-radius:14px"></iframe></div><div class="modal-footer"><button class="btn btn-soft" data-invoice-whatsapp>Send WhatsApp</button><button class="btn btn-soft" data-invoice-copy-link>🔗 Copy Invoice Link</button><button class="btn btn-soft" data-invoice-pdf>Download PDF Preview</button><button class="btn btn-brand" data-invoice-modal-print>Print</button><button class="btn btn-soft" data-bs-dismiss="modal">Close</button></div></div></div></div>`); return $('#axtorInvoicePreviewModal')}
+  function renderSelectedInvoice() {
+    const box = document.getElementById("axtorReturnSelectedBox");
+    const tbody = document.getElementById("axtorReturnItemsTbody");
 
-  let lastPreview={template:'modern-a4',html:'',data:null};
-  function preview(templateId, opts={}){const id=templateId||selectedTemplate(opts.customer); const data=normalizeData(id, opts); const html=render(id,{data}); lastPreview={template:id,html,data}; const m=ensureModal(), f=$('#axtorInvoiceFrame'); if(f) f.srcdoc=html; if(m && window.bootstrap?.Modal){ window.bootstrap.Modal.getOrCreateInstance(m).show(); } else { toast('Invoice preview is unavailable on this page','warning'); } const h=read(KEYS.previewHistory,[]); h.unshift({template:lastPreview.template,ref:data.invoiceNo,time:new Date().toLocaleString()}); write(KEYS.previewHistory,h.slice(0,50)); audit('Invoice preview opened','-',data.invoiceNo||lastPreview.template)}
-  function print(templateId, opts={}){const id=templateId||selectedTemplate(opts.customer); const data=normalizeData(id, opts); const html=render(id,{data}); openPrint(html); const h=read(KEYS.printHistory,[]); h.unshift({template:id,time:new Date().toLocaleString(),ref:data.invoiceNo}); write(KEYS.printHistory,h.slice(0,50)); audit('Invoice printed','-',data.invoiceNo||id)}
-  function selectedTemplate(customer){const prefs=read(KEYS.customerPrefs,{}); if(customer&&prefs[customer]&&prefs[customer].template) return prefs[customer].template; return localStorage.getItem(KEYS.selected)||getInvoice().defaultInvoiceTemplate||'modern-a4'}
+    if (!box || !tbody) return;
 
-  function saveCompanyForm(){const obj=getCompany(); $$('[data-company-setting]').forEach(el=>obj[el.dataset.companySetting]=el.value); const symbols={QAR:'QAR ',AED:'AED ',SAR:'SAR ',KWD:'KWD ',BHD:'BHD ',USD:'$ ',EUR:'€ ',GBP:'£ '}; obj.currency=obj.currency||'QAR'; obj.currencySymbol=symbols[obj.currency]||((obj.currency||'QAR')+' '); write(KEYS.company,obj); audit('Company settings changed','Company profile','Saved'); toast('Company settings saved'); updateLivePreview(); renderSettingsSummary();}
-  function loadCompanyForm(){const obj=getCompany(); $$('[data-company-setting]').forEach(el=>{el.value=obj[el.dataset.companySetting]||''}); ['logoData','stampData','signatureData'].forEach(k=>{const img=$(`[data-company-preview="${k}"]`); if(img&&obj[k]) img.src=obj[k]})}
-  function saveInvoiceForm(){const obj=getInvoice(); $$('[data-invoice-setting]').forEach(el=>{obj[el.dataset.invoiceSetting]=el.type==='checkbox'?el.checked:el.value}); write(KEYS.invoice,obj); localStorage.setItem(KEYS.selected,obj.defaultInvoiceTemplate); audit('Invoice settings changed','Invoice preferences','Saved'); toast('Invoice settings saved'); renderSettingsSummary(); updateLivePreview()}
-  function loadInvoiceForm(){const obj=getInvoice(); $$('[data-invoice-setting]').forEach(el=>{if(el.type==='checkbox') el.checked=!!obj[el.dataset.invoiceSetting]; else el.value=obj[el.dataset.invoiceSetting]??''}); renderSettingsSummary()}
-  function renderSettingsSummary(){let boxes=$$('.invoice-settings-summary'); const legacy=$('#invoiceSettingsSummary'); if(!boxes.length && legacy) boxes=[legacy]; if(!boxes.length) return; const i=getInvoice(), t=templateList.find(x=>x.id===selectedTemplate())||templateList[0]; const html=`<div class="smallcaps">Current invoice setup</div><h5 class="mt-2">${esc(t.name)}</h5><p class="text-muted mb-2">${esc(i.defaultPrintSize)} • ${esc(i.defaultLanguage)} • ${esc(i.copyLabel)}</p><div class="d-flex gap-2 flex-wrap"><span class="badge-soft badge-paid">${esc(i.invoicePrefix)}${esc(i.nextInvoiceNumber)}</span><span class="badge-soft badge-pending">VAT ${i.vatEnabled?'On':'Off'}</span><span class="badge-soft badge-paid">Auto preview ${i.autoPreview?'On':'Off'}</span></div>`; boxes.forEach(box=>{ if(box) box.innerHTML=html; });}
-  function renderGallery(){const wrap=$('#invoiceTemplateGallery'); if(!wrap) return; const selected=selectedTemplate(); wrap.innerHTML=templateList.map(t=>`<div class="col-md-6 col-xl-4"><div class="invoice-template-card ${selected===t.id?'active':''}"><div class="d-flex justify-content-between align-items-start"><div><h5>${esc(t.name)}</h5><p class="text-muted small">${esc(t.use)}</p></div>${t.badge?`<span class="badge-soft badge-paid">${esc(t.badge)}</span>`:''}</div><div class="invoice-thumb"><div></div><span>${esc(t.size)}</span></div><div class="d-flex gap-2 mt-3 flex-wrap"><button class="btn btn-sm btn-brand" data-select-template="${t.id}">Select default</button><button class="btn btn-sm btn-soft" data-preview-template="${t.id}">Preview</button><button class="btn btn-sm btn-soft" data-print-template="${t.id}">Print sample</button></div>${selected===t.id?'<div class="mt-2 text-brand fw-bold"><i class="bi bi-check-circle"></i> Selected default</div>':''}</div></div>`).join('')}
-  function updateLivePreview(){const box=$('#invoiceLivePreview'); if(box){box.innerHTML='<iframe class="w-100" style="height:620px;border:0;background:white;border-radius:14px" sandbox="allow-same-origin allow-modals allow-popups"></iframe>'; const f=box.querySelector('iframe'); f.srcdoc=render(selectedTemplate());}}
-  function initSettingsPage(){if(!$('#invoiceTemplateGallery') && !$('#invoiceSettingsForm')) return; loadCompanyForm(); loadInvoiceForm(); renderGallery(); updateLivePreview(); $('#saveCompanySettingsBtn')?.addEventListener('click',saveCompanyForm); $('#saveInvoiceSettingsBtn')?.addEventListener('click',saveInvoiceForm); $$('[data-image-upload]').forEach(input=>input.addEventListener('change',e=>{const file=e.target.files[0]; if(!file) return; const key=input.dataset.imageUpload; const r=new FileReader(); r.onload=()=>{const c=getCompany(); c[key]=r.result; write(KEYS.company,c); loadCompanyForm(); toast('Image saved in demo localStorage')}; r.readAsDataURL(file)})); }
-  function loadDesignerForm(){const d=getDesigner(); $$('[data-designer]').forEach(el=>{const key=el.dataset.designer; if(key==='columns.salesman'){el.checked=false; el.disabled=true; return;} if(key.startsWith('columns.')) el.checked=!!d.columns[key.split('.')[1]]; else if(el.type==='checkbox') el.checked=!!d[key]; else el.value=d[key]??''}); updateLivePreview();}
-  function saveDesignerForm(){const d=getDesigner(); $$('[data-designer]').forEach(el=>{const key=el.dataset.designer; if(key==='columns.salesman') return; if(key.startsWith('columns.')){d.columns=d.columns||{}; d.columns[key.split('.')[1]]=el.checked;} else d[key]=el.type==='checkbox'?el.checked:el.value}); migrateDesignerColumns(d); write(KEYS.designer,d); write(KEYS.columns,d.columns); audit('Invoice design saved','Designer','Saved'); toast('Invoice design saved'); updateLivePreview();}
-  function initDesignerPage(){if(!$('#invoiceDesignerForm')) return; loadDesignerForm(); document.addEventListener('input',e=>{if(e.target.closest('#invoiceDesignerForm')){saveDesignerForm()}}); $('#saveInvoiceDesignBtn')?.addEventListener('click',saveDesignerForm); $('#resetInvoiceDesignBtn')?.addEventListener('click',()=>{write(KEYS.designer,clone(defaultDesigner)); write(KEYS.columns,clone(defaultDesigner.columns)); loadDesignerForm(); audit('Invoice design reset'); toast('Invoice design reset')}); $('#saveDesignerDefaultBtn')?.addEventListener('click',()=>{const d=getDesigner(); localStorage.setItem(KEYS.selected,d.templateBase); const i=getInvoice(); i.defaultInvoiceTemplate=d.templateBase; write(KEYS.invoice,i); toast('Designer base saved as default template')}); $('#exportTemplateJsonBtn')?.addEventListener('click',()=>{const data=getDesigner(); stripSalesmanColumn(data); const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='axtor-invoice-template.json'; a.click(); URL.revokeObjectURL(a.href); const ex=read(KEYS.exports,[]); ex.unshift({time:new Date().toLocaleString(),template:data.templateBase}); write(KEYS.exports,ex); audit('Exported invoice template JSON')}); $('#importTemplateJsonInput')?.addEventListener('change',e=>{const file=e.target.files[0]; if(!file) return; const r=new FileReader(); r.onload=()=>{try{const json=JSON.parse(r.result); const d=getDesigner(); merge(json,d); migrateDesignerColumns(json); write(KEYS.designer,json); write(KEYS.columns,json.columns||{}); loadDesignerForm(); toast('Template JSON imported')}catch(err){toast('Invalid template JSON','danger')}}; r.readAsText(file)});}
-  function initCustomerPrefs(){const form=$('#customerInvoicePrefsForm'); if(!form) return; const prefs=read(KEYS.customerPrefs,defaultCustomerPrefs); function load(){const name=$('#customerPrefName').value; const p=prefs[name]||{}; $$('[data-customer-pref]').forEach(el=>{const k=el.dataset.customerPref; if(el.type==='checkbox') el.checked=!!p[k]; else el.value=p[k]??(k==='template'?selectedTemplate(): '')})} $('#customerPrefName')?.addEventListener('change',load); $('#saveCustomerInvoicePrefsBtn')?.addEventListener('click',()=>{const name=$('#customerPrefName').value; prefs[name]=prefs[name]||{}; $$('[data-customer-pref]').forEach(el=>{prefs[name][el.dataset.customerPref]=el.type==='checkbox'?el.checked:el.value}); write(KEYS.customerPrefs,prefs); audit('Customer invoice preferences changed','-',name); toast('Customer invoice preferences saved')}); load();}
-  function whatsAppMessage(){const data=lastPreview.data||normalizeData(selectedTemplate(),{}); const t=templateList.find(x=>x.id===(lastPreview.template||selectedTemplate()))||templateList[0]; return `Dear ${data.customer},\n${data.documentTitle||'Sales Invoice'} ${data.invoiceNo} from Axtor Trading is ready.\nAmount: ${money(data.grand)}\nTemplate: ${t.name}\nPlease arrange payment if pending.\nThank you.`}
-  function initGlobalButtons(){document.addEventListener('click',e=>{const sel=e.target.closest('[data-select-template]'); if(sel){const i=getInvoice(); const before=selectedTemplate(); i.defaultInvoiceTemplate=sel.dataset.selectTemplate; write(KEYS.invoice,i); localStorage.setItem(KEYS.selected,sel.dataset.selectTemplate); audit('Default invoice template changed',before,sel.dataset.selectTemplate); toast('Default invoice template selected'); renderGallery(); renderSettingsSummary(); updateLivePreview()} const pre=e.target.closest('[data-preview-template],[data-invoice-preview]'); if(pre){e.preventDefault(); const id=pre.dataset.previewTemplate||pre.dataset.invoicePreview||selectedTemplate(); preview(id)} const pr=e.target.closest('[data-print-template],[data-invoice-print]'); if(pr){e.preventDefault(); const id=pr.dataset.printTemplate||pr.dataset.invoicePrint||selectedTemplate(); print(id)} const modPrint=e.target.closest('[data-invoice-modal-print]'); if(modPrint){e.preventDefault(); openPrint(lastPreview.html||render(lastPreview.template||selectedTemplate()))} const pdf=e.target.closest('[data-invoice-pdf]'); if(pdf){const blob=new Blob(['Axtor POS Cloud PDF preview generated for '+(lastPreview.data?.invoiceNo||lastPreview.template)],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='axtor-invoice-pdf-preview.txt'; a.click(); URL.revokeObjectURL(a.href); toast('PDF preview generated')} const link=e.target.closest('[data-invoice-copy-link]'); if(link){const payload=Object.assign({template:lastPreview.template||selectedTemplate()}, lastPreview.data||normalizeData(lastPreview.template||selectedTemplate(),{})); const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload)))); const url=new URL('invoice-view.html', location.href); url.searchParams.set('data', encoded); copyText(url.href); audit('Invoice link copied','-',payload.invoiceNo); toast('Invoice link copied')} const wa=e.target.closest('[data-invoice-whatsapp],[data-whatsapp-invoice]'); if(wa){const msg=whatsAppMessage(); copyText(msg); const d=appDb(); d.communicationHistory=d.communicationHistory||[]; d.communicationHistory.unshift({time:new Date().toLocaleString(),type:'WhatsApp Invoice',message:msg,status:'Prepared'}); saveAppDb(d); const company=getCompany(); if(company.whatsapp) window.open('https://wa.me/'+company.whatsapp+'?text='+encodeURIComponent(msg),'_blank'); audit('WhatsApp invoice message prepared','-',lastPreview.data?.invoiceNo||selectedTemplate()); toast('WhatsApp invoice message copied and WhatsApp opened')}} , true);
-    const oldModal=$('#invoiceModal'); if(oldModal){oldModal.addEventListener('show.bs.modal',()=>setTimeout(()=>{const body=oldModal.querySelector('.modal-body'); if(body){ body.innerHTML='<iframe style="width:100%;height:72vh;border:0;background:white;border-radius:14px"></iframe>'; body.querySelector('iframe').srcdoc=lastPreview.html||render(selectedTemplate()); } const footer=oldModal.querySelector('.modal-footer'); if(footer) footer.innerHTML='<button class="btn btn-soft" data-bs-dismiss="modal">Close</button><button class="btn btn-soft" data-whatsapp-invoice>WhatsApp</button><button class="btn btn-soft" data-invoice-copy-link>🔗 Copy Invoice Link</button><button class="btn btn-brand" data-invoice-modal-print>Print Invoice</button>';},20))}
+    const doc = state.selectedInvoice;
+
+    if (!doc) {
+      box.innerHTML =
+        '<div class="text-muted">Select backend invoice to return items.</div>';
+      tbody.innerHTML =
+        '<tr><td colspan="6" class="text-center py-4 text-muted">No invoice selected.</td></tr>';
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="axtor-return-doc-grid">
+        ${infoBox("Invoice", doc.documentNoText)}
+        ${infoBox("Customer", doc.customerText)}
+        ${infoBox("Date", doc.dateText)}
+        ${infoBox("Amount", money(doc.amount))}
+        ${infoBox("Paid", money(doc.paidAmount))}
+        ${infoBox("Status", titleCase(doc.statusText))}
+        ${infoBox("Return Status", doc.returnStatusText || "Not Returned")}
+        ${infoBox("Returned Amount", money(doc.returnedAmount || 0))}
+        ${infoBox("Return Count", String(doc.returnCount || 0))}
+        ${infoBox("Refund Status", refundStatusLabel(doc.refundStatus))}
+        ${infoBox("Refunded Amount", money(doc.refundedAmount || 0))}
+        ${infoBox("Refund Balance", money(doc.refundBalance || 0))}
+      </div>
+    `;
+
+    const items = Array.from(state.returnItems.values());
+
+    if (!items.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="6" class="text-center py-4 text-muted">No items found on this invoice.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = items
+      .map(function (item) {
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(item.name)}</strong>
+              <div class="small text-muted">SKU: ${escapeHtml(item.sku || "-")}</div>
+              <div class="small text-muted">Product ID: ${escapeHtml(item.productId || "-")}</div>
+            </td>
+            <td class="text-end">${formatQty(item.soldQty)}</td>
+            <td class="text-end">${money(item.rate)}</td>
+            <td class="text-end">
+              <input type="number" min="0" max="${escapeAttr(item.soldQty)}" step="0.01"
+                class="form-control form-control-sm text-end"
+                value="${toNumber(item.returnQty).toFixed(2)}"
+                data-return-qty="${escapeAttr(item.key)}"
+                ${state.posting ? "disabled" : ""}>
+            </td>
+            <td class="text-end"><strong>${money(item.total)}</strong></td>
+            <td>${item.returnQty > 0 ? '<span class="badge text-bg-warning">Return</span>' : '<span class="text-muted">No return</span>'}</td>
+          </tr>
+        `;
+      })
+      .join("");
   }
-  function init(){ensure(); initSettingsPage(); initDesignerPage(); initCustomerPrefs(); initGlobalButtons();}
-  window.AxtorInvoice={templates:templateList,render,preview,print,selectedTemplate,getCompany,getInvoice,getDesigner,toast,audit,sampleData,normalizeData,resolveSalesman};
-  document.addEventListener('DOMContentLoaded',init);
+
+  function setReturnQty(key, value) {
+    const item = state.returnItems.get(String(key));
+    if (!item) return;
+
+    const qty = Math.max(0, Math.min(toNumber(value), toNumber(item.soldQty)));
+    item.returnQty = qty;
+    item.total = roundMoney(qty * toNumber(item.rate));
+
+    renderSelectedInvoice();
+    updateSummary();
+  }
+
+  function updateSummary() {
+    const items = Array.from(state.returnItems.values()).filter(function (item) {
+      return toNumber(item.returnQty) > 0;
+    });
+
+    const totalQty = items.reduce(function (sum, item) {
+      return sum + toNumber(item.returnQty);
+    }, 0);
+
+    const totalAmount = items.reduce(function (sum, item) {
+      return sum + toNumber(item.total);
+    }, 0);
+
+    setText("axtorReturnTotalQty", formatQty(totalQty));
+    setText("axtorReturnTotalAmount", money(totalAmount));
+
+    const postBtn = document.querySelector("[data-returns-post]");
+    const previewBtn = document.querySelector("[data-returns-preview]");
+
+    if (previewBtn) previewBtn.disabled = !state.selectedInvoice || totalAmount <= 0 || state.posting;
+    if (postBtn) {
+      postBtn.disabled = !state.selectedInvoice || totalAmount <= 0 || state.posting;
+      postBtn.title = postBtn.disabled ? "Select invoice and return quantity first." : "Post return to backend.";
+    }
+  }
+
+  function previewReturnPayload() {
+    try {
+      const payload = buildReturnPayload();
+      console.log("Axtor Return Phase 5B payload preview:", payload);
+
+      showToast(
+        "Return preview ready",
+        "Payload printed in console. Total: " + money(payload.totalAmount),
+        "info"
+      );
+
+      alert(
+        "Return payload printed in console.\n\nInvoice: " +
+          payload.documentNo +
+          "\nItems: " +
+          payload.items.length +
+          "\nTotal: " +
+          money(payload.totalAmount)
+      );
+    } catch (err) {
+      showToast("Preview failed", err.message || "Unable to build return payload.", "danger");
+    }
+  }
+
+  async function postBackendReturn() {
+    if (state.posting) {
+      showToast("Please wait", "Return is already being posted.", "warning");
+      return;
+    }
+
+    let payload;
+    try {
+      payload = buildReturnPayload();
+    } catch (err) {
+      showToast("Return invalid", err.message || "Check return details.", "danger");
+      return;
+    }
+
+    const ok = confirm(
+      "Post backend sales return now?\n\nInvoice: " +
+        payload.documentNo +
+        "\nItems: " +
+        payload.items.length +
+        "\nTotal: " +
+        money(payload.totalAmount)
+    );
+
+    if (!ok) return;
+
+    state.posting = true;
+    setPostButtonLoading(true);
+    updateSummary();
+    showToast("Posting return", "Saving return and increasing stock...", "info");
+
+    try {
+      console.log("Axtor Phase 5B return payload:", payload);
+      const response = await backendPost("/api/v1/sales-returns", payload);
+      const created = normalizeReturn(unwrapData(response));
+
+      state.lastReturnId = created.id || "";
+      state.lastReturnNo = created.returnNo || created.documentNo || "";
+
+      showToast(
+        "Return posted",
+        (state.lastReturnNo ? state.lastReturnNo + " posted. " : "") +
+          "Stock updated by backend.",
+        "success"
+      );
+
+      clearReturnPreview(false);
+      await loadBackendInvoices(false);
+      await loadReturnHistory();
+      refreshProductsIfAvailable();
+      refreshSalesBackendIfAvailable();
+    } catch (err) {
+      console.error("Post sales return failed:", err);
+      showToast("Return failed", err.message || "Unable to post return.", "danger");
+    } finally {
+      state.posting = false;
+      setPostButtonLoading(false);
+      updateSummary();
+    }
+  }
+
+  function buildReturnPayload() {
+    if (!state.selectedInvoice) {
+      throw new Error("Select invoice first.");
+    }
+
+    const items = Array.from(state.returnItems.values())
+      .filter(function (item) {
+        return toNumber(item.returnQty) > 0;
+      })
+      .map(function (item) {
+        return {
+          salesDocumentItemId: item.salesDocumentItemId || null,
+          productId: item.productId || null,
+          productName: item.name,
+          sku: item.sku || null,
+          soldQty: item.soldQty,
+          returnQty: item.returnQty,
+          quantity: item.returnQty,
+          qty: item.returnQty,
+          rate: item.rate,
+          unitPrice: item.rate,
+          price: item.rate,
+          lineTotal: item.total,
+          total: item.total,
+        };
+      });
+
+    if (!items.length) {
+      throw new Error("Enter return quantity for at least one item.");
+    }
+
+    const reason =
+      document.getElementById("axtorReturnReason")?.value ||
+      "Customer return";
+
+    const totalAmount = items.reduce(function (sum, item) {
+      return sum + toNumber(item.lineTotal);
+    }, 0);
+
+    return {
+      sourceSalesDocumentId: state.selectedInvoice.id,
+      salesDocumentId: state.selectedInvoice.id,
+      documentNo: state.selectedInvoice.documentNoText,
+      customerId: state.selectedInvoice.customerId || null,
+      customerName: state.selectedInvoice.customerText,
+      reason: reason,
+      notes: reason,
+      idempotencyKey: state.returnIdempotencyKey || (state.returnIdempotencyKey = createKey("return", state.selectedInvoice.id)),
+      totalAmount: totalAmount,
+      grandTotal: totalAmount,
+      items: items,
+    };
+  }
+
+  function setPostButtonLoading(active) {
+    const btn = document.querySelector("[data-returns-post]");
+    if (!btn) return;
+
+    btn.disabled = !!active;
+
+    if (active) {
+      btn.setAttribute("data-original-html", btn.innerHTML);
+      btn.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Posting Return...';
+    } else {
+      btn.innerHTML =
+        btn.getAttribute("data-original-html") ||
+        "Post Backend Return";
+      btn.removeAttribute("data-original-html");
+    }
+  }
+
+  function clearReturnPreview(showMessage) {
+    state.selectedInvoice = null;
+    state.returnIdempotencyKey = null;
+    state.returnItems.clear();
+
+    const reason = document.getElementById("axtorReturnReason");
+    if (reason) reason.value = "";
+
+    renderInvoiceList();
+    renderSelectedInvoice();
+    updateSummary();
+
+    if (showMessage !== false) {
+      showToast("Return cleared", "Return preview has been cleared.", "info");
+    }
+  }
+
+  function refreshSalesBackendIfAvailable() {
+    try {
+      if (
+        window.AxtorSalesBackend &&
+        typeof window.AxtorSalesBackend.loadSavedDocuments === "function"
+      ) {
+        window.AxtorSalesBackend.loadSavedDocuments({
+          preserveSearch: true,
+          preserveTab: true,
+          manual: false,
+        });
+      } else if (
+        window.AxtorSalesBackend &&
+        typeof window.AxtorSalesBackend.refresh === "function"
+      ) {
+        window.AxtorSalesBackend.refresh();
+      }
+    } catch (err) {
+      console.warn("Sales backend refresh skipped:", err);
+    }
+  }
+
+  function refreshProductsIfAvailable() {
+    try {
+      if (
+        window.AxtorSalesBackend &&
+        typeof window.AxtorSalesBackend.loadBackendProducts === "function"
+      ) {
+        window.AxtorSalesBackend.loadBackendProducts();
+      }
+    } catch (err) {
+      console.warn("Products refresh skipped:", err);
+    }
+  }
+
+  function renderReturnHistory() {
+    const body = document.getElementById("axtorReturnHistoryTbody");
+    if (!body) return;
+
+    if (!state.returns.length) {
+      body.innerHTML =
+        '<tr><td colspan="5" class="text-center py-3 text-muted">No backend returns yet.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = state.returns
+      .slice(0, 10)
+      .map(function (row) {
+        const isNew = state.lastReturnId && String(row.id) === String(state.lastReturnId);
+        return `
+          <tr class="${isNew ? "axtor-return-selected-row" : ""}">
+            <td><strong>${escapeHtml(row.returnNo || row.documentNo || "-")}</strong></td>
+            <td>${escapeHtml(row.invoiceNo || row.sourceDocumentNo || "-")}</td>
+            <td>${escapeHtml(row.customerName || "-")}</td>
+            <td class="text-end"><strong>${money(row.totalAmount)}</strong></td>
+            <td>${escapeHtml(formatDate(row.createdAt || row.returnDate || new Date()))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  }
+
+  function ensureReturnsPanel() {
+    if (document.getElementById("axtorReturnsBackendPanel")) return;
+
+    const root = findReturnsRoot() || document.querySelector("main") || document.body;
+
+    const panel = document.createElement("div");
+    panel.id = "axtorReturnsBackendPanel";
+    panel.className = "card my-3 axtor-returns-backend-panel";
+
+    panel.innerHTML = `
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <strong>Backend Sales Returns — Phase 5B</strong>
+          <div id="axtorReturnsStatus" class="small text-muted">Ready</div>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span id="axtorReturnsCount" class="badge text-bg-light">0 shown</span>
+          <input id="axtorReturnInvoiceSearch" type="search" class="form-control form-control-sm"
+            style="max-width:260px" placeholder="Search invoice / customer / LPO / PO">
+          <button type="button" class="btn btn-sm btn-outline-success" data-returns-refresh="1">Refresh</button>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-hover align-middle">
+            <thead>
+              <tr>
+                <th class="axtor-return-sticky-invoice">Invoice</th>
+                <th>Customer</th>
+                <th>Date</th>
+                <th class="text-end">Invoice Total</th>
+                <th class="text-end">Paid / Received</th>
+                <th class="text-end">Returned</th>
+                <th class="text-end">Refunded</th>
+                <th class="text-end">Refund Balance</th>
+                <th class="text-end">Net Retained</th>
+                <th>Return / Refund Status</th>
+                <th class="text-end axtor-return-sticky-action">Action</th>
+              </tr>
+            </thead>
+            <tbody id="axtorReturnInvoicesTbody">
+              <tr><td colspan="11" class="text-center py-4 text-muted">Waiting for backend invoices...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card axtor-return-preview-card mb-3">
+          <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <strong>Return Posting</strong>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-returns-clear="1">Clear</button>
+              <button type="button" class="btn btn-sm btn-outline-primary" data-returns-preview="1" disabled>Preview Payload</button>
+              <button type="button" class="btn btn-sm btn-success" data-returns-post="1" disabled>Post Backend Return</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="axtorReturnSelectedBox" class="mb-3">
+              <div class="text-muted">Select backend invoice to return items.</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label small fw-bold">Return Reason</label>
+              <input id="axtorReturnReason" class="form-control form-control-sm"
+                placeholder="Example: damaged item, customer changed mind, wrong item">
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th class="text-end">Sold Qty</th>
+                    <th class="text-end">Rate</th>
+                    <th class="text-end">Return Qty</th>
+                    <th class="text-end">Return Total</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="axtorReturnItemsTbody">
+                  <tr><td colspan="6" class="text-center py-4 text-muted">No invoice selected.</td></tr>
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="3" class="text-end">Total Return</th>
+                    <th id="axtorReturnTotalQty" class="text-end">0</th>
+                    <th id="axtorReturnTotalAmount" class="text-end">QAR 0.00</th>
+                    <th></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div class="alert alert-success mt-3 mb-0">
+              <strong>Phase 5D:</strong> Return posts to backend; customer refunds are recorded separately for audit accuracy.
+            </div>
+          </div>
+        </div>
+
+        <div class="card axtor-return-preview-card">
+          <div class="card-header">
+            <strong>Backend Return History</strong>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Return No</th>
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th class="text-end">Amount</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody id="axtorReturnHistoryTbody">
+                  <tr><td colspan="5" class="text-center py-3 text-muted">Loading return history...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    root.prepend(panel);
+  }
+
+  function findReturnsRoot() {
+    const selectors = [
+      "#sales-returns",
+      "#returns",
+      "#return",
+      "#salesReturns",
+      "#sales-return",
+      '[data-section="sales-returns"]',
+      '[data-section="returns"]',
+    ];
+
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el) return el;
+    }
+
+    return document.querySelector("main") || document.body;
+  }
+
+  function normalizeList(response) {
+    const data = unwrapData(response);
+    let list = [];
+
+    if (Array.isArray(data)) list = data;
+    else if (Array.isArray(data?.items)) list = data.items;
+    else if (Array.isArray(data?.documents)) list = data.documents;
+    else if (Array.isArray(data?.salesDocuments)) list = data.salesDocuments;
+    else if (Array.isArray(data?.rows)) list = data.rows;
+    else if (Array.isArray(data?.results)) list = data.results;
+
+    return list.map(normalizeDocument).filter(function (doc) {
+      return !!doc.id;
+    });
+  }
+
+  function unwrapData(response) {
+    if (response && typeof response === "object" && "data" in response) return response.data;
+    return response;
+  }
+
+  function normalizeDocument(raw) {
+    const doc = raw || {};
+    const customer = doc.customer || doc.customerSnapshot || doc.customerData || {};
+    const rawType = doc.documentType || doc.documentTypeRaw || doc.type || doc.docType || "";
+    const rawDate = doc.documentDate || doc.date || doc.createdAt || doc.issueDate || "";
+    const linesRaw = doc.items || doc.lines || doc.documentItems || doc.saleDocumentItems || [];
+
+    const amount = toNumber(
+      doc.grandTotal ?? doc.totalAmount ?? doc.netAmount ?? doc.amount ?? doc.total ?? 0
+    );
+
+    const paidAmount = toNumber(
+      doc.paidAmount ?? doc.amountPaid ?? doc.receivedAmount ?? doc.paid ?? doc.cashAmount ?? 0
+    );
+
+    return {
+      ...doc,
+      id: doc.id || doc._id || doc.documentId || doc.salesDocumentId,
+      documentNoText: doc.documentNo || doc.docNo || doc.invoiceNo || doc.number || "N/A",
+      rawType: rawType,
+      typeText: documentTypeLabel(rawType),
+      customerId: doc.customerId || customer.id || "",
+      customerText:
+        doc.customerName ||
+        customer.name ||
+        customer.displayName ||
+        customer.companyName ||
+        doc.customerId ||
+        "Walk-in / Unknown",
+      rawDate: rawDate,
+      dateText: formatDate(rawDate),
+      lpoText: doc.lpoNo || doc.lpo || "",
+      poText: doc.customerPoNo || doc.poNo || "",
+      amount: amount,
+      paidAmount: paidAmount,
+      statusText:
+        doc.status || doc.paymentStatus || doc.documentStatus || (doc.isPosted ? "posted" : "draft"),
+      returnStatus:
+        doc.returnStatus || doc.return_status || doc.returnState || "not_returned",
+      returnStatusText: returnStatusLabel(
+        doc.returnStatus || doc.return_status || doc.returnState || "not_returned"
+      ),
+      returnedAmount: toNumber(doc.returnedAmount ?? doc.return_amount ?? doc.totalReturned ?? 0),
+      returnCount: toNumber(doc.returnCount ?? doc.returnsCount ?? doc.return_count ?? 0),
+      refundedAmount: toNumber(doc.refundedAmount ?? doc.refund_amount ?? 0),
+      paymentStatus: doc.paymentStatus || doc.payment_status || doc.status || "unpaid",
+      refundStatus: doc.refundStatus || doc.refund_status || "not_refunded",
+      refundBalance: toNumber(doc.refundBalance ?? Math.max(0, Math.min(doc.returnedAmount ?? 0, paidAmount) - (doc.refundedAmount ?? 0))),
+      netRetained: toNumber(doc.netRetained ?? Math.max(0, paidAmount - (doc.refundedAmount ?? 0))),
+      lines: Array.isArray(linesRaw) ? linesRaw.map(normalizeLine) : [],
+    };
+  }
+
+  function normalizeLine(line, index) {
+    const product = line.product || line.item || {};
+    const qty = toNumber(line.qty ?? line.quantity ?? line.qtySold ?? 0);
+    const rate = toNumber(line.rate ?? line.unitPrice ?? line.price ?? 0);
+
+    return {
+      id: line.id || line.lineId || "line-" + index,
+      productId: line.productId || product.id || "",
+      name: line.productName || line.itemName || line.name || product.name || "Item",
+      sku: line.sku || line.productSku || product.sku || product.barcode || "-",
+      qty: qty,
+      quantity: qty,
+      rate: rate,
+      unitPrice: rate,
+      total: toNumber(line.lineTotal ?? line.total ?? line.amount ?? qty * rate),
+    };
+  }
+
+  function normalizeReturn(raw) {
+    const row = raw || {};
+    return {
+      ...row,
+      id: row.id || row._id || row.returnId || row.salesReturnId,
+      returnNo: row.returnNo || row.documentNo || row.number || "RET",
+      invoiceNo:
+        row.invoiceNo ||
+        row.sourceDocumentNo ||
+        row.originalInvoiceNo ||
+        row.salesDocument?.documentNo ||
+        "",
+      customerName:
+        row.customerName ||
+        row.customer?.name ||
+        row.salesDocument?.customerName ||
+        "",
+      totalAmount: toNumber(row.totalAmount ?? row.grandTotal ?? row.amount ?? row.total ?? 0),
+      createdAt: row.createdAt || row.returnDate || row.date || "",
+    };
+  }
+
+  function isInvoice(doc) {
+    const raw = String(doc.rawType || doc.typeText || "").toLowerCase();
+    const no = String(doc.documentNoText || "").toLowerCase();
+
+    if (raw.includes("quotation") || raw.includes("quote") || raw.includes("delivery")) return false;
+    if (no.startsWith("quo") || no.startsWith("dn")) return false;
+
+    return raw.includes("invoice") || raw.includes("sale") || no.startsWith("inv");
+  }
+
+  function documentTypeLabel(type) {
+    const value = String(type || "").toLowerCase();
+
+    if (value.includes("delivery") || value === "dn") return "Delivery Note";
+    if (value.includes("quotation") || value.includes("quote") || value.includes("quo")) return "Quotation";
+    if (value.includes("invoice") || value.includes("sale")) return "Sales Invoice";
+
+    return type ? titleCase(String(type).replaceAll("_", " ")) : "Sales Document";
+  }
+
+  function infoBox(label, value) {
+    return `
+      <div class="axtor-return-info-box">
+        <div class="axtor-return-info-label">${escapeHtml(label)}</div>
+        <div class="axtor-return-info-value">${escapeHtml(value || "-")}</div>
+      </div>
+    `;
+  }
+
+
+  function returnStatusLabel(status) {
+    const value = String(status || "not_returned").toLowerCase();
+
+    if (value.includes("fully")) return "Fully Returned";
+    if (value.includes("partial")) return "Partially Returned";
+    if (value.includes("returned") && !value.includes("not")) return "Returned";
+
+    return "Not Returned";
+  }
+
+  function isFullyReturned(doc) {
+    const status = String(doc?.returnStatus || "").toLowerCase();
+    return status.includes("fully");
+  }
+
+  function returnBadge(doc) {
+    const status = String(doc?.returnStatus || "").toLowerCase();
+    const amount = toNumber(doc?.returnedAmount || 0);
+    const count = toNumber(doc?.returnCount || 0);
+
+    if ((!status || status === "not_returned") && amount <= 0 && count <= 0) {
+      return "";
+    }
+
+    let cls = "axtor-return-status-badge warning";
+    let label = doc.returnStatusText || "Returned";
+
+    if (status.includes("fully")) {
+      cls = "axtor-return-status-badge danger";
+      label = "Fully Returned";
+    } else if (status.includes("partial")) {
+      cls = "axtor-return-status-badge warning";
+      label = "Partially Returned";
+    }
+
+    return `
+      <div class="mt-1">
+        <span class="${cls}">
+          ${escapeHtml(label)} · ${money(amount)} · ${escapeHtml(count)} return(s)
+        </span>
+      </div>
+    `;
+  }
+
+  function statusBadge(status) {
+    const text = String(status || "-");
+    const lower = text.toLowerCase();
+    let cls = "axtor-return-status-badge";
+
+    if (lower.includes("paid") || lower.includes("posted") || lower.includes("complete")) {
+      cls += " success";
+    } else if (lower.includes("partial")) {
+      cls += " warning";
+    } else {
+      cls += " muted";
+    }
+
+    return `<span class="${cls}">${escapeHtml(titleCase(text))}</span>`;
+  }
+
+
+  function refundBadge(doc) {
+    const status = String(doc?.refundStatus || "not_refunded").toLowerCase();
+    const amount = toNumber(doc?.refundedAmount || 0);
+    if (status === "fully_refunded") return `<span class="badge text-bg-success">Fully Refunded · ${money(amount)}</span>`;
+    if (status === "partially_refunded") return `<span class="badge text-bg-warning">Partially Refunded · ${money(amount)}</span>`;
+    return `<span class="badge text-bg-light">Not Refunded · ${money(0)}</span>`;
+  }
+
+  function refundStatusLabel(status) {
+    const value=String(status||"not_refunded").toLowerCase();
+    if(value.includes("fully")) return "Fully Refunded";
+    if(value.includes("partial")) return "Partially Refunded";
+    return "Not Refunded";
+  }
+
+  function ensureRefundModal() {
+    if(document.getElementById("axtorRefundModal")) return;
+    const wrap=document.createElement("div");
+    wrap.innerHTML=`<div class="modal fade" id="axtorRefundModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Refund Customer</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="axtorRefundInvoiceInfo" class="alert alert-light"></div><label class="form-label">Refund amount</label><input id="axtorRefundAmount" type="number" min="0.01" step="0.01" class="form-control"><label class="form-label mt-2">Refund method</label><select id="axtorRefundMethod" class="form-select"><option>Cash</option><option>Card reversal</option><option>Bank transfer</option><option>Store credit</option><option>Wallet</option></select><label class="form-label mt-2">Reference number</label><input id="axtorRefundReference" class="form-control"><label class="form-label mt-2">Notes</label><textarea id="axtorRefundNotes" class="form-control" rows="2"></textarea></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-warning" data-refund-submit>Post Refund</button></div></div></div></div>`;
+    document.body.appendChild(wrap.firstElementChild);
+  }
+
+  function openRefundModal(id) {
+    const doc=state.invoices.find(x=>String(x.id)===String(id));
+    if(!doc) return showToast("Invoice not found","Refresh and try again.","danger");
+    const max=roundMoney(Math.max(0,Math.min(toNumber(doc.returnedAmount),toNumber(doc.paidAmount))-toNumber(doc.refundedAmount)));
+    if(max<=0) return showToast("Nothing to refund","No refundable balance remains.","warning");
+    state.refundInvoice=doc; state.refundIdempotencyKey=createKey("refund",doc.id); ensureRefundModal();
+    document.getElementById("axtorRefundInvoiceInfo").innerHTML=`<strong>${escapeHtml(doc.documentNoText)}</strong><br>Returned: ${money(doc.returnedAmount)} · Paid: ${money(doc.paidAmount)} · Already refunded: ${money(doc.refundedAmount)} · <strong>Maximum: ${money(max)}</strong>`;
+    document.getElementById("axtorRefundAmount").value=max.toFixed(2);
+    document.getElementById("axtorRefundAmount").max=max.toFixed(2);
+    document.getElementById("axtorRefundReference").value=""; document.getElementById("axtorRefundNotes").value="";
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("axtorRefundModal")).show();
+  }
+
+  async function postCustomerRefund() {
+    if(state.refundPosting||!state.refundInvoice) return;
+    const doc=state.refundInvoice; const amount=roundMoney(toNumber(document.getElementById("axtorRefundAmount")?.value));
+    const max=roundMoney(Math.max(0,Math.min(toNumber(doc.returnedAmount),toNumber(doc.paidAmount))-toNumber(doc.refundedAmount)));
+    if(amount<=0||amount>max) return showToast("Invalid refund",`Amount must be between QAR 0.01 and ${money(max)}.`,"danger");
+    state.refundPosting=true; const btn=document.querySelector("[data-refund-submit]"); if(btn){btn.disabled=true;btn.textContent="Posting...";}
+    try {
+      const payload={salesDocumentId:doc.id,amount,refundMethod:document.getElementById("axtorRefundMethod")?.value,referenceNo:document.getElementById("axtorRefundReference")?.value,notes:document.getElementById("axtorRefundNotes")?.value,refundDate:new Date().toISOString(),idempotencyKey:state.refundIdempotencyKey||(state.refundIdempotencyKey=createKey("refund",doc.id))};
+      await backendPost("/api/v1/refunds",payload);
+      bootstrap.Modal.getInstance(document.getElementById("axtorRefundModal"))?.hide();
+      showToast("Refund posted",`${money(amount)} returned to customer via ${payload.refundMethod}.`,"success");
+      state.refundInvoice=null; state.refundIdempotencyKey=null; await loadBackendInvoices(true); await loadReturnHistory();
+      if(window.AxtorSalesBackend&&typeof window.AxtorSalesBackend.loadBackendDocuments==="function") window.AxtorSalesBackend.loadBackendDocuments();
+    } catch(err){ showToast("Refund failed",err.message||"Unable to post refund.","danger"); }
+    finally {state.refundPosting=false;if(btn){btn.disabled=false;btn.textContent="Post Refund";}}
+  }
+
+  function createKey(prefix, id) {
+    const random = window.crypto?.randomUUID ? window.crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2);
+    return String(prefix || "request") + "-" + String(id || "global") + "-" + random;
+  }
+
+  function ensureToastContainer() {
+    if (document.getElementById("axtorReturnsToastContainer")) return;
+
+    const box = document.createElement("div");
+    box.id = "axtorReturnsToastContainer";
+    box.className = "toast-container position-fixed top-0 end-0 p-3";
+    box.style.zIndex = "1080";
+    document.body.appendChild(box);
+  }
+
+  function showToast(title, message, type) {
+    ensureToastContainer();
+
+    const container = document.getElementById("axtorReturnsToastContainer");
+    if (!container) return;
+
+    const safeType = type || "info";
+    const toast = document.createElement("div");
+    toast.className = "toast axtor-return-toast axtor-return-toast-" + safeType;
+    toast.setAttribute("role", "alert");
+    toast.setAttribute("aria-live", "assertive");
+    toast.setAttribute("aria-atomic", "true");
+
+    toast.innerHTML = `
+      <div class="toast-header">
+        <strong class="me-auto">${escapeHtml(title || "Axtor POS")}</strong>
+        <small>${escapeHtml(new Date().toLocaleTimeString("en-QA", { hour: "2-digit", minute: "2-digit" }))}</small>
+        <button type="button" class="btn-close ms-2 mb-1" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <div class="toast-body">${escapeHtml(message || "")}</div>
+    `;
+
+    container.appendChild(toast);
+
+    if (window.bootstrap && window.bootstrap.Toast) {
+      const instance = window.bootstrap.Toast.getOrCreateInstance(toast, {
+        autohide: true,
+        delay: safeType === "danger" ? 6500 : 3500,
+      });
+      instance.show();
+      toast.addEventListener("hidden.bs.toast", function () {
+        toast.remove();
+      });
+      return;
+    }
+
+    toast.style.display = "block";
+    setTimeout(function () {
+      toast.remove();
+    }, safeType === "danger" ? 6500 : 3500);
+  }
+
+  function ensureStyles() {
+    if (document.getElementById("axtorReturnsBackendStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "axtorReturnsBackendStyles";
+    style.textContent = `
+      #axtorReturnsBackendPanel,
+      .axtor-return-preview-card {
+        border: 1px solid rgba(25, 135, 84, 0.24);
+        background: rgba(255, 255, 255, 0.74);
+        backdrop-filter: blur(10px);
+      }
+
+      #axtorReturnsBackendPanel .card-header,
+      .axtor-return-preview-card .card-header {
+        background: rgba(25, 135, 84, 0.08);
+        border-bottom: 1px solid rgba(25, 135, 84, 0.16);
+      }
+
+      .axtor-return-selected-row {
+        background: rgba(25, 135, 84, 0.08) !important;
+      }
+
+      .axtor-return-doc-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+
+      .axtor-return-info-box {
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 0.85rem;
+        padding: 0.75rem;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .axtor-return-info-label {
+        font-size: 0.76rem;
+        color: #6c757d;
+        margin-bottom: 0.18rem;
+      }
+
+      .axtor-return-info-value {
+        font-weight: 800;
+      }
+
+      .axtor-return-status-badge {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 0.18rem 0.55rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+
+      .axtor-return-status-badge.success {
+        color: #146c43;
+        background: rgba(25, 135, 84, 0.12);
+      }
+
+      .axtor-return-status-badge.warning {
+        color: #7a5b00;
+        background: rgba(255, 193, 7, 0.2);
+      }
+
+      .axtor-return-status-badge.danger {
+        color: #842029;
+        background: rgba(220, 53, 69, 0.14);
+      }
+
+      .axtor-return-status-badge.muted {
+        color: #495057;
+        background: rgba(108, 117, 125, 0.12);
+      }
+
+      .axtor-return-toast-success .toast-header {
+        background: rgba(25, 135, 84, 0.12);
+      }
+
+      .axtor-return-toast-danger .toast-header {
+        background: rgba(220, 53, 69, 0.12);
+      }
+
+      .axtor-return-toast-warning .toast-header {
+        background: rgba(255, 193, 7, 0.18);
+      }
+
+      .axtor-return-toast-info .toast-header {
+        background: rgba(13, 202, 240, 0.12);
+      }
+
+      body.retro-theme #axtorReturnsBackendPanel,
+      body.retro-theme .axtor-return-preview-card,
+      body.retro #axtorReturnsBackendPanel,
+      body.retro .axtor-return-preview-card {
+        backdrop-filter: none;
+      }
+
+      @media (max-width: 768px) {
+        .axtor-return-doc-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function inlineSpinner(text) {
+    return (
+      '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>' +
+      escapeHtml(text || "Loading...")
+    );
+  }
+
+  function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  function toNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  }
+
+  function roundMoney(value) {
+    return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+  }
+
+  function money(value) {
+    return "QAR " + toNumber(value).toFixed(2);
+  }
+
+  function formatQty(value) {
+    const number = toNumber(value);
+    return Number.isInteger(number) ? String(number) : number.toFixed(2);
+  }
+
+  function formatDate(value) {
+    if (!value) return "-";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+
+    return date.toLocaleDateString("en-QA", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
+  }
+
+  function titleCase(value) {
+    return String(value || "")
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\w\S*/g, function (txt) {
+        return txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase();
+      });
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value).replaceAll("`", "&#096;");
+  }
 })();

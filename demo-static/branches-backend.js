@@ -1,0 +1,23 @@
+(function(){"use strict";
+ const U={};
+ U.api=function(){if(!window.AxtorAPI)throw new Error("Axtor API client is not loaded");return window.AxtorAPI};
+ U.data=function(r){return r&&Object.prototype.hasOwnProperty.call(r,"data")?r.data:r};
+ U.q=function(s,r){return(r||document).querySelector(s)};U.qa=function(s,r){return Array.from((r||document).querySelectorAll(s))};
+ U.esc=function(v){return String(v==null?"":v).replace(/[&<>'"]/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]})};
+ U.money=function(v){return Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})};
+ U.num=function(v,d){var n=Number(v);return Number.isFinite(n)?n:(d||0)};
+ U.date=function(v){if(!v)return"-";var d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString()};
+ U.datetime=function(v){if(!v)return"-";var d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleString()};
+ U.toast=function(message,type){if(typeof window.showToast==="function")return window.showToast(message,type||"success");var box=document.getElementById("axtorBackendToast");if(!box){box=document.createElement("div");box.id="axtorBackendToast";box.style.cssText="position:fixed;right:18px;bottom:18px;z-index:99999;max-width:360px;padding:12px 16px;border-radius:12px;background:#173f35;color:white;box-shadow:0 12px 30px rgba(0,0,0,.25);font-weight:600";document.body.appendChild(box)}box.textContent=message;box.style.background=type==="error"?"#a93636":"#173f35";box.hidden=false;clearTimeout(box._timer);box._timer=setTimeout(function(){box.hidden=true},3500)};
+ U.error=function(e,fallback){var m=e&&e.message?e.message:fallback||"Request failed";U.toast(m,"error");console.error(e);return m};
+ U.bind=function(selector,event,handler){var old=typeof selector==="string"?U.q(selector):selector;if(!old)return null;var el=old.cloneNode(true);old.replaceWith(el);el.addEventListener(event||"click",handler);return el};
+ U.on=function(el,event,handler){if(el)el.addEventListener(event,handler);return el};
+ U.value=function(selector){var el=typeof selector==="string"?U.q(selector):selector;return el?String(el.value||"").trim():""};
+ U.checked=function(selector){var el=typeof selector==="string"?U.q(selector):selector;return!!(el&&el.checked)};
+ U.setOptions=function(el,rows,label,value,first){if(!el)return;var html=first===false?"":'<option value="">All</option>';html+=(rows||[]).map(function(r){return'<option value="'+U.esc(r[value||"id"])+ '">'+U.esc(typeof label==="function"?label(r):r[label||"name"])+"</option>"}).join("");el.innerHTML=html};
+ U.modalHide=function(id){var el=typeof id==="string"?U.q(id):id;if(!el)return;try{var m=window.bootstrap&&window.bootstrap.Modal.getInstance(el);if(m)m.hide()}catch(_){}}
+ U.loading=function(el,text){if(!el)return function(){};var before=el.innerHTML;el.disabled=true;el.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>'+(text||"Saving...");return function(){el.disabled=false;el.innerHTML=before}};
+ U.emptyRow=function(cols,message){return'<tr><td colspan="'+cols+'" class="text-center text-muted py-4">'+U.esc(message||"No records found")+'</td></tr>'};
+ U.run=function(fn){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){Promise.resolve().then(fn).catch(U.error)});else Promise.resolve().then(fn).catch(U.error)};
+ window.AxtorPage=U;
+})();
