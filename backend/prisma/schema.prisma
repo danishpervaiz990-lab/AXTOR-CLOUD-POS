@@ -173,6 +173,16 @@ model Business {
   authSessions          AuthSession[]
   importJobs            DataImportJob[]
   provisioningRuns      TenantProvisioningRun[]
+  gymMembers             GymMember[]
+  gymMembershipPlans     GymMembershipPlan[]
+  gymMemberships         GymMembership[]
+  schoolStudents         SchoolStudent[]
+  schoolGuardians        SchoolGuardian[]
+  schoolClasses          SchoolClassSection[]
+  schoolEnrollments      SchoolEnrollment[]
+  clinicPatients         ClinicPatient[]
+  clinicPractitioners    ClinicPractitioner[]
+  clinicAppointments     ClinicAppointment[]
 
   @@map("businesses")
 }
@@ -1918,4 +1928,1871 @@ model DataImportJob {
 
   @@index([businessId, entityType, createdAt])
   @@map("data_import_jobs")
+}
+
+
+model GymMember {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  memberNo String @map("member_no")
+  fullName String @map("full_name")
+  phone String?
+  email String?
+  dateOfBirth DateTime? @map("date_of_birth")
+  emergencyContact String? @map("emergency_contact")
+  status String @default("active")
+  revision Int @default(1)
+  archivedAt DateTime? @map("archived_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  memberships GymMembership[]
+  classBookings GymClassBooking[]
+  checkIns GymCheckIn[]
+  @@unique([businessId, memberNo])
+  @@index([businessId, status])
+  @@map("gym_members")
+}
+model GymMembershipPlan {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  durationDays Int @map("duration_days")
+  price Decimal @db.Decimal(14,2)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  memberships GymMembership[]
+  @@unique([businessId, code])
+  @@map("gym_membership_plans")
+}
+model GymMembership {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  memberId String @map("member_id")
+  planId String @map("plan_id")
+  startDate DateTime @map("start_date")
+  endDate DateTime @map("end_date")
+  status String @default("active")
+  amount Decimal @db.Decimal(14,2)
+  paidAmount Decimal @default(0) @map("paid_amount") @db.Decimal(14,2)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  member GymMember @relation(fields:[memberId], references:[id], onDelete:Restrict)
+  plan GymMembershipPlan @relation(fields:[planId], references:[id], onDelete:Restrict)
+  @@index([businessId,status,endDate])
+  @@map("gym_memberships")
+}
+model SchoolStudent {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  admissionNo String @map("admission_no")
+  fullName String @map("full_name")
+  dateOfBirth DateTime? @map("date_of_birth")
+  status String @default("active")
+  revision Int @default(1)
+  archivedAt DateTime? @map("archived_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  enrollments SchoolEnrollment[]
+  guardianLinks SchoolStudentGuardian[]
+  attendance SchoolAttendance[]
+  fees SchoolStudentFee[]
+  @@unique([businessId, admissionNo])
+  @@index([businessId,status])
+  @@map("school_students")
+}
+model SchoolGuardian {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  fullName String @map("full_name")
+  phone String
+  email String?
+  relation String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  studentLinks SchoolStudentGuardian[]
+  @@index([businessId,phone])
+  @@map("school_guardians")
+}
+model SchoolClassSection {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  academicYear String @map("academic_year")
+  grade String
+  section String
+  capacity Int @default(30)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  enrollments SchoolEnrollment[]
+  attendance SchoolAttendance[]
+  @@unique([businessId,academicYear,grade,section])
+  @@map("school_class_sections")
+}
+model SchoolEnrollment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  studentId String @map("student_id")
+  classSectionId String @map("class_section_id")
+  enrolledAt DateTime @default(now()) @map("enrolled_at")
+  status String @default("active")
+  revision Int @default(1)
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  student SchoolStudent @relation(fields:[studentId], references:[id], onDelete:Restrict)
+  classSection SchoolClassSection @relation(fields:[classSectionId], references:[id], onDelete:Restrict)
+  @@unique([businessId,studentId,classSectionId])
+  @@index([businessId,status])
+  @@map("school_enrollments")
+}
+model ClinicPatient {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  patientNo String @map("patient_no")
+  fullName String @map("full_name")
+  phone String?
+  dateOfBirth DateTime? @map("date_of_birth")
+  consentConfirmed Boolean @default(false) @map("consent_confirmed")
+  status String @default("active")
+  revision Int @default(1)
+  archivedAt DateTime? @map("archived_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  appointments ClinicAppointment[]
+  consents ClinicConsent[]
+  queueEntries ClinicQueueEntry[]
+  followUps ClinicFollowUp[]
+  @@unique([businessId,patientNo])
+  @@index([businessId,status])
+  @@map("clinic_patients")
+}
+model ClinicPractitioner {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  fullName String @map("full_name")
+  specialty String
+  licenseReference String? @map("license_reference")
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  appointments ClinicAppointment[]
+  queueEntries ClinicQueueEntry[]
+  followUps ClinicFollowUp[]
+  @@index([businessId,active])
+  @@map("clinic_practitioners")
+}
+model ClinicAppointment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  patientId String @map("patient_id")
+  practitionerId String @map("practitioner_id")
+  startAt DateTime @map("start_at")
+  endAt DateTime @map("end_at")
+  status String @default("booked")
+  service String
+  room String?
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  patient ClinicPatient @relation(fields:[patientId], references:[id], onDelete:Restrict)
+  practitioner ClinicPractitioner @relation(fields:[practitionerId], references:[id], onDelete:Restrict)
+  queueEntries ClinicQueueEntry[]
+  @@index([businessId,practitionerId,startAt,endAt])
+  @@index([businessId,status,startAt])
+  @@map("clinic_appointments")
+}
+
+
+model GymTrainer {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  employeeNo String? @map("employee_no")
+  fullName String @map("full_name")
+  phone String?
+  specialties String?
+  active Boolean @default(true)
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  classes GymClass[]
+  checkIns GymCheckIn[]
+  @@unique([businessId, employeeNo])
+  @@index([businessId, active])
+  @@map("gym_trainers")
+}
+model GymClass {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  trainerId String? @map("trainer_id")
+  name String
+  room String?
+  startAt DateTime @map("start_at")
+  endAt DateTime @map("end_at")
+  capacity Int @default(20)
+  status String @default("scheduled")
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  trainer GymTrainer? @relation(fields:[trainerId], references:[id], onDelete:SetNull)
+  bookings GymClassBooking[]
+  @@index([businessId,startAt,endAt])
+  @@map("gym_classes")
+}
+model GymClassBooking {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  classId String @map("class_id")
+  memberId String @map("member_id")
+  status String @default("booked")
+  bookedAt DateTime @default(now()) @map("booked_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  gymClass GymClass @relation(fields:[classId], references:[id], onDelete:Cascade)
+  member GymMember @relation(fields:[memberId], references:[id], onDelete:Restrict)
+  @@unique([businessId,classId,memberId])
+  @@index([businessId,status])
+  @@map("gym_class_bookings")
+}
+model GymCheckIn {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  memberId String @map("member_id")
+  trainerId String? @map("trainer_id")
+  method String @default("manual")
+  checkedInAt DateTime @default(now()) @map("checked_in_at")
+  checkedOutAt DateTime? @map("checked_out_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  member GymMember @relation(fields:[memberId], references:[id], onDelete:Restrict)
+  trainer GymTrainer? @relation(fields:[trainerId], references:[id], onDelete:SetNull)
+  @@index([businessId,checkedInAt])
+  @@map("gym_check_ins")
+}
+model SchoolStudentGuardian {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  studentId String @map("student_id")
+  guardianId String @map("guardian_id")
+  isPrimary Boolean @default(false) @map("is_primary")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  student SchoolStudent @relation(fields:[studentId], references:[id], onDelete:Cascade)
+  guardian SchoolGuardian @relation(fields:[guardianId], references:[id], onDelete:Cascade)
+  @@unique([businessId,studentId,guardianId])
+  @@map("school_student_guardians")
+}
+model SchoolAttendance {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  studentId String @map("student_id")
+  classSectionId String @map("class_section_id")
+  attendanceDate DateTime @map("attendance_date")
+  status String
+  note String?
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  student SchoolStudent @relation(fields:[studentId], references:[id], onDelete:Restrict)
+  classSection SchoolClassSection @relation(fields:[classSectionId], references:[id], onDelete:Restrict)
+  @@unique([businessId,studentId,classSectionId,attendanceDate])
+  @@index([businessId,attendanceDate,status])
+  @@map("school_attendance")
+}
+model SchoolFeeHead {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  active Boolean @default(true)
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  fees SchoolStudentFee[]
+  @@unique([businessId,code])
+  @@map("school_fee_heads")
+}
+model SchoolStudentFee {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  studentId String @map("student_id")
+  feeHeadId String @map("fee_head_id")
+  dueDate DateTime @map("due_date")
+  amount Decimal @db.Decimal(14,2)
+  paidAmount Decimal @default(0) @map("paid_amount") @db.Decimal(14,2)
+  status String @default("due")
+  revision Int @default(1)
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  student SchoolStudent @relation(fields:[studentId], references:[id], onDelete:Restrict)
+  feeHead SchoolFeeHead @relation(fields:[feeHeadId], references:[id], onDelete:Restrict)
+  payments SchoolFeePayment[]
+  @@index([businessId,status,dueDate])
+  @@map("school_student_fees")
+}
+model SchoolFeePayment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  studentFeeId String @map("student_fee_id")
+  amount Decimal @db.Decimal(14,2)
+  paymentMethod String @map("payment_method")
+  reference String?
+  paidAt DateTime @default(now()) @map("paid_at")
+  idempotencyKey String? @map("idempotency_key")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  studentFee SchoolStudentFee @relation(fields:[studentFeeId], references:[id], onDelete:Restrict)
+  @@unique([businessId,idempotencyKey])
+  @@index([businessId,paidAt])
+  @@map("school_fee_payments")
+}
+model ClinicConsent {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  patientId String @map("patient_id")
+  consentType String @map("consent_type")
+  confirmed Boolean @default(true)
+  confirmedAt DateTime @default(now()) @map("confirmed_at")
+  expiresAt DateTime? @map("expires_at")
+  note String?
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  patient ClinicPatient @relation(fields:[patientId], references:[id], onDelete:Cascade)
+  @@index([businessId,patientId,consentType])
+  @@map("clinic_consents")
+}
+model ClinicQueueEntry {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  patientId String @map("patient_id")
+  practitionerId String? @map("practitioner_id")
+  appointmentId String? @map("appointment_id")
+  queueNo Int @map("queue_no")
+  status String @default("waiting")
+  checkedInAt DateTime @default(now()) @map("checked_in_at")
+  calledAt DateTime? @map("called_at")
+  completedAt DateTime? @map("completed_at")
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  patient ClinicPatient @relation(fields:[patientId], references:[id], onDelete:Restrict)
+  practitioner ClinicPractitioner? @relation(fields:[practitionerId], references:[id], onDelete:SetNull)
+  appointment ClinicAppointment? @relation(fields:[appointmentId], references:[id], onDelete:SetNull)
+  @@unique([businessId,queueNo,checkedInAt])
+  @@index([businessId,status,checkedInAt])
+  @@map("clinic_queue_entries")
+}
+model ClinicService {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  price Decimal @db.Decimal(14,2)
+  active Boolean @default(true)
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  @@unique([businessId,code])
+  @@map("clinic_services")
+}
+model ClinicFollowUp {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  patientId String @map("patient_id")
+  practitionerId String? @map("practitioner_id")
+  dueAt DateTime @map("due_at")
+  reason String
+  status String @default("pending")
+  completedAt DateTime? @map("completed_at")
+  revision Int @default(1)
+  business Business @relation(fields:[businessId], references:[id], onDelete:Cascade)
+  patient ClinicPatient @relation(fields:[patientId], references:[id], onDelete:Restrict)
+  practitioner ClinicPractitioner? @relation(fields:[practitionerId], references:[id], onDelete:SetNull)
+  @@index([businessId,status,dueAt])
+  @@map("clinic_follow_ups")
+}
+
+
+model GymProgram {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  description String?
+  durationWeeks Int @default(4) @map("duration_weeks")
+  price Decimal @default(0) @db.Decimal(14,2)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([businessId,code])
+  @@index([businessId,active])
+  @@map("gym_programs")
+}
+model GymProgramEnrollment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  programId String @map("program_id")
+  memberId String @map("member_id")
+  trainerId String? @map("trainer_id")
+  startDate DateTime @map("start_date")
+  endDate DateTime? @map("end_date")
+  status String @default("active")
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([businessId,programId,memberId,startDate])
+  @@index([businessId,status])
+  @@map("gym_program_enrollments")
+}
+model GymFacility {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  capacity Int @default(1)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([businessId,code])
+  @@map("gym_facilities")
+}
+model GymFacilityEnrollment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  facilityId String @map("facility_id")
+  memberId String @map("member_id")
+  startDate DateTime @map("start_date")
+  endDate DateTime? @map("end_date")
+  status String @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([businessId,facilityId,status])
+  @@map("gym_facility_enrollments")
+}
+model GymTrainerAssignment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  trainerId String @map("trainer_id")
+  memberId String @map("member_id")
+  startDate DateTime @map("start_date")
+  endDate DateTime? @map("end_date")
+  status String @default("active")
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([businessId,trainerId,status])
+  @@map("gym_trainer_assignments")
+}
+model GymLockerAssignment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  memberId String @map("member_id")
+  lockerNo String @map("locker_no")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  releasedAt DateTime? @map("released_at")
+  status String @default("active")
+  @@unique([businessId,lockerNo,status])
+  @@index([businessId,memberId,status])
+  @@map("gym_locker_assignments")
+}
+model GymMeasurement {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  memberId String @map("member_id")
+  measuredAt DateTime @default(now()) @map("measured_at")
+  weightKg Decimal? @map("weight_kg") @db.Decimal(8,2)
+  heightCm Decimal? @map("height_cm") @db.Decimal(8,2)
+  bodyFatPct Decimal? @map("body_fat_pct") @db.Decimal(6,2)
+  waistCm Decimal? @map("waist_cm") @db.Decimal(8,2)
+  goalNote String? @map("goal_note")
+  recordedBy String? @map("recorded_by")
+  @@index([businessId,memberId,measuredAt])
+  @@map("gym_measurements")
+}
+model SchoolApplicant {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  applicationNo String @map("application_no")
+  fullName String @map("full_name")
+  requestedGrade String? @map("requested_grade")
+  guardianName String? @map("guardian_name")
+  guardianPhone String? @map("guardian_phone")
+  status String @default("submitted")
+  appliedAt DateTime @default(now()) @map("applied_at")
+  revision Int @default(1)
+  @@unique([businessId,applicationNo])
+  @@index([businessId,status])
+  @@map("school_applicants")
+}
+model AcademicYear {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  startsOn DateTime @map("starts_on")
+  endsOn DateTime @map("ends_on")
+  active Boolean @default(false)
+  @@unique([businessId,name])
+  @@map("academic_years")
+}
+model AcademicTerm {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  academicYearId String @map("academic_year_id")
+  name String
+  startsOn DateTime @map("starts_on")
+  endsOn DateTime @map("ends_on")
+  active Boolean @default(true)
+  @@unique([businessId,academicYearId,name])
+  @@map("academic_terms")
+}
+model SchoolSubject {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  active Boolean @default(true)
+  @@unique([businessId,code])
+  @@map("school_subjects")
+}
+model SchoolTeacher {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  employeeNo String? @map("employee_no")
+  fullName String @map("full_name")
+  phone String?
+  email String?
+  active Boolean @default(true)
+  @@unique([businessId,employeeNo])
+  @@index([businessId,active])
+  @@map("school_teachers")
+}
+model SchoolRoom {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  capacity Int @default(30)
+  active Boolean @default(true)
+  @@unique([businessId,code])
+  @@map("school_rooms")
+}
+model SchoolTimetableEntry {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  classSectionId String @map("class_section_id")
+  subjectId String @map("subject_id")
+  teacherId String @map("teacher_id")
+  roomId String @map("room_id")
+  weekday Int
+  startMinute Int @map("start_minute")
+  endMinute Int @map("end_minute")
+  active Boolean @default(true)
+  revision Int @default(1)
+  @@index([businessId,weekday,startMinute,endMinute])
+  @@map("school_timetable_entries")
+}
+model SchoolAssessment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  classSectionId String @map("class_section_id")
+  subjectId String @map("subject_id")
+  termId String? @map("term_id")
+  name String
+  maxMarks Decimal @map("max_marks") @db.Decimal(8,2)
+  assessmentDate DateTime? @map("assessment_date")
+  status String @default("draft")
+  @@index([businessId,classSectionId,subjectId])
+  @@map("school_assessments")
+}
+model SchoolResult {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  assessmentId String @map("assessment_id")
+  studentId String @map("student_id")
+  marks Decimal @db.Decimal(8,2)
+  grade String?
+  remarks String?
+  publishedAt DateTime? @map("published_at")
+  @@unique([businessId,assessmentId,studentId])
+  @@map("school_results")
+}
+model SchoolEmployee {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  employeeNo String @map("employee_no")
+  fullName String @map("full_name")
+  roleTitle String @map("role_title")
+  monthlySalary Decimal @default(0) @map("monthly_salary") @db.Decimal(14,2)
+  active Boolean @default(true)
+  @@unique([businessId,employeeNo])
+  @@map("school_employees")
+}
+model ClinicSpecialty {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  active Boolean @default(true)
+  @@unique([businessId,code])
+  @@map("clinic_specialties")
+}
+model ClinicEncounter {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  patientId String @map("patient_id")
+  practitionerId String @map("practitioner_id")
+  appointmentId String? @map("appointment_id")
+  startedAt DateTime @default(now()) @map("started_at")
+  endedAt DateTime? @map("ended_at")
+  status String @default("open")
+  practitionerNotes String? @map("practitioner_notes")
+  followUpRequired Boolean @default(false) @map("follow_up_required")
+  revision Int @default(1)
+  @@index([businessId,patientId,startedAt])
+  @@map("clinic_encounters")
+}
+model ClinicServiceRequest {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  encounterId String @map("encounter_id")
+  serviceId String @map("service_id")
+  quantity Decimal @default(1) @db.Decimal(10,2)
+  unitPrice Decimal @default(0) @map("unit_price") @db.Decimal(14,2)
+  status String @default("requested")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  @@index([businessId,encounterId,status])
+  @@map("clinic_service_requests")
+}
+model ClinicMedicationRequest {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  encounterId String @map("encounter_id")
+  medicationText String @map("medication_text")
+  instructions String?
+  status String @default("requested")
+  authorizedBy String @map("authorized_by")
+  requestedAt DateTime @default(now()) @map("requested_at")
+  @@index([businessId,encounterId,status])
+  @@map("clinic_medication_requests")
+}
+
+
+model GymMembershipPayment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  membershipId String @map("membership_id")
+  amount Decimal @db.Decimal(14,2)
+  paymentMethod String @map("payment_method")
+  reference String?
+  paidAt DateTime @default(now()) @map("paid_at")
+  idempotencyKey String? @map("idempotency_key")
+  recordedBy String? @map("recorded_by")
+  @@unique([businessId,idempotencyKey])
+  @@index([businessId,membershipId,paidAt])
+  @@map("gym_membership_payments")
+}
+model SchoolFeeAdjustment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  studentFeeId String @map("student_fee_id")
+  adjustmentType String @map("adjustment_type")
+  amount Decimal @db.Decimal(14,2)
+  reason String
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String? @map("created_by")
+  @@index([businessId,studentFeeId,createdAt])
+  @@map("school_fee_adjustments")
+}
+model SchoolPayrollRun {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  period String
+  status String @default("draft")
+  grossAmount Decimal @default(0) @map("gross_amount") @db.Decimal(14,2)
+  paidAmount Decimal @default(0) @map("paid_amount") @db.Decimal(14,2)
+  createdAt DateTime @default(now()) @map("created_at")
+  postedAt DateTime? @map("posted_at")
+  idempotencyKey String? @map("idempotency_key")
+  @@unique([businessId,period])
+  @@unique([businessId,idempotencyKey])
+  @@index([businessId,status])
+  @@map("school_payroll_runs")
+}
+model ClinicInvoice {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  invoiceNo String @map("invoice_no")
+  patientId String @map("patient_id")
+  encounterId String? @map("encounter_id")
+  subtotal Decimal @default(0) @db.Decimal(14,2)
+  discount Decimal @default(0) @db.Decimal(14,2)
+  total Decimal @default(0) @db.Decimal(14,2)
+  paidAmount Decimal @default(0) @map("paid_amount") @db.Decimal(14,2)
+  status String @default("due")
+  issuedAt DateTime @default(now()) @map("issued_at")
+  revision Int @default(1)
+  idempotencyKey String? @map("idempotency_key")
+  @@unique([businessId,invoiceNo])
+  @@unique([businessId,idempotencyKey])
+  @@index([businessId,patientId,status])
+  @@map("clinic_invoices")
+}
+model ClinicInvoiceItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  invoiceId String @map("invoice_id")
+  serviceId String? @map("service_id")
+  description String
+  quantity Decimal @default(1) @db.Decimal(10,2)
+  unitPrice Decimal @map("unit_price") @db.Decimal(14,2)
+  lineTotal Decimal @map("line_total") @db.Decimal(14,2)
+  @@index([businessId,invoiceId])
+  @@map("clinic_invoice_items")
+}
+model ClinicPayment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  invoiceId String @map("invoice_id")
+  amount Decimal @db.Decimal(14,2)
+  paymentMethod String @map("payment_method")
+  reference String?
+  paidAt DateTime @default(now()) @map("paid_at")
+  idempotencyKey String? @map("idempotency_key")
+  recordedBy String? @map("recorded_by")
+  @@unique([businessId,idempotencyKey])
+  @@index([businessId,invoiceId,paidAt])
+  @@map("clinic_payments")
+}
+model ReleaseBNotificationRule {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  industry String
+  eventKey String @map("event_key")
+  daysBefore Int @default(0) @map("days_before")
+  channel String @default("in_app")
+  active Boolean @default(true)
+  @@unique([businessId,industry,eventKey,channel])
+  @@index([businessId,industry,active])
+  @@map("release_b_notification_rules")
+}
+
+
+// Release C — Restaurant, Hardware and Paint
+model RestaurantArea {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+ 
+  @@unique([businessId,name])
+ 
+  @@map("restaurant_areas")
+}
+model RestaurantTable {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  areaId String? @map("area_id")
+  tableNo String @map("table_no")
+  capacity Int @default(2)
+  status String @default("available")
+  active Boolean @default(true)
+ 
+  @@unique([businessId,tableNo])
+ 
+  @@index([businessId,status])
+ 
+  @@map("restaurant_tables")
+}
+model RestaurantMenuCategory {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  kitchenStation String? @map("kitchen_station")
+  active Boolean @default(true)
+ 
+  @@unique([businessId,name])
+ 
+  @@map("restaurant_menu_categories")
+}
+model RestaurantMenuItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  categoryId String? @map("category_id")
+  name String
+  sku String?
+  price Decimal @db.Decimal(14,2)
+  preparationMinutes Int @default(10) @map("preparation_minutes")
+  active Boolean @default(true)
+ 
+  @@unique([businessId,sku])
+ 
+  @@index([businessId,categoryId,active])
+ 
+  @@map("restaurant_menu_items")
+}
+model RestaurantOrder {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  orderNo String @map("order_no")
+  orderType String @map("order_type")
+  tableId String? @map("table_id")
+  customerName String? @map("customer_name")
+  status String @default("open")
+  subtotal Decimal @default(0) @db.Decimal(14,2)
+  discount Decimal @default(0) @db.Decimal(14,2)
+  serviceCharge Decimal @default(0) @map("service_charge") @db.Decimal(14,2)
+  total Decimal @default(0) @db.Decimal(14,2)
+  createdAt DateTime @default(now()) @map("created_at")
+  closedAt DateTime? @map("closed_at")
+  idempotencyKey String? @map("idempotency_key")
+  waiterId String? @map("waiter_id")
+  tip Decimal @default(0) @db.Decimal(14,2)
+  deliveryStatus String? @map("delivery_status")
+  courseStatus String @default("held") @map("course_status")
+ 
+  @@unique([businessId,orderNo])
+ 
+  @@unique([businessId,idempotencyKey])
+ 
+  @@index([businessId,status,createdAt])
+ 
+  @@map("restaurant_orders")
+}
+model RestaurantOrderItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  orderId String @map("order_id")
+  menuItemId String? @map("menu_item_id")
+  itemName String @map("item_name")
+  quantity Decimal @db.Decimal(10,2)
+  unitPrice Decimal @map("unit_price") @db.Decimal(14,2)
+  modifiers Json?
+  lineTotal Decimal @map("line_total") @db.Decimal(14,2)
+  preparationStatus String @default("pending") @map("preparation_status")
+ 
+  @@index([businessId,orderId])
+ 
+  @@map("restaurant_order_items")
+}
+model RestaurantKitchenTicket {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  orderId String @map("order_id")
+  station String
+  ticketNo String @map("ticket_no")
+  status String @default("queued")
+  createdAt DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+ 
+  @@unique([businessId,ticketNo])
+ 
+  @@index([businessId,status])
+ 
+  @@map("restaurant_kitchen_tickets") }
+
+model HardwareProductProfile {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  productId String @map("product_id")
+  baseUnit String @map("base_unit")
+  cuttable Boolean @default(false)
+  serialTracked Boolean @default(false) @map("serial_tracked")
+  warrantyMonths Int @default(0) @map("warranty_months")
+ 
+  @@unique([businessId,productId])
+ 
+  @@map("hardware_product_profiles")
+}
+model HardwareUnitConversion {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  productId String @map("product_id")
+  fromUnit String @map("from_unit")
+  toUnit String @map("to_unit")
+  factor Decimal @db.Decimal(14,4)
+ 
+  @@unique([businessId,productId,fromUnit,toUnit])
+ 
+  @@map("hardware_unit_conversions")
+}
+model TradePriceLevel {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  discountPercent Decimal @default(0) @map("discount_percent") @db.Decimal(7,2)
+  active Boolean @default(true)
+ 
+  @@unique([businessId,name])
+ 
+  @@map("trade_price_levels")
+}
+model CustomerProject {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customerId String @map("customer_id")
+  projectCode String @map("project_code")
+  name String
+  location String?
+  status String @default("active")
+  creditLimit Decimal @default(0) @map("credit_limit") @db.Decimal(14,2)
+ 
+  @@unique([businessId,projectCode])
+ 
+  @@index([businessId,customerId,status])
+ 
+  @@map("customer_projects")
+}
+model HardwareStagedDelivery {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  projectId String? @map("project_id")
+  documentNo String @map("document_no")
+  scheduledDate DateTime @map("scheduled_date")
+  status String @default("planned")
+  notes String?
+  idempotencyKey String? @map("idempotency_key")
+ 
+  @@unique([businessId,documentNo])
+ 
+  @@unique([businessId,idempotencyKey])
+ 
+  @@index([businessId,status,scheduledDate])
+ 
+  @@map("hardware_staged_deliveries")
+}
+model HardwareBackorder {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customerId String? @map("customer_id")
+  productId String @map("product_id")
+  quantity Decimal @db.Decimal(14,3)
+  fulfilledQuantity Decimal @default(0) @map("fulfilled_quantity") @db.Decimal(14,3)
+  status String @default("open")
+  createdAt DateTime @default(now()) @map("created_at")
+ 
+  @@index([businessId,status,productId])
+ 
+  @@map("hardware_backorders")
+}
+model HardwareRentalContract {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  contractNo String @map("contract_no")
+  customerId String @map("customer_id")
+  itemDescription String @map("item_description")
+  startAt DateTime @map("start_at")
+  dueAt DateTime @map("due_at")
+  returnedAt DateTime? @map("returned_at")
+  deposit Decimal @default(0) @db.Decimal(14,2)
+  status String @default("active")
+  rentalCharge Decimal @default(0) @map("rental_charge") @db.Decimal(14,2)
+  damageCharge Decimal @default(0) @map("damage_charge") @db.Decimal(14,2)
+  refundAmount Decimal @default(0) @map("refund_amount") @db.Decimal(14,2)
+ 
+  @@unique([businessId,contractNo])
+ 
+  @@index([businessId,status,dueAt])
+ 
+  @@map("hardware_rental_contracts") }
+
+model PaintBrand {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  active Boolean @default(true)
+ 
+  @@unique([businessId,name])
+ 
+  @@map("paint_brands")
+}
+model PaintProductLine {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  brandId String @map("brand_id")
+  name String
+  technology String?
+  active Boolean @default(true)
+ 
+  @@unique([businessId,brandId,name])
+ 
+  @@map("paint_product_lines")
+}
+model PaintColor {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  code String
+  name String
+  collection String?
+  active Boolean @default(true)
+ 
+  @@unique([businessId,code])
+ 
+  @@map("paint_colors")
+}
+model PaintFormula {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  formulaCode String @map("formula_code")
+  colorId String @map("color_id")
+  productLineId String @map("product_line_id")
+  baseCode String @map("base_code")
+  packSize Decimal @map("pack_size") @db.Decimal(12,3)
+  unit String
+  currentRevision Int @default(1) @map("current_revision")
+  active Boolean @default(true)
+ 
+  @@unique([businessId,formulaCode])
+ 
+  @@map("paint_formulas")
+}
+model PaintFormulaRevision {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  formulaId String @map("formula_id")
+  revision Int
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at")
+ 
+  @@unique([businessId,formulaId,revision])
+ 
+  @@map("paint_formula_revisions")
+}
+model PaintFormulaComponent {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  revisionId String @map("revision_id")
+  componentCode String @map("component_code")
+  componentName String @map("component_name")
+  quantity Decimal @db.Decimal(14,4)
+  unit String
+  sequence Int @default(0)
+ 
+  @@index([businessId,revisionId,sequence])
+ 
+  @@map("paint_formula_components")
+}
+model PaintMixJob {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobNo String @map("job_no")
+  formulaId String @map("formula_id")
+  formulaRevision Int @map("formula_revision")
+  customerReference String? @map("customer_reference")
+  vehicleProjectReference String? @map("vehicle_project_reference")
+  status String @default("queued")
+  quantity Decimal @db.Decimal(14,3)
+  unit String
+  mixCost Decimal @default(0) @map("mix_cost") @db.Decimal(14,2)
+  sellingPrice Decimal @default(0) @map("selling_price") @db.Decimal(14,2)
+  nonReturnableAccepted Boolean @default(false) @map("non_returnable_accepted")
+  createdAt DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  deliveredAt DateTime? @map("delivered_at")
+  idempotencyKey String? @map("idempotency_key")
+ 
+  @@unique([businessId,jobNo])
+ 
+  @@unique([businessId,idempotencyKey])
+ 
+  @@index([businessId,status,createdAt])
+ 
+  @@map("paint_mix_jobs")
+}
+model PaintMixConsumption {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  mixJobId String @map("mix_job_id")
+  componentCode String @map("component_code")
+  plannedQuantity Decimal @map("planned_quantity") @db.Decimal(14,4)
+  actualQuantity Decimal @map("actual_quantity") @db.Decimal(14,4)
+  unit String
+  cost Decimal @default(0) @db.Decimal(14,2)
+ 
+  @@index([businessId,mixJobId])
+ 
+  @@map("paint_mix_consumptions")
+}
+model PaintMixQualityCheck {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  mixJobId String @map("mix_job_id")
+  result String
+  checkedBy String? @map("checked_by")
+  notes String?
+  checkedAt DateTime @default(now()) @map("checked_at")
+ 
+  @@index([businessId,mixJobId,checkedAt])
+ 
+  @@map("paint_mix_quality_checks") }
+
+// Release C checkpoint 2 — operational completion foundations
+model RestaurantReservation {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  reservationNo String @map("reservation_no")
+  tableId String? @map("table_id")
+  customerName String @map("customer_name")
+  phone String?
+  partySize Int @map("party_size")
+  reservedAt DateTime @map("reserved_at")
+  status String @default("booked")
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([businessId,reservationNo])
+  @@index([businessId,reservedAt,status])
+  @@map("restaurant_reservations")
+}
+model RestaurantModifierGroup {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  required Boolean @default(false)
+  minSelect Int @default(0) @map("min_select")
+  maxSelect Int @default(1) @map("max_select")
+  active Boolean @default(true)
+  @@unique([businessId,name])
+  @@map("restaurant_modifier_groups")
+}
+model RestaurantModifier {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  groupId String @map("group_id")
+  name String
+  priceDelta Decimal @default(0) @map("price_delta") @db.Decimal(14,2)
+  active Boolean @default(true)
+  @@unique([businessId,groupId,name])
+  @@map("restaurant_modifiers")
+}
+model RestaurantRecipe {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  menuItemId String @map("menu_item_id")
+  yieldQuantity Decimal @default(1) @map("yield_quantity") @db.Decimal(14,3)
+  active Boolean @default(true)
+  @@unique([businessId,menuItemId])
+  @@map("restaurant_recipes")
+}
+model RestaurantRecipeIngredient {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  recipeId String @map("recipe_id")
+  productId String @map("product_id")
+  quantity Decimal @db.Decimal(14,4)
+  unit String
+  @@unique([businessId,recipeId,productId])
+  @@map("restaurant_recipe_ingredients")
+}
+model RestaurantWastage {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  productId String @map("product_id")
+  quantity Decimal @db.Decimal(14,3)
+  unit String
+  reason String
+  postedBy String? @map("posted_by")
+  postedAt DateTime @default(now()) @map("posted_at")
+  reversedAt DateTime? @map("reversed_at")
+  idempotencyKey String? @map("idempotency_key")
+  @@unique([businessId,idempotencyKey])
+  @@index([businessId,postedAt])
+  @@map("restaurant_wastage")
+}
+model HardwareQuotation {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  quotationNo String @map("quotation_no")
+  customerId String @map("customer_id")
+  projectId String? @map("project_id")
+  lpoNo String? @map("lpo_no")
+  subtotal Decimal @default(0) @db.Decimal(14,2)
+  discount Decimal @default(0) @db.Decimal(14,2)
+  total Decimal @default(0) @db.Decimal(14,2)
+  status String @default("draft")
+  validUntil DateTime? @map("valid_until")
+  createdAt DateTime @default(now()) @map("created_at")
+  idempotencyKey String? @map("idempotency_key")
+  @@unique([businessId,quotationNo])
+  @@unique([businessId,idempotencyKey])
+  @@index([businessId,status,createdAt])
+  @@map("hardware_quotations")
+}
+model HardwareQuotationItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  quotationId String @map("quotation_id")
+  productId String @map("product_id")
+  description String
+  quantity Decimal @db.Decimal(14,3)
+  unit String
+  cutLength Decimal? @map("cut_length") @db.Decimal(14,3)
+  unitPrice Decimal @map("unit_price") @db.Decimal(14,2)
+  lineTotal Decimal @map("line_total") @db.Decimal(14,2)
+  @@index([businessId,quotationId])
+  @@map("hardware_quotation_items")
+}
+model HardwareDeliveryItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  deliveryId String @map("delivery_id")
+  productId String @map("product_id")
+  orderedQuantity Decimal @map("ordered_quantity") @db.Decimal(14,3)
+  deliveredQuantity Decimal @default(0) @map("delivered_quantity") @db.Decimal(14,3)
+  unit String
+  @@index([businessId,deliveryId])
+  @@map("hardware_delivery_items")
+}
+model HardwareWarrantyRecord {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  productId String @map("product_id")
+  customerId String @map("customer_id")
+  serialNo String? @map("serial_no")
+  invoiceNo String? @map("invoice_no")
+  startsAt DateTime @map("starts_at")
+  expiresAt DateTime @map("expires_at")
+  status String @default("active")
+  notes String?
+  @@index([businessId,status,expiresAt])
+  @@map("hardware_warranty_records")
+}
+model PaintComponentStock {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  componentCode String @map("component_code")
+  componentName String @map("component_name")
+  quantityOnHand Decimal @default(0) @map("quantity_on_hand") @db.Decimal(16,4)
+  unit String
+  averageCost Decimal @default(0) @map("average_cost") @db.Decimal(14,4)
+  minimumStock Decimal @default(0) @map("minimum_stock") @db.Decimal(16,4)
+  active Boolean @default(true)
+  @@unique([businessId,componentCode])
+  @@map("paint_component_stock")
+}
+model PaintMixLabel {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  mixJobId String @map("mix_job_id")
+  labelNo String @map("label_no")
+  printedAt DateTime? @map("printed_at")
+  printCount Int @default(0) @map("print_count")
+  @@unique([businessId,labelNo])
+  @@unique([businessId,mixJobId])
+  @@map("paint_mix_labels")
+}
+model ReleaseCNotificationRule {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  industry String
+  eventKey String @map("event_key")
+  channel String @default("in_app")
+  daysBefore Int @default(0) @map("days_before")
+  active Boolean @default(true)
+  @@unique([businessId,industry,eventKey,channel])
+  @@index([businessId,industry,active])
+  @@map("release_c_notification_rules")
+}
+
+// Release D — Furniture, Workshop, Wholesale core
+model FurnitureProductProfile {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  productId String @map("product_id")
+  collection String?
+  dimensions String?
+  material String?
+  colour String?
+  madeToOrder Boolean @default(false) @map("made_to_order")
+  warrantyMonths Int @default(12) @map("warranty_months")
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([businessId, productId])
+  @@index([businessId, collection, active])
+  @@map("furniture_product_profiles")
+}
+model FurnitureCustomOrder {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  orderNo String @map("order_no")
+  customerId String @map("customer_id")
+  productId String? @map("product_id")
+  description String
+  status String @default("draft")
+  quotedAmount Decimal @default(0) @map("quoted_amount") @db.Decimal(14,2)
+  depositRequired Decimal @default(0) @map("deposit_required") @db.Decimal(14,2)
+  balance Decimal @default(0) @db.Decimal(14,2)
+  expectedAt DateTime? @map("expected_at")
+  approvedAt DateTime? @map("approved_at")
+  revision Int @default(1)
+  idempotencyKey String? @map("idempotency_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([businessId, orderNo])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, expectedAt])
+  @@map("furniture_custom_orders")
+}
+model FurnitureMeasurement {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customOrderId String @map("custom_order_id")
+  measurementKey String @map("measurement_key")
+  measurementValue Decimal @map("measurement_value") @db.Decimal(14,3)
+  unit String
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([businessId, customOrderId])
+  @@map("furniture_measurements")
+}
+model FurnitureProductionStage {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customOrderId String @map("custom_order_id")
+  stageName String @map("stage_name")
+  sequence Int
+  status String @default("pending")
+  startedAt DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  assignedTo String? @map("assigned_to")
+  notes String?
+  @@unique([businessId, customOrderId, sequence])
+  @@index([businessId, status])
+  @@map("furniture_production_stages")
+}
+model FurniturePayment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customOrderId String @map("custom_order_id")
+  amount Decimal @db.Decimal(14,2)
+  paymentType String @map("payment_type")
+  method String @default("cash")
+  reference String?
+  idempotencyKey String? @map("idempotency_key")
+  paidAt DateTime @default(now()) @map("paid_at")
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, customOrderId, paidAt])
+  @@map("furniture_payments")
+}
+model FurnitureDelivery {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customOrderId String @map("custom_order_id")
+  scheduledAt DateTime @map("scheduled_at")
+  status String @default("scheduled")
+  vehicleReference String? @map("vehicle_reference")
+  driverName String? @map("driver_name")
+  deliveredAt DateTime? @map("delivered_at")
+  customerSignature String? @map("customer_signature")
+  @@index([businessId, status, scheduledAt])
+  @@map("furniture_deliveries")
+}
+model FurnitureInstallation {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  deliveryId String @map("delivery_id")
+  scheduledAt DateTime @map("scheduled_at")
+  technicianName String? @map("technician_name")
+  status String @default("scheduled")
+  completedAt DateTime? @map("completed_at")
+  notes String?
+  @@index([businessId, status, scheduledAt])
+  @@map("furniture_installations")
+}
+model FurnitureWarranty {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customOrderId String @map("custom_order_id")
+  startsAt DateTime @map("starts_at")
+  expiresAt DateTime @map("expires_at")
+  status String @default("active")
+  notes String?
+  @@index([businessId, status, expiresAt])
+  @@map("furniture_warranties")
+}
+model WorkshopVehicle {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customerId String @map("customer_id")
+  registrationNo String @map("registration_no")
+  vin String?
+  make String
+  model String
+  modelYear Int? @map("model_year")
+  mileage Int @default(0)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([businessId, registrationNo])
+  @@index([businessId, customerId])
+  @@map("workshop_vehicles")
+}
+model WorkshopInspection {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  vehicleId String @map("vehicle_id")
+  inspectionNo String @map("inspection_no")
+  mileage Int
+  fuelLevel String? @map("fuel_level")
+  notes String?
+  status String @default("open")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([businessId, inspectionNo])
+  @@index([businessId, vehicleId, createdAt])
+  @@map("workshop_inspections")
+}
+model WorkshopInspectionItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  inspectionId String @map("inspection_id")
+  itemName String @map("item_name")
+  condition String
+  notes String?
+  @@index([businessId, inspectionId])
+  @@map("workshop_inspection_items")
+}
+model WorkshopEstimate {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  estimateNo String @map("estimate_no")
+  vehicleId String @map("vehicle_id")
+  status String @default("draft")
+  subtotal Decimal @default(0) @db.Decimal(14,2)
+  tax Decimal @default(0) @db.Decimal(14,2)
+  total Decimal @default(0) @db.Decimal(14,2)
+  approvedAt DateTime? @map("approved_at")
+  idempotencyKey String? @map("idempotency_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([businessId, estimateNo])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, vehicleId, status])
+  @@map("workshop_estimates")
+}
+model WorkshopEstimateItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  estimateId String @map("estimate_id")
+  itemType String @map("item_type")
+  description String
+  quantity Decimal @db.Decimal(14,3)
+  unitPrice Decimal @map("unit_price") @db.Decimal(14,2)
+  lineTotal Decimal @map("line_total") @db.Decimal(14,2)
+  @@index([businessId, estimateId])
+  @@map("workshop_estimate_items")
+}
+model WorkshopTechnician {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  specialty String?
+  active Boolean @default(true)
+  @@index([businessId, active])
+  @@map("workshop_technicians")
+}
+model WorkshopBay {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  active Boolean @default(true)
+  @@unique([businessId, name])
+  @@map("workshop_bays")
+}
+model WorkshopJobCard {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobNo String @map("job_no")
+  vehicleId String @map("vehicle_id")
+  estimateId String? @map("estimate_id")
+  technicianId String? @map("technician_id")
+  bayId String? @map("bay_id")
+  status String @default("open")
+  priority String @default("normal")
+  promisedAt DateTime? @map("promised_at")
+  startedAt DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  idempotencyKey String? @map("idempotency_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([businessId, jobNo])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, promisedAt])
+  @@map("workshop_job_cards")
+}
+model WorkshopJobTask {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobCardId String @map("job_card_id")
+  description String
+  taskType String @map("task_type")
+  status String @default("pending")
+  labourHours Decimal @default(0) @map("labour_hours") @db.Decimal(10,2)
+  completedAt DateTime? @map("completed_at")
+  @@index([businessId, jobCardId, status])
+  @@map("workshop_job_tasks")
+}
+model WorkshopPartUsage {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobCardId String @map("job_card_id")
+  productId String @map("product_id")
+  quantity Decimal @db.Decimal(14,3)
+  unitCost Decimal @map("unit_cost") @db.Decimal(14,2)
+  postedAt DateTime @default(now()) @map("posted_at")
+  idempotencyKey String? @map("idempotency_key")
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, jobCardId])
+  @@map("workshop_part_usage")
+}
+model WholesalePriceList {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  currency String @default("USD")
+  active Boolean @default(true)
+  @@unique([businessId, name])
+  @@map("wholesale_price_lists")
+}
+model WholesalePriceListItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  priceListId String @map("price_list_id")
+  productId String @map("product_id")
+  unit String
+  minimumQuantity Decimal @default(1) @map("minimum_quantity") @db.Decimal(14,3)
+  unitPrice Decimal @map("unit_price") @db.Decimal(14,2)
+  @@unique([businessId, priceListId, productId, unit, minimumQuantity])
+  @@map("wholesale_price_list_items")
+}
+model WholesaleSalesOrder {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  orderNo String @map("order_no")
+  customerId String @map("customer_id")
+  customerPo String? @map("customer_po")
+  territory String?
+  status String @default("draft")
+  subtotal Decimal @default(0) @db.Decimal(14,2)
+  discount Decimal @default(0) @db.Decimal(14,2)
+  total Decimal @default(0) @db.Decimal(14,2)
+  requestedDeliveryAt DateTime? @map("requested_delivery_at")
+  idempotencyKey String? @map("idempotency_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([businessId, orderNo])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@map("wholesale_sales_orders")
+}
+model WholesaleSalesOrderItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  salesOrderId String @map("sales_order_id")
+  productId String @map("product_id")
+  description String
+  quantity Decimal @db.Decimal(14,3)
+  allocatedQuantity Decimal @default(0) @map("allocated_quantity") @db.Decimal(14,3)
+  unit String
+  unitPrice Decimal @map("unit_price") @db.Decimal(14,2)
+  lineTotal Decimal @map("line_total") @db.Decimal(14,2)
+  @@index([businessId, salesOrderId])
+  @@map("wholesale_sales_order_items")
+}
+model WholesalePickList {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  pickNo String @map("pick_no")
+  salesOrderId String @map("sales_order_id")
+  status String @default("open")
+  assignedTo String? @map("assigned_to")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([businessId, pickNo])
+  @@index([businessId, status])
+  @@map("wholesale_pick_lists")
+}
+model WholesalePickListItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  pickListId String @map("pick_list_id")
+  salesOrderItemId String @map("sales_order_item_id")
+  requestedQuantity Decimal @map("requested_quantity") @db.Decimal(14,3)
+  pickedQuantity Decimal @default(0) @map("picked_quantity") @db.Decimal(14,3)
+  @@index([businessId, pickListId])
+  @@map("wholesale_pick_list_items")
+}
+model WholesaleDispatch {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  dispatchNo String @map("dispatch_no")
+  salesOrderId String @map("sales_order_id")
+  routeName String? @map("route_name")
+  driverName String? @map("driver_name")
+  vehicleReference String? @map("vehicle_reference")
+  status String @default("planned")
+  dispatchedAt DateTime? @map("dispatched_at")
+  deliveredAt DateTime? @map("delivered_at")
+  @@unique([businessId, dispatchNo])
+  @@index([businessId, status])
+  @@map("wholesale_dispatches")
+}
+model WholesaleBackorder {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  salesOrderItemId String @map("sales_order_item_id")
+  quantity Decimal @db.Decimal(14,3)
+  status String @default("open")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([businessId, status])
+  @@map("wholesale_backorders")
+}
+
+// Release D checkpoint 2 — remaining operational workflows
+model FurnitureApproval {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customOrderId String @map("custom_order_id")
+  status String @default("pending")
+  revision Int @default(1)
+  approvedBy String? @map("approved_by")
+  notes String?
+  approvedAt DateTime? @map("approved_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([businessId, customOrderId, status])
+  @@map("furniture_approvals")
+}
+model FurnitureWarrantyClaim {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  warrantyId String @map("warranty_id")
+  claimNo String @map("claim_no")
+  issue String
+  status String @default("open")
+  resolution String?
+  openedAt DateTime @default(now()) @map("opened_at")
+  closedAt DateTime? @map("closed_at")
+  @@unique([businessId, claimNo])
+  @@index([businessId, status])
+  @@map("furniture_warranty_claims")
+}
+model WorkshopPartReservation {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobCardId String @map("job_card_id")
+  productId String @map("product_id")
+  quantity Decimal @db.Decimal(14,3)
+  status String @default("reserved")
+  idempotencyKey String? @map("idempotency_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, jobCardId, status])
+  @@map("workshop_part_reservations")
+}
+model WorkshopQualityCheck {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobCardId String @map("job_card_id")
+  result String
+  checklist Json?
+  notes String?
+  checkedBy String? @map("checked_by")
+  checkedAt DateTime @default(now()) @map("checked_at")
+  @@index([businessId, jobCardId, result])
+  @@map("workshop_quality_checks")
+}
+model WorkshopInvoice {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobCardId String @map("job_card_id")
+  invoiceNo String @map("invoice_no")
+  total Decimal @db.Decimal(14,2)
+  paidAmount Decimal @default(0) @map("paid_amount") @db.Decimal(14,2)
+  balance Decimal @db.Decimal(14,2)
+  status String @default("unpaid")
+  idempotencyKey String? @map("idempotency_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([businessId, invoiceNo])
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status])
+  @@map("workshop_invoices")
+}
+model WorkshopPayment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  invoiceId String @map("invoice_id")
+  amount Decimal @db.Decimal(14,2)
+  method String @default("cash")
+  reference String?
+  idempotencyKey String? @map("idempotency_key")
+  paidAt DateTime @default(now()) @map("paid_at")
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, invoiceId, paidAt])
+  @@map("workshop_payments")
+}
+model WorkshopServiceReminder {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  vehicleId String @map("vehicle_id")
+  dueAt DateTime @map("due_at")
+  dueMileage Int? @map("due_mileage")
+  status String @default("pending")
+  message String?
+  @@index([businessId, status, dueAt])
+  @@map("workshop_service_reminders")
+}
+model WholesaleCustomerPriceAssignment {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customerId String @map("customer_id")
+  priceListId String @map("price_list_id")
+  active Boolean @default(true)
+  @@unique([businessId, customerId])
+  @@index([businessId, priceListId, active])
+  @@map("wholesale_customer_price_assignments")
+}
+model WholesaleUnitConversion {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  productId String @map("product_id")
+  fromUnit String @map("from_unit")
+  toUnit String @map("to_unit")
+  factor Decimal @db.Decimal(14,6)
+  @@unique([businessId, productId, fromUnit, toUnit])
+  @@map("wholesale_unit_conversions")
+}
+model WholesalePackingList {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  packingNo String @map("packing_no")
+  pickListId String @map("pick_list_id")
+  status String @default("open")
+  packedBy String? @map("packed_by")
+  packedAt DateTime? @map("packed_at")
+  @@unique([businessId, packingNo])
+  @@index([businessId, status])
+  @@map("wholesale_packing_lists")
+}
+model WholesaleDeliveryRoute {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  name String
+  driverName String? @map("driver_name")
+  vehicleReference String? @map("vehicle_reference")
+  active Boolean @default(true)
+  @@unique([businessId, name])
+  @@map("wholesale_delivery_routes")
+}
+model WholesaleCollection {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  salesOrderId String @map("sales_order_id")
+  customerId String @map("customer_id")
+  amount Decimal @db.Decimal(14,2)
+  method String @default("bank")
+  reference String?
+  idempotencyKey String? @map("idempotency_key")
+  collectedAt DateTime @default(now()) @map("collected_at")
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, customerId, collectedAt])
+  @@map("wholesale_collections")
+}
+
+
+model FurnitureProcurement {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customOrderId String @map("custom_order_id")
+  supplierId String? @map("supplier_id")
+  description String
+  amount Decimal @default(0) @db.Decimal(14,2)
+  status String @default("requested")
+  orderedAt DateTime? @map("ordered_at")
+  receivedAt DateTime? @map("received_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([businessId, customOrderId, status])
+  @@map("furniture_procurements")
+}
+model FurnitureReturn {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customOrderId String @map("custom_order_id")
+  returnNo String @map("return_no")
+  reason String
+  resolution String?
+  status String @default("open")
+  createdAt DateTime @default(now()) @map("created_at")
+  resolvedAt DateTime? @map("resolved_at")
+  @@unique([businessId, returnNo])
+  @@index([businessId, status])
+  @@map("furniture_returns")
+}
+model FurnitureInstallationSignoff {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  installationId String @map("installation_id")
+  customerName String @map("customer_name")
+  signatureReference String? @map("signature_reference")
+  notes String?
+  signedAt DateTime @default(now()) @map("signed_at")
+  @@unique([businessId, installationId])
+  @@map("furniture_installation_signoffs")
+}
+model WorkshopInventoryPosting {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobCardId String @map("job_card_id")
+  productId String @map("product_id")
+  quantity Decimal @db.Decimal(14,3)
+  postingType String @map("posting_type")
+  idempotencyKey String? @map("idempotency_key")
+  postedAt DateTime @default(now()) @map("posted_at")
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, jobCardId])
+  @@map("workshop_inventory_postings")
+}
+model WorkshopVehicleDelivery {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  jobCardId String @map("job_card_id")
+  deliveredTo String @map("delivered_to")
+  signatureReference String? @map("signature_reference")
+  notes String?
+  deliveredAt DateTime @default(now()) @map("delivered_at")
+  @@unique([businessId, jobCardId])
+  @@map("workshop_vehicle_deliveries")
+}
+model WholesalePackingListItem {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  packingListId String @map("packing_list_id")
+  salesOrderItemId String @map("sales_order_item_id")
+  quantity Decimal @db.Decimal(14,3)
+  unit String @default("unit")
+  @@index([businessId, packingListId])
+  @@map("wholesale_packing_list_items")
+}
+model WholesaleProofOfDelivery {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  dispatchId String @map("dispatch_id")
+  receiverName String @map("receiver_name")
+  signatureReference String? @map("signature_reference")
+  notes String?
+  deliveredAt DateTime @default(now()) @map("delivered_at")
+  @@unique([businessId, dispatchId])
+  @@map("wholesale_proof_of_deliveries")
+}
+model WholesaleCreditProfile {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  customerId String @map("customer_id")
+  creditLimit Decimal @default(0) @map("credit_limit") @db.Decimal(14,2)
+  creditDays Int @default(0) @map("credit_days")
+  blocked Boolean @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([businessId, customerId])
+  @@map("wholesale_credit_profiles")
+}
+model ReleaseDNotificationRule {
+  id String @id @default(cuid())
+  businessId String @map("business_id")
+  industry String
+  eventCode String @map("event_code")
+  enabled Boolean @default(true)
+  daysBefore Int? @map("days_before")
+  channel String @default("in_app")
+  @@unique([businessId, industry, eventCode])
+  @@map("release_d_notification_rules")
 }

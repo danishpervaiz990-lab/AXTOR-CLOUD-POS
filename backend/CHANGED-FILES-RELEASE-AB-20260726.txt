@@ -1,0 +1,18 @@
+backend/prisma/schema.prisma
+backend/prisma/migrations/20260726110000_release_ab_normalized_core/migration.sql
+backend/src/middleware/industry-guard.middleware.ts
+backend/src/services/release-ab.service.ts
+backend/src/controllers/release-ab.controller.ts
+backend/src/routes/release-ab.routes.ts
+backend/src/controllers/auth.controller.ts
+backend/src/app.ts
+backend/RELEASE-AB-CHECKPOINT-20260726.md
+backend/CHANGED-FILES-RELEASE-AB-20260726.txt
+frontend/demo-static/retail.html
+frontend/demo-static/gym.html
+frontend/demo-static/school.html
+frontend/demo-static/clinic.html
+frontend/demo-static/css/dedicated-industry.css
+frontend/demo-static/js/dedicated-industry.js
+frontend/demo-static/login.html
+frontend/demo-static/customer.html (preserved repaired baseline)
