@@ -1,67 +1,367 @@
-(function(){
-"use strict";
-const API="/api/v1/school";
-const nav=[
- ["school-dashboard.html","Dashboard"],["school-admissions.html","Admissions"],["school-students.html","Students"],["school-guardians.html","Guardians"],["school-classes.html","Classes & Sections"],["school-enrollments.html","Enrollments"],["school-attendance.html","Attendance"],["school-timetable.html","Timetable"],["school-fees.html","Fees"],["school-fee-payments.html","Fee Payments"],["school-assessments.html","Assessments"],["school-results.html","Results"],["school-teachers.html","Teachers"],["school-employees.html","Employees"],["school-payroll.html","Payroll"],["school-reports.html","Reports"],["school-settings.html","Settings"]
-];
-const fields={
- admissions:[["applicationNo","Application number","text",1],["fullName","Applicant name","text",1],["requestedGrade","Requested grade","text",0],["guardianName","Guardian name","text",0],["guardianPhone","Guardian phone","text",0]],
- students:[["admissionNo","Admission number","text",1],["fullName","Student name","text",1],["dateOfBirth","Date of birth","date",0]],
- guardians:[["fullName","Guardian name","text",1],["phone","Phone","text",1],["email","Email","email",0],["relation","Relationship","text",0]],
- classes:[["academicYear","Academic year","text",1],["grade","Grade","text",1],["section","Section","text",1],["capacity","Capacity","number",1]],
- enrollments:[["studentId","Student ID","text",1],["classSectionId","Class section ID","text",1]],
- attendance:[["studentId","Student ID","text",1],["classSectionId","Class section ID","text",1],["attendanceDate","Attendance date","date",1],["status","Status","select",1,["present","absent","late","excused"]],["note","Note","text",0]],
- fees:[["studentId","Student ID","text",1],["feeHeadId","Fee head ID","text",1],["dueDate","Due date","date",1],["amount","Amount","number",1]],
- "fee-payments":[["studentFeeId","Student fee ID","text",1],["amount","Amount","number",1],["paymentMethod","Payment method","select",1,["cash","card","bank_transfer","cheque"]],["reference","Reference","text",0]],
- "academic-years":[["name","Academic year","text",1],["startsOn","Starts on","date",1],["endsOn","Ends on","date",1],["active","Set active","select",0,["true","false"]]],
- subjects:[["code","Subject code","text",1],["name","Subject name","text",1]],
- teachers:[["employeeNo","Employee number","text",0],["fullName","Teacher name","text",1],["phone","Phone","text",0],["email","Email","email",0]],
- rooms:[["code","Room code","text",1],["name","Room name","text",1],["capacity","Capacity","number",1]],
- timetable:[["classSectionId","Class section ID","text",1],["subjectId","Subject ID","text",1],["teacherId","Teacher ID","text",1],["roomId","Room ID","text",1],["weekday","Weekday 1-7","number",1],["startMinute","Start minute","number",1],["endMinute","End minute","number",1]],
- assessments:[["classSectionId","Class section ID","text",1],["subjectId","Subject ID","text",1],["termId","Term ID","text",0],["name","Assessment name","text",1],["maxMarks","Maximum marks","number",1],["assessmentDate","Assessment date","date",0]],
- results:[["assessmentId","Assessment ID","text",1],["studentId","Student ID","text",1],["marks","Marks","number",1],["grade","Grade","text",0],["remarks","Remarks","text",0]],
- employees:[["employeeNo","Employee number","text",1],["fullName","Employee name","text",1],["roleTitle","Role title","text",1],["monthlySalary","Monthly salary","number",1]],
- payroll:[["period","Payroll period","text",1],["paidAmount","Paid amount","number",0]],
- settings:[["eventKey","Event key","text",1],["channel","Channel","select",1,["in_app","email","sms","whatsapp"]],["daysBefore","Days before","number",0],["active","Active","select",0,["true","false"]]]
-};
-const pages={
- dashboard:{title:"School Operations Dashboard",subtitle:"Admissions, academics, attendance, fees and workforce control"},
- admissions:{title:"Admissions Pipeline",list:"/applicants",create:"/applicants",cols:[["applicationNo","Application"],["fullName","Applicant"],["requestedGrade","Grade"],["guardianName","Guardian"],["status","Status"]]},
- students:{title:"Student Register",list:"/students",create:"/students",cols:[["admissionNo","Admission"],["fullName","Student"],["dateOfBirth","DOB"],["status","Status"]]},
- guardians:{title:"Guardians",list:"/guardians",create:"/guardians",cols:[["fullName","Guardian"],["phone","Phone"],["email","Email"],["relation","Relation"]]},
- classes:{title:"Classes & Sections",list:"/classes",create:"/classes",cols:[["academicYear","Year"],["grade","Grade"],["section","Section"],["capacity","Capacity"]]},
- enrollments:{title:"Class Enrollments",list:"/enrollments",create:"/enrollments",cols:[["student.fullName","Student"],["classSection.grade","Grade"],["classSection.section","Section"],["status","Status"]]},
- attendance:{title:"Attendance Register",list:"/attendance",create:"/attendance",cols:[["attendanceDate","Date"],["student.fullName","Student"],["classSection.grade","Grade"],["status","Status"],["note","Note"]]},
- fees:{title:"Student Fees",list:"/fees",create:"/fees",cols:[["student.fullName","Student"],["feeHead.name","Fee Head"],["dueDate","Due"],["amount","Amount"],["paidAmount","Paid"],["status","Status"]]},
- "fee-payments":{title:"Fee Payments",list:"/fee-payments",create:"/fee-payments",idempotent:true,cols:[["paidAt","Paid At"],["studentFeeId","Fee ID"],["amount","Amount"],["paymentMethod","Method"],["reference","Reference"]]},
- "academic-years":{title:"Academic Years",list:"/academic-years",create:"/academic-years",cols:[["name","Academic Year"],["startsOn","Starts"],["endsOn","Ends"],["active","Active"]]},
- subjects:{title:"Subjects",list:"/subjects",create:"/subjects",cols:[["code","Code"],["name","Subject"],["active","Active"]]},
- teachers:{title:"Teachers",list:"/teachers",create:"/teachers",cols:[["employeeNo","Employee No"],["fullName","Teacher"],["phone","Phone"],["email","Email"]]},
- rooms:{title:"Rooms",list:"/rooms",create:"/rooms",cols:[["code","Code"],["name","Room"],["capacity","Capacity"]]},
- timetable:{title:"Timetable",list:"/timetable",create:"/timetable",cols:[["weekday","Day"],["startMinute","Start"],["endMinute","End"],["classSectionId","Class"],["teacherId","Teacher"],["roomId","Room"]]},
- assessments:{title:"Assessments",list:"/assessments",create:"/assessments",cols:[["name","Assessment"],["assessmentDate","Date"],["classSectionId","Class"],["subjectId","Subject"],["maxMarks","Max Marks"],["status","Status"]]},
- results:{title:"Results",list:"/results",create:"/results",cols:[["assessmentId","Assessment"],["studentId","Student"],["marks","Marks"],["grade","Grade"],["publishedAt","Published"]]},
- employees:{title:"Employees",list:"/employees",create:"/employees",cols:[["employeeNo","Employee No"],["fullName","Employee"],["roleTitle","Role"],["monthlySalary","Monthly Salary"]]},
- payroll:{title:"Payroll Runs",list:"/payroll-runs",create:"/payroll-runs",idempotent:true,cols:[["period","Period"],["grossAmount","Gross"],["paidAmount","Paid"],["status","Status"],["postedAt","Posted"]]},
- reports:{title:"School Reports",subtitle:"Date-filtered fee collection, payroll and operational summaries"},
- settings:{title:"School Notification Settings",list:"/notification-rules",create:"/notification-rules",put:true,cols:[["eventKey","Event"],["channel","Channel"],["daysBefore","Days Before"],["active","Active"]]},
- "student-profile":{title:"Student Profile",subtitle:"Longitudinal enrollment, guardian, attendance, fee and result history"}
-};
-function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function data(v){return v&&Object.prototype.hasOwnProperty.call(v,"data")?v.data:v;}
-function value(row,path){return path.split(".").reduce((x,k)=>x==null?x:x[k],row);}
-function shown(v){if(v===null||v===undefined||v==="")return "—";if(typeof v==="boolean")return v?"Yes":"No";if(/^\d{4}-\d{2}-\d{2}T/.test(String(v)))return new Date(v).toLocaleString();if(/^\d{4}-\d{2}-\d{2}$/.test(String(v)))return new Date(v+"T00:00:00").toLocaleDateString();return String(v);}
-function current(){return document.body.dataset.page||"dashboard";}
-function shell(page){const p=pages[page]||pages.dashboard;document.body.innerHTML=`<div class="school-shell"><aside class="school-nav"><div class="school-brand">AXTOR · SCHOOL</div>${nav.map(n=>`<a href="${n[0]}" class="${n[0].startsWith("school-"+page) ? "active":""}">${n[1]}</a>`).join("")}<a href="school-academic-years.html">Academic Years</a><a href="school-subjects.html">Subjects</a><a href="school-rooms.html">Rooms</a></aside><main class="school-main"><section class="school-hero"><h1>${esc(p.title)}</h1><p>${esc(p.subtitle||"Purpose-built school administration workspace")}</p></section><div id="app"></div></main></div>`;}
-async function guard(){const r=data(await AxtorAPI.apiGet("/api/v1/industry/registry",{cache:false}))||{};const code=String(r.selection?.code||r.selected?.code||"").toLowerCase();if(!["school","education"].includes(code))throw new Error("This application is available only to School tenants.");return r;}
-function form(page){const defs=fields[page]||[];if(!defs.length)return "";return `<section class="school-panel"><h2>New ${esc((pages[page]?.title||page).replace(/s$/,""))}</h2><form id="schoolForm" class="school-form">${defs.map(f=>`<div><label>${esc(f[1])}</label>${f[2]==="select"?`<select name="${f[0]}" ${f[3]?"required":""}><option value="">Select</option>${(f[4]||[]).map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")}</select>`:`<input name="${f[0]}" type="${f[2]}" ${f[3]?"required":""}></div>`).join("")}<div class="school-actions"><button class="school-btn">Save</button></div></form><div id="status" class="school-status"></div></section>`;}
-function table(page){const p=pages[page],cols=p.cols||[];return `<section class="school-panel"><div class="school-toolbar"><h2>Records</h2><input id="search" class="school-search" placeholder="Search or filter displayed records"></div><div class="school-table-wrap"><table class="school-table"><thead><tr>${cols.map(c=>`<th>${esc(c[1])}</th>`).join("")}</tr></thead><tbody id="rows"><tr><td colspan="${cols.length}">Loading…</td></tr></tbody></table></div></section>`;}
-function normalize(body){Object.keys(body).forEach(k=>{if(body[k]==="true")body[k]=true;else if(body[k]==="false")body[k]=false;else if(body[k]!==""&&["amount","paidAmount","monthlySalary","capacity","weekday","startMinute","endMinute","marks","maxMarks","daysBefore"].includes(k))body[k]=Number(body[k]);});return body;}
-async function list(page){const p=pages[page];const rows=data(await AxtorAPI.apiGet(API+p.list,{cache:false}))||[];const q=String(document.getElementById("search")?.value||"").toLowerCase();const filtered=q?rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q)):rows;const body=document.getElementById("rows");body.innerHTML=filtered.map(r=>`<tr>${p.cols.map(c=>`<td>${esc(shown(value(r,c[0])))}</td>`).join("")}</tr>`).join("")||`<tr><td class="school-empty" colspan="${p.cols.length}">No records found.</td></tr>`;}
-async function submit(page,event){event.preventDefault();const p=pages[page],fd=new FormData(event.currentTarget),body=normalize(Object.fromEntries(fd.entries()));const status=document.getElementById("status");status.textContent="Saving…";status.className="school-status";try{const options=p.idempotent?{headers:{"Idempotency-Key":"school:"+page+":"+Date.now()+":"+Math.random().toString(36).slice(2)}}:undefined;if(p.put)await AxtorAPI.apiPut(API+p.create,body,options);else await AxtorAPI.apiPost(API+p.create,body,options);status.textContent="Saved successfully.";status.className="school-status ok";event.currentTarget.reset();await list(page);}catch(e){status.textContent=e.message||"Save failed";status.className="school-status error";}}
-async function dashboard(){const [d,fees,attendance]=await Promise.all([AxtorAPI.apiGet(API+"/dashboard",{cache:false}),AxtorAPI.apiGet(API+"/fees?limit=500",{cache:false}),AxtorAPI.apiGet(API+"/attendance?limit=500",{cache:false})]);const k=data(d)||{},f=data(fees)||[],a=data(attendance)||[];const outstanding=f.reduce((s,x)=>s+Math.max(0,Number(x.amount||0)-Number(x.paidAmount||0)),0);document.getElementById("app").innerHTML=`<div class="school-kpis"><div class="school-kpi"><span>Active Students</span><strong>${esc(k.activeStudents||0)}</strong></div><div class="school-kpi"><span>Active Classes</span><strong>${esc(k.activeClasses||0)}</strong></div><div class="school-kpi"><span>Current Enrollments</span><strong>${esc(k.activeEnrollments||0)}</strong></div><div class="school-kpi"><span>Outstanding Fees</span><strong>${esc(outstanding.toFixed(2))}</strong></div></div><section class="school-panel"><h2>Academic Operations</h2><p>Attendance records loaded: <strong>${a.length}</strong></p><div class="school-note">Use the dedicated modules for admissions, attendance, fees, timetable, assessments and payroll. All records are isolated by tenant.</div></section>`;}
-async function reports(){const today=new Date(),from=new Date(today.getTime()-30*86400000).toISOString().slice(0,10),to=today.toISOString().slice(0,10);document.getElementById("app").innerHTML=`<section class="school-panel"><form id="reportForm" class="school-form"><div><label>From</label><input name="from" type="date" value="${from}"></div><div><label>To</label><input name="to" type="date" value="${to}"></div><div class="school-actions"><button class="school-btn">Run Report</button></div></form><pre id="reportOutput" class="mt-3"></pre></section>`;const run=async e=>{if(e)e.preventDefault();const q=new URLSearchParams(new FormData(document.getElementById("reportForm")));document.getElementById("reportOutput").textContent=JSON.stringify(data(await AxtorAPI.apiGet(API+"/reports/filtered?"+q.toString(),{cache:false})),null,2);};document.getElementById("reportForm").addEventListener("submit",run);await run();}
-async function profile(){const id=new URLSearchParams(location.search).get("id");if(!id)throw new Error("Student id is required");const r=data(await AxtorAPI.apiGet(API+"/students/"+encodeURIComponent(id)+"/summary",{cache:false}));document.getElementById("app").innerHTML=`<section class="school-panel"><h2>${esc(r.student.fullName)}</h2><p>Admission: ${esc(r.student.admissionNo)}</p><pre>${esc(JSON.stringify(r,null,2))}</pre></section>`;}
-async function boot(){const page=current();shell(page);try{await guard();if(page==="dashboard")return dashboard();if(page==="reports")return reports();if(page==="student-profile")return profile();const p=pages[page];document.getElementById("app").innerHTML=form(page)+table(page);document.getElementById("schoolForm")?.addEventListener("submit",e=>submit(page,e));document.getElementById("search")?.addEventListener("input",()=>list(page));await list(page);}catch(e){document.getElementById("app").innerHTML=`<section class="school-panel"><div class="school-status error">${esc(e.message||"Unable to load School application")}</div></section>`;}}
-document.addEventListener("DOMContentLoaded",boot);
+(function () {
+  "use strict";
+
+  const API = "/api/v1/school";
+  const PAGE = document.body.dataset.page || "dashboard";
+  const NAV = [
+    ["school-dashboard.html", "Dashboard"],
+    ["school-admissions.html", "Admissions"],
+    ["school-students.html", "Students"],
+    ["school-guardians.html", "Guardians"],
+    ["school-classes.html", "Classes"],
+    ["school-enrollments.html", "Enrollments"],
+    ["school-attendance.html", "Attendance"],
+    ["school-timetable.html", "Timetable"],
+    ["school-fees.html", "Fees"],
+    ["school-fee-payments.html", "Fee Payments"],
+    ["school-assessments.html", "Assessments"],
+    ["school-results.html", "Results"],
+    ["school-teachers.html", "Teachers"],
+    ["school-employees.html", "Employees"],
+    ["school-payroll.html", "Payroll"],
+    ["school-reports.html", "Reports"],
+    ["school-settings.html", "Settings"],
+    ["school-academic-years.html", "Academic Years"],
+    ["school-subjects.html", "Subjects"],
+    ["school-rooms.html", "Rooms"]
+  ];
+
+  const FIELD_MAP = {
+    admissions: [
+      ["applicationNo", "Application number", "text", true],
+      ["fullName", "Applicant name", "text", true],
+      ["requestedGrade", "Requested grade", "text", false],
+      ["guardianName", "Guardian name", "text", false],
+      ["guardianPhone", "Guardian phone", "text", false]
+    ],
+    students: [
+      ["admissionNo", "Admission number", "text", true],
+      ["fullName", "Student name", "text", true],
+      ["dateOfBirth", "Date of birth", "date", false]
+    ],
+    guardians: [
+      ["fullName", "Guardian name", "text", true],
+      ["phone", "Phone", "text", true],
+      ["email", "Email", "email", false],
+      ["relation", "Relationship", "text", false]
+    ],
+    classes: [
+      ["academicYear", "Academic year", "text", true],
+      ["grade", "Grade", "text", true],
+      ["section", "Section", "text", true],
+      ["capacity", "Capacity", "number", true]
+    ],
+    enrollments: [
+      ["studentId", "Student ID", "text", true],
+      ["classSectionId", "Class section ID", "text", true]
+    ],
+    attendance: [
+      ["studentId", "Student ID", "text", true],
+      ["classSectionId", "Class section ID", "text", true],
+      ["attendanceDate", "Attendance date", "date", true],
+      ["status", "Status", "select", true, ["present", "absent", "late", "excused"]],
+      ["note", "Note", "text", false]
+    ],
+    fees: [
+      ["studentId", "Student ID", "text", true],
+      ["feeHeadId", "Fee head ID", "text", true],
+      ["dueDate", "Due date", "date", true],
+      ["amount", "Amount", "number", true]
+    ],
+    "fee-payments": [
+      ["studentFeeId", "Student fee ID", "text", true],
+      ["amount", "Amount", "number", true],
+      ["paymentMethod", "Payment method", "select", true, ["cash", "card", "bank_transfer", "cheque"]],
+      ["reference", "Reference", "text", false]
+    ],
+    "academic-years": [
+      ["name", "Academic year", "text", true],
+      ["startsOn", "Starts on", "date", true],
+      ["endsOn", "Ends on", "date", true],
+      ["active", "Set active", "select", false, ["true", "false"]]
+    ],
+    subjects: [
+      ["code", "Subject code", "text", true],
+      ["name", "Subject name", "text", true]
+    ],
+    teachers: [
+      ["employeeNo", "Employee number", "text", false],
+      ["fullName", "Teacher name", "text", true],
+      ["phone", "Phone", "text", false],
+      ["email", "Email", "email", false]
+    ],
+    rooms: [
+      ["code", "Room code", "text", true],
+      ["name", "Room name", "text", true],
+      ["capacity", "Capacity", "number", true]
+    ],
+    timetable: [
+      ["classSectionId", "Class section ID", "text", true],
+      ["subjectId", "Subject ID", "text", true],
+      ["teacherId", "Teacher ID", "text", true],
+      ["roomId", "Room ID", "text", true],
+      ["weekday", "Weekday 1-7", "number", true],
+      ["startMinute", "Start minute", "number", true],
+      ["endMinute", "End minute", "number", true]
+    ],
+    assessments: [
+      ["classSectionId", "Class section ID", "text", true],
+      ["subjectId", "Subject ID", "text", true],
+      ["termId", "Term ID", "text", false],
+      ["name", "Assessment name", "text", true],
+      ["maxMarks", "Maximum marks", "number", true],
+      ["assessmentDate", "Assessment date", "date", false]
+    ],
+    results: [
+      ["assessmentId", "Assessment ID", "text", true],
+      ["studentId", "Student ID", "text", true],
+      ["marks", "Marks", "number", true],
+      ["grade", "Grade", "text", false],
+      ["remarks", "Remarks", "text", false]
+    ],
+    employees: [
+      ["employeeNo", "Employee number", "text", true],
+      ["fullName", "Employee name", "text", true],
+      ["roleTitle", "Role title", "text", true],
+      ["monthlySalary", "Monthly salary", "number", true]
+    ],
+    payroll: [
+      ["period", "Payroll period", "text", true],
+      ["paidAmount", "Paid amount", "number", false]
+    ],
+    settings: [
+      ["eventKey", "Event key", "text", true],
+      ["channel", "Channel", "select", true, ["in_app", "email", "sms", "whatsapp"]],
+      ["daysBefore", "Days before", "number", false],
+      ["active", "Active", "select", false, ["true", "false"]]
+    ]
+  };
+
+  const PAGE_MAP = {
+    dashboard: { title: "School Operations Dashboard", subtitle: "Admissions, academics, attendance, fees and workforce control" },
+    admissions: { title: "Admissions Pipeline", list: "/applicants", create: "/applicants", columns: [["applicationNo", "Application"], ["fullName", "Applicant"], ["requestedGrade", "Grade"], ["guardianName", "Guardian"], ["status", "Status"]] },
+    students: { title: "Student Register", list: "/students", create: "/students", columns: [["admissionNo", "Admission"], ["fullName", "Student"], ["dateOfBirth", "DOB"], ["status", "Status"]] },
+    guardians: { title: "Guardians", list: "/guardians", create: "/guardians", columns: [["fullName", "Guardian"], ["phone", "Phone"], ["email", "Email"], ["relation", "Relation"]] },
+    classes: { title: "Classes & Sections", list: "/classes", create: "/classes", columns: [["academicYear", "Year"], ["grade", "Grade"], ["section", "Section"], ["capacity", "Capacity"]] },
+    enrollments: { title: "Class Enrollments", list: "/enrollments", create: "/enrollments", columns: [["student.fullName", "Student"], ["classSection.grade", "Grade"], ["classSection.section", "Section"], ["status", "Status"]] },
+    attendance: { title: "Attendance Register", list: "/attendance", create: "/attendance", columns: [["attendanceDate", "Date"], ["student.fullName", "Student"], ["classSection.grade", "Grade"], ["status", "Status"], ["note", "Note"]] },
+    fees: { title: "Student Fees", list: "/fees", create: "/fees", columns: [["student.fullName", "Student"], ["feeHead.name", "Fee Head"], ["dueDate", "Due"], ["amount", "Amount"], ["paidAmount", "Paid"], ["status", "Status"]] },
+    "fee-payments": { title: "Fee Payments", list: "/fee-payments", create: "/fee-payments", idempotent: true, columns: [["paidAt", "Paid At"], ["studentFeeId", "Fee ID"], ["amount", "Amount"], ["paymentMethod", "Method"], ["reference", "Reference"]] },
+    "academic-years": { title: "Academic Years", list: "/academic-years", create: "/academic-years", columns: [["name", "Academic Year"], ["startsOn", "Starts"], ["endsOn", "Ends"], ["active", "Active"]] },
+    subjects: { title: "Subjects", list: "/subjects", create: "/subjects", columns: [["code", "Code"], ["name", "Subject"], ["active", "Active"]] },
+    teachers: { title: "Teachers", list: "/teachers", create: "/teachers", columns: [["employeeNo", "Employee No"], ["fullName", "Teacher"], ["phone", "Phone"], ["email", "Email"]] },
+    rooms: { title: "Rooms", list: "/rooms", create: "/rooms", columns: [["code", "Code"], ["name", "Room"], ["capacity", "Capacity"]] },
+    timetable: { title: "Timetable", list: "/timetable", create: "/timetable", columns: [["weekday", "Day"], ["startMinute", "Start"], ["endMinute", "End"], ["classSectionId", "Class"], ["teacherId", "Teacher"], ["roomId", "Room"]] },
+    assessments: { title: "Assessments", list: "/assessments", create: "/assessments", columns: [["name", "Assessment"], ["assessmentDate", "Date"], ["classSectionId", "Class"], ["subjectId", "Subject"], ["maxMarks", "Max Marks"], ["status", "Status"]] },
+    results: { title: "Results", list: "/results", create: "/results", columns: [["assessmentId", "Assessment"], ["studentId", "Student"], ["marks", "Marks"], ["grade", "Grade"], ["publishedAt", "Published"]] },
+    employees: { title: "Employees", list: "/employees", create: "/employees", columns: [["employeeNo", "Employee No"], ["fullName", "Employee"], ["roleTitle", "Role"], ["monthlySalary", "Monthly Salary"]] },
+    payroll: { title: "Payroll Runs", list: "/payroll-runs", create: "/payroll-runs", idempotent: true, columns: [["period", "Period"], ["grossAmount", "Gross"], ["paidAmount", "Paid"], ["status", "Status"], ["postedAt", "Posted"]] },
+    reports: { title: "School Reports", subtitle: "Date-filtered fee collection, payroll and operational summaries" },
+    settings: { title: "School Notification Settings", list: "/notification-rules", create: "/notification-rules", put: true, columns: [["eventKey", "Event"], ["channel", "Channel"], ["daysBefore", "Days Before"], ["active", "Active"]] },
+    "student-profile": { title: "Student Profile", subtitle: "Longitudinal enrollment, guardian, attendance, fee and result history" }
+  };
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, function (char) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char];
+    });
+  }
+
+  function unwrap(value) {
+    return value && Object.prototype.hasOwnProperty.call(value, "data") ? value.data : value;
+  }
+
+  function nestedValue(row, path) {
+    return path.split(".").reduce(function (current, key) {
+      return current == null ? current : current[key];
+    }, row);
+  }
+
+  function displayValue(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    const text = String(value);
+    if (/^\d{4}-\d{2}-\d{2}T/.test(text)) return new Date(text).toLocaleString();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return new Date(text + "T00:00:00").toLocaleDateString();
+    return text;
+  }
+
+  function renderShell() {
+    const config = PAGE_MAP[PAGE] || PAGE_MAP.dashboard;
+    const links = NAV.map(function (item) {
+      const active = item[0] === window.location.pathname.split("/").pop() ? "active" : "";
+      return '<a class="' + active + '" href="' + item[0] + '">' + escapeHtml(item[1]) + "</a>";
+    }).join("");
+    document.body.innerHTML =
+      '<div class="school-shell">' +
+        '<aside class="school-nav"><div class="school-brand">AXTOR · SCHOOL</div>' + links + "</aside>" +
+        '<main class="school-main">' +
+          '<section class="school-hero"><h1>' + escapeHtml(config.title) + "</h1><p>" + escapeHtml(config.subtitle || "Purpose-built school administration workspace") + "</p></section>" +
+          '<div id="app"></div>' +
+        "</main>" +
+      "</div>";
+  }
+
+  async function verifyTenant() {
+    const response = unwrap(await AxtorAPI.apiGet("/api/v1/industry/registry", { cache: false })) || {};
+    const code = String(response.selection?.code || response.selected?.code || "").toLowerCase();
+    if (!["school", "education"].includes(code)) {
+      throw new Error("This application is available only to School tenants.");
+    }
+  }
+
+  function controlHtml(field) {
+    const name = field[0];
+    const label = field[1];
+    const type = field[2];
+    const required = field[3] ? " required" : "";
+    let control;
+    if (type === "select") {
+      const options = (field[4] || []).map(function (option) {
+        return '<option value="' + escapeHtml(option) + '">' + escapeHtml(option) + "</option>";
+      }).join("");
+      control = '<select name="' + name + '"' + required + '><option value="">Select</option>' + options + "</select>";
+    } else {
+      control = '<input name="' + name + '" type="' + type + '"' + required + ">";
+    }
+    return "<div><label>" + escapeHtml(label) + "</label>" + control + "</div>";
+  }
+
+  function formHtml() {
+    const definitions = FIELD_MAP[PAGE] || [];
+    if (!definitions.length) return "";
+    return '<section class="school-panel"><h2>New Record</h2><form id="schoolForm" class="school-form">' +
+      definitions.map(controlHtml).join("") +
+      '<div class="school-actions"><button class="school-btn" type="submit">Save</button></div></form><div id="status" class="school-status"></div></section>';
+  }
+
+  function tableHtml(config) {
+    const columns = config.columns || [];
+    const headings = columns.map(function (column) {
+      return "<th>" + escapeHtml(column[1]) + "</th>";
+    }).join("");
+    return '<section class="school-panel"><div class="school-toolbar"><h2>Records</h2><input id="search" class="school-search" placeholder="Search displayed records"></div>' +
+      '<div class="school-table-wrap"><table class="school-table"><thead><tr>' + headings + '</tr></thead><tbody id="rows"><tr><td colspan="' + columns.length + '">Loading…</td></tr></tbody></table></div></section>';
+  }
+
+  function normalizePayload(payload) {
+    const numeric = new Set(["amount", "paidAmount", "monthlySalary", "capacity", "weekday", "startMinute", "endMinute", "marks", "maxMarks", "daysBefore"]);
+    Object.keys(payload).forEach(function (key) {
+      if (payload[key] === "true") payload[key] = true;
+      else if (payload[key] === "false") payload[key] = false;
+      else if (payload[key] !== "" && numeric.has(key)) payload[key] = Number(payload[key]);
+    });
+    return payload;
+  }
+
+  async function loadRows() {
+    const config = PAGE_MAP[PAGE];
+    const rows = unwrap(await AxtorAPI.apiGet(API + config.list, { cache: false })) || [];
+    const query = String(document.getElementById("search")?.value || "").toLowerCase();
+    const filtered = query ? rows.filter(function (row) {
+      return JSON.stringify(row).toLowerCase().includes(query);
+    }) : rows;
+    const body = document.getElementById("rows");
+    body.innerHTML = filtered.map(function (row) {
+      return "<tr>" + config.columns.map(function (column) {
+        return "<td>" + escapeHtml(displayValue(nestedValue(row, column[0]))) + "</td>";
+      }).join("") + "</tr>";
+    }).join("") || '<tr><td class="school-empty" colspan="' + config.columns.length + '">No records found.</td></tr>';
+  }
+
+  async function submitForm(event) {
+    event.preventDefault();
+    const config = PAGE_MAP[PAGE];
+    const payload = normalizePayload(Object.fromEntries(new FormData(event.currentTarget).entries()));
+    const status = document.getElementById("status");
+    status.textContent = "Saving…";
+    status.className = "school-status";
+    try {
+      const options = config.idempotent ? {
+        headers: { "Idempotency-Key": "school:" + PAGE + ":" + Date.now() + ":" + Math.random().toString(36).slice(2) }
+      } : undefined;
+      if (config.put) await AxtorAPI.apiPut(API + config.create, payload, options);
+      else await AxtorAPI.apiPost(API + config.create, payload, options);
+      status.textContent = "Saved successfully.";
+      status.className = "school-status ok";
+      event.currentTarget.reset();
+      await loadRows();
+    } catch (error) {
+      status.textContent = error.message || "Save failed";
+      status.className = "school-status error";
+    }
+  }
+
+  async function renderDashboard() {
+    const responses = await Promise.all([
+      AxtorAPI.apiGet(API + "/dashboard", { cache: false }),
+      AxtorAPI.apiGet(API + "/fees?limit=500", { cache: false }),
+      AxtorAPI.apiGet(API + "/attendance?limit=500", { cache: false })
+    ]);
+    const metrics = unwrap(responses[0]) || {};
+    const fees = unwrap(responses[1]) || [];
+    const attendance = unwrap(responses[2]) || [];
+    const outstanding = fees.reduce(function (sum, row) {
+      return sum + Math.max(0, Number(row.amount || 0) - Number(row.paidAmount || 0));
+    }, 0);
+    document.getElementById("app").innerHTML =
+      '<div class="school-kpis">' +
+        '<div class="school-kpi"><span>Active Students</span><strong>' + escapeHtml(metrics.activeStudents || 0) + "</strong></div>" +
+        '<div class="school-kpi"><span>Active Classes</span><strong>' + escapeHtml(metrics.activeClasses || 0) + "</strong></div>" +
+        '<div class="school-kpi"><span>Current Enrollments</span><strong>' + escapeHtml(metrics.activeEnrollments || 0) + "</strong></div>" +
+        '<div class="school-kpi"><span>Outstanding Fees</span><strong>' + escapeHtml(outstanding.toFixed(2)) + "</strong></div>" +
+      "</div>" +
+      '<section class="school-panel"><h2>Academic Operations</h2><p>Attendance records loaded: <strong>' + attendance.length + '</strong></p><div class="school-note">All School records are tenant-scoped. Use the dedicated modules for admissions, attendance, fees, timetable, assessments and payroll.</div></section>';
+  }
+
+  async function renderReports() {
+    const today = new Date();
+    const from = new Date(today.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+    const to = today.toISOString().slice(0, 10);
+    document.getElementById("app").innerHTML =
+      '<section class="school-panel"><form id="reportForm" class="school-form">' +
+        '<div><label>From</label><input name="from" type="date" value="' + from + '"></div>' +
+        '<div><label>To</label><input name="to" type="date" value="' + to + '"></div>' +
+        '<div class="school-actions"><button class="school-btn" type="submit">Run Report</button></div>' +
+      '</form><pre id="reportOutput"></pre></section>';
+
+    async function runReport(event) {
+      if (event) event.preventDefault();
+      const query = new URLSearchParams(new FormData(document.getElementById("reportForm")));
+      const report = unwrap(await AxtorAPI.apiGet(API + "/reports/filtered?" + query.toString(), { cache: false }));
+      document.getElementById("reportOutput").textContent = JSON.stringify(report, null, 2);
+    }
+    document.getElementById("reportForm").addEventListener("submit", runReport);
+    await runReport();
+  }
+
+  async function renderStudentProfile() {
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) throw new Error("Student id is required.");
+    const summary = unwrap(await AxtorAPI.apiGet(API + "/students/" + encodeURIComponent(id) + "/summary", { cache: false }));
+    document.getElementById("app").innerHTML =
+      '<section class="school-panel"><h2>' + escapeHtml(summary.student.fullName) + '</h2><p>Admission: ' + escapeHtml(summary.student.admissionNo) + '</p><pre>' + escapeHtml(JSON.stringify(summary, null, 2)) + "</pre></section>";
+  }
+
+  async function boot() {
+    renderShell();
+    try {
+      await verifyTenant();
+      if (PAGE === "dashboard") return renderDashboard();
+      if (PAGE === "reports") return renderReports();
+      if (PAGE === "student-profile") return renderStudentProfile();
+
+      const config = PAGE_MAP[PAGE];
+      if (!config) throw new Error("Unsupported School page.");
+      document.getElementById("app").innerHTML = formHtml() + tableHtml(config);
+      document.getElementById("schoolForm")?.addEventListener("submit", submitForm);
+      document.getElementById("search")?.addEventListener("input", loadRows);
+      await loadRows();
+    } catch (error) {
+      document.getElementById("app").innerHTML =
+        '<section class="school-panel"><div class="school-status error">' + escapeHtml(error.message || "Unable to load School application") + "</div></section>";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", boot);
 })();
