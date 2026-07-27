@@ -1,0 +1,39 @@
+name: Pharmacy Frontend CI
+
+on:
+  pull_request:
+    branches: [frontend-pharmacy]
+    paths:
+      - "demo-static/pharmacy*.html"
+      - "demo-static/css/pharmacy-app.css"
+      - "demo-static/js/pharmacy-app.js"
+      - "demo-static/js/axtor-api.js"
+      - "tests/pharmacy-frontend.test.cjs"
+      - ".github/workflows/frontend-pharmacy-ci.yml"
+  push:
+    branches: [frontend-pharmacy]
+    paths:
+      - "demo-static/pharmacy*.html"
+      - "demo-static/css/pharmacy-app.css"
+      - "demo-static/js/pharmacy-app.js"
+      - "demo-static/js/axtor-api.js"
+      - "tests/pharmacy-frontend.test.cjs"
+      - ".github/workflows/frontend-pharmacy-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  static-release-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - name: JavaScript syntax
+        run: |
+          node --check demo-static/js/axtor-api.js
+          node --check demo-static/js/pharmacy-app.js
+      - name: Pharmacy release suite
+        run: node tests/pharmacy-frontend.test.cjs
