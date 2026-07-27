@@ -1,0 +1,20 @@
+{
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/", "destination": "/restaurant-dashboard.html" },
+    { "source": "/dashboard", "destination": "/restaurant-dashboard.html" },
+    { "source": "/floor", "destination": "/restaurant-floor.html" },
+    { "source": "/menu", "destination": "/restaurant-menu.html" },
+    { "source": "/orders", "destination": "/restaurant-orders.html" },
+    { "source": "/kitchen", "destination": "/restaurant-kitchen.html" },
+    { "source": "/reservations", "destination": "/restaurant-reservations.html" },
+    { "source": "/reports", "destination": "/restaurant-reports.html" }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [
+      { "key": "X-Content-Type-Options", "value": "nosniff" },
+      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+    ] }
+  ]
+}
