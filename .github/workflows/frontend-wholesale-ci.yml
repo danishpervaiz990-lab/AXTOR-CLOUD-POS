@@ -1,0 +1,22 @@
+name: Wholesale Frontend CI
+on:
+  pull_request:
+    branches: [frontend-wholesale]
+  push:
+    branches: [frontend-wholesale, fix/wholesale/dedicated-frontend-v1]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --check demo-static/js/axtor-api.js
+      - run: node --check demo-static/js/wholesale-app.js
+      - run: node tests/wholesale-frontend.test.cjs
+      - run: |
+          if grep -R "industry.html?module=" demo-static/wholesale-*.html; then exit 1; fi
+      - run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
