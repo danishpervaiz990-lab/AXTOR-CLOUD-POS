@@ -1,9 +1,10 @@
 const fs = require('node:fs');
+const path = require('node:path');
 const assert = require('node:assert/strict');
 
-const routes = fs.readFileSync(new URL('../src/routes/school.routes.ts', import.meta.url), 'utf8');
-const operations = fs.readFileSync(new URL('../src/routes/school-operations.routes.ts', import.meta.url), 'utf8');
-const release = fs.readFileSync(new URL('../src/routes/release-ab.routes.ts', import.meta.url), 'utf8');
+const routes = fs.readFileSync(path.join(__dirname, '../src/routes/school.routes.ts'), 'utf8');
+const operations = fs.readFileSync(path.join(__dirname, '../src/routes/school-operations.routes.ts'), 'utf8');
+const release = fs.readFileSync(path.join(__dirname, '../src/routes/release-ab.routes.ts'), 'utf8');
 
 assert.match(routes, /requireIndustry\("school", "education"\)/);
 assert.match(routes, /requireAnyPermission/);
