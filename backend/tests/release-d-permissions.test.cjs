@@ -1,0 +1,12 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const routes = fs.readFileSync(path.join(__dirname, '../src/routes/release-d.routes.ts'), 'utf8');
+assert.match(routes, /requireAnyPermission/);
+assert.doesNotMatch(routes, /requireIndustryWritePermission/);
+assert.match(routes, /requireIndustry\("furniture"\)/);
+assert.match(routes, /requireIndustry\("workshop", "garage"\)/);
+assert.match(routes, /requireIndustry\("wholesale", "distribution"\)/);
+for (const permissionName of ['furnitureOrderWrite','furnitureProductionWrite','furniturePaymentWrite','workshopVehicleWrite','workshopJobWrite','workshopQualityWrite','wholesalePricingWrite','wholesaleOrderWrite','wholesaleDispatchWrite','wholesaleCreditWrite']) assert.match(routes, new RegExp(permissionName));
+for (const route of ['/orders/:id/approvals','/installations/:id/signoff','/jobs/:id/parts/post','/jobs/:id/deliver','/packing-lists/detailed','/dispatches/:id/proof-of-delivery','/receivables/ageing']) assert.ok(routes.includes(route), `Missing protected route ${route}`);
+console.log('PASS: Release D routes use granular server-side permissions');
