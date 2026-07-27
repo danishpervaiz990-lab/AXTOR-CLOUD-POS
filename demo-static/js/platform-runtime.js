@@ -11,6 +11,181 @@
   const NAV_FEATURES = {
     "purchase.html":"purchases.*","expenses.html":"expenses.*","accounts.html":"accounts.*","promotions.html":"promotions.basic","loyalty.html":"loyalty.basic","approvals.html":"approvals.basic","barcode-labels.html":"barcode"
   };
+
+  const CORE_POS_NAV = [
+    ["Dashboard", "index.html", "bi-speedometer2"],
+    ["Terminal", "terminal.html", "bi-upc-scan"],
+    ["Sales", "sales.html", "bi-cart-check"],
+    ["Shifts / Closing", "shifts.html", "bi-clock-history"],
+    ["Customers", "customer.html", "bi-people"],
+    ["Products", "products.html", "bi-box-seam"],
+    ["Inventory", "inventory.html", "bi-boxes"],
+    ["Purchases", "purchase.html", "bi-bag-plus"],
+    ["Reports", "reports.html", "bi-graph-up-arrow"],
+    ["Settings", "settings.html", "bi-gear"]
+  ];
+
+  const INDUSTRY_NAV = {
+    retail: CORE_POS_NAV,
+    grocery: [
+      ["Grocery Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Checkout Terminal", "terminal.html", "bi-upc-scan"],
+      ["Sales", "sales.html", "bi-cart-check"],
+      ["Products", "products.html", "bi-box-seam"],
+      ["Batch & Expiry", "industry.html?module=batches", "bi-calendar-x"],
+      ["Stock & Reorder", "inventory.html", "bi-boxes"],
+      ["Suppliers & Purchases", "purchase.html", "bi-bag-plus"],
+      ["Customers", "customer.html", "bi-people"],
+      ["Grocery Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    pharmacy: [
+      ["Pharmacy Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Pharmacy Terminal", "terminal.html", "bi-capsule-pill"],
+      ["Prescriptions", "industry.html?module=prescriptions", "bi-file-medical"],
+      ["Medicines", "products.html", "bi-capsule"],
+      ["Batches & Expiry", "industry.html?module=batches", "bi-calendar2-x"],
+      ["Patients / Customers", "customer.html", "bi-people"],
+      ["Sales & Billing", "sales.html", "bi-receipt"],
+      ["Inventory", "inventory.html", "bi-boxes"],
+      ["Suppliers & Purchases", "purchase.html", "bi-bag-plus"],
+      ["Pharmacy Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    gym: [
+      ["Gym Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Members", "industry.html?module=members", "bi-people"],
+      ["Membership Plans", "industry.html?module=membership_plans", "bi-card-checklist"],
+      ["Memberships", "industry.html?module=memberships", "bi-person-badge"],
+      ["Check-ins", "industry.html?module=checkins", "bi-qr-code-scan"],
+      ["Trainers", "industry.html?module=trainers", "bi-person-arms-up"],
+      ["Classes & Programs", "industry.html?module=classes", "bi-calendar3"],
+      ["Facilities & Lockers", "industry.html?module=facilities", "bi-building"],
+      ["Payments", "sales.html", "bi-cash-coin"],
+      ["Gym Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    school: [
+      ["School Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Admissions", "industry.html?module=admissions", "bi-person-plus"],
+      ["Students", "industry.html?module=students", "bi-mortarboard"],
+      ["Guardians", "industry.html?module=guardians", "bi-people"],
+      ["Classes & Sections", "industry.html?module=classes", "bi-diagram-3"],
+      ["Attendance", "industry.html?module=attendance", "bi-calendar-check"],
+      ["Timetable", "industry.html?module=timetable", "bi-calendar3"],
+      ["Assessments & Results", "industry.html?module=assessments", "bi-journal-check"],
+      ["Fees & Payments", "industry.html?module=fees", "bi-cash-stack"],
+      ["School Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    clinic: [
+      ["Clinic Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Patients", "industry.html?module=patients", "bi-people"],
+      ["Practitioners", "industry.html?module=practitioners", "bi-person-vcard"],
+      ["Appointments", "industry.html?module=appointments", "bi-calendar2-check"],
+      ["Queue & Check-in", "industry.html?module=queue", "bi-person-lines-fill"],
+      ["Encounters", "industry.html?module=encounters", "bi-clipboard2-pulse"],
+      ["Medications", "industry.html?module=medications", "bi-capsule"],
+      ["Billing & Payments", "sales.html", "bi-receipt"],
+      ["Clinic Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    restaurant: [
+      ["Restaurant Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Tables & Areas", "industry.html?module=tables", "bi-grid-3x3-gap"],
+      ["Reservations", "industry.html?module=reservations", "bi-calendar2-event"],
+      ["Orders", "industry.html?module=orders", "bi-receipt-cutoff"],
+      ["Kitchen Display", "industry.html?module=kitchen_tickets", "bi-display"],
+      ["Menu & Modifiers", "industry.html?module=menu_items", "bi-menu-button-wide"],
+      ["Recipes & Ingredients", "industry.html?module=recipes", "bi-journal-text"],
+      ["Inventory & Wastage", "inventory.html", "bi-boxes"],
+      ["Settlement", "sales.html", "bi-cash-coin"],
+      ["Restaurant Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    hardware: [
+      ["Hardware Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Trade Terminal", "terminal.html", "bi-upc-scan"],
+      ["Products & Units", "products.html", "bi-tools"],
+      ["Trade Pricing", "industry.html?module=trade_pricing", "bi-tags"],
+      ["Quotations", "industry.html?module=quotations", "bi-file-earmark-text"],
+      ["Deliveries & Backorders", "industry.html?module=deliveries", "bi-truck"],
+      ["Rentals & Warranties", "industry.html?module=rentals", "bi-shield-check"],
+      ["Inventory", "inventory.html", "bi-boxes"],
+      ["Customers & Projects", "customer.html", "bi-people"],
+      ["Hardware Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    paint: [
+      ["Paint Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Paint Terminal", "terminal.html", "bi-palette2"],
+      ["Brands & Product Lines", "industry.html?module=brands", "bi-box-seam"],
+      ["Colors", "industry.html?module=colors", "bi-palette"],
+      ["Formulas & Revisions", "industry.html?module=formulas", "bi-bezier2"],
+      ["Mix Jobs", "industry.html?module=mix_jobs", "bi-droplet-half"],
+      ["Quality Checks", "industry.html?module=quality_checks", "bi-clipboard-check"],
+      ["Component Stock", "inventory.html", "bi-boxes"],
+      ["Sales & Billing", "sales.html", "bi-receipt"],
+      ["Paint Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    hardware_paint: null,
+    furniture: [
+      ["Furniture Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Products & Catalogue", "products.html", "bi-lamp"],
+      ["Custom Orders", "industry.html?module=custom_orders", "bi-rulers"],
+      ["Measurements", "industry.html?module=measurements", "bi-bounding-box"],
+      ["Production Stages", "industry.html?module=production_stages", "bi-kanban"],
+      ["Procurement", "purchase.html", "bi-bag-plus"],
+      ["Deliveries", "industry.html?module=deliveries", "bi-truck"],
+      ["Installations", "industry.html?module=installations", "bi-house-gear"],
+      ["Warranties & Claims", "industry.html?module=warranties", "bi-shield-check"],
+      ["Furniture Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    workshop: [
+      ["Workshop Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Vehicles", "industry.html?module=vehicles", "bi-car-front"],
+      ["Inspections", "industry.html?module=inspections", "bi-clipboard-check"],
+      ["Estimates", "industry.html?module=estimates", "bi-file-earmark-text"],
+      ["Job Cards", "industry.html?module=job_cards", "bi-card-checklist"],
+      ["Technicians & Bays", "industry.html?module=technicians", "bi-person-gear"],
+      ["Parts & Inventory", "inventory.html", "bi-tools"],
+      ["Quality Checks", "industry.html?module=quality_checks", "bi-patch-check"],
+      ["Invoices & Payments", "sales.html", "bi-receipt"],
+      ["Service Reminders", "industry.html?module=service_reminders", "bi-bell"],
+      ["Workshop Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    wholesale: [
+      ["Wholesale Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Customers & Credit", "customer.html", "bi-people"],
+      ["Price Lists", "industry.html?module=price_lists", "bi-tags"],
+      ["Sales Orders", "industry.html?module=sales_orders", "bi-file-earmark-text"],
+      ["Pick Lists", "industry.html?module=pick_lists", "bi-list-check"],
+      ["Packing & Dispatch", "industry.html?module=dispatches", "bi-box-seam"],
+      ["Routes & Delivery", "industry.html?module=routes", "bi-truck"],
+      ["Backorders", "industry.html?module=backorders", "bi-hourglass-split"],
+      ["Collections", "industry.html?module=collections", "bi-cash-coin"],
+      ["Inventory", "inventory.html", "bi-boxes"],
+      ["Wholesale Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ],
+    manufacturing: [
+      ["Manufacturing Dashboard", "industry-dashboard.html", "bi-speedometer2"],
+      ["Products & BOM", "industry.html?module=bills_of_materials", "bi-diagram-3"],
+      ["Work Orders", "industry.html?module=work_orders", "bi-clipboard-data"],
+      ["Material Issue", "industry.html?module=material_issue", "bi-box-arrow-up"],
+      ["Work in Progress", "industry.html?module=work_in_progress", "bi-hourglass-split"],
+      ["Finished Goods", "industry.html?module=finished_goods", "bi-box-seam"],
+      ["Inventory", "inventory.html", "bi-boxes"],
+      ["Purchases", "purchase.html", "bi-bag-plus"],
+      ["Production Reports", "reports.html", "bi-graph-up-arrow"],
+      ["Settings", "settings.html", "bi-gear"]
+    ]
+  };
+  INDUSTRY_NAV.hardware_paint = INDUSTRY_NAV.paint;
+
   let dictionary = {};
   let context = null;
   let language = "en";
@@ -31,7 +206,7 @@
     if (access.isOwner || access.isAdmin || access.permissions?.includes("*")) return true;
     if (access.permissions?.includes(permission)) return true;
     const parts = String(permission || "").split(".");
-    for (let index = parts.length - 1; index > 0; index -= 1) if (access.permissions?.includes(parts.slice(0, index).join(".") + ".*")) return true;
+    for (let index = parts.length - 1; index > 0; index -= 1) if (access.permissions?.includes(parts.slice(0, index).join(".") + ".*") ) return true;
     return false;
   }
   function formatMoney(amount, currencyCode) {
@@ -68,18 +243,73 @@
     select.addEventListener("change", async () => { select.disabled = true; try { await loadDictionary(select.value); await window.AxtorAPI.apiPut("/api/v1/commercial/preferences", { language: select.value }); } catch (error) { console.error(error); } finally { select.disabled = false; } });
     const user = topbar.querySelector(".user-chip"); topbar.insertBefore(select, user || null);
   }
-  function addIndustryNavigation() {
-    const nav = document.querySelector(".nav-menu"); if (!nav || nav.querySelector('a[href="industry-dashboard.html"]')) return;
+  function normalizedIndustryCode() {
+    const raw = context?.industry?.industry?.code || context?.business?.industryCode || context?.business?.industry || "retail";
+    return String(raw).trim().toLowerCase().replace(/[\s-]+/g, "_");
+  }
+  function currentLocationKey() {
+    const file = location.pathname.split("/").pop() || "index.html";
+    const module = new URLSearchParams(location.search).get("module");
+    return file === "industry.html" && module ? `${file}?module=${module}` : file;
+  }
+  function navItemHtml(item, currentKey) {
+    const [label, href, icon] = item;
+    const targetFile = href.split(/[?#]/)[0];
+    const currentFile = currentKey.split(/[?#]/)[0];
+    const exactModule = currentKey === href;
+    const active = exactModule || (!href.includes("?module=") && targetFile === currentFile);
+    return `<a class="nav-linkx${active ? " active" : ""}" href="${href}"><i class="bi ${icon}"></i><span>${label}</span></a>`;
+  }
+  function renderIndustryNavigation() {
+    const nav = document.querySelector(".nav-menu"); if (!nav) return;
     const selected = context?.industry?.industry;
-    const code = String(selected?.code || "").toLowerCase();
-    if (!selected || !["retail","gym","clinic","grocery","hardware","paint","hardware_paint","school","pharmacy","restaurant","furniture","workshop","wholesale","manufacturing"].includes(code)) return;
-    const link = document.createElement("a");
-    link.className = "nav-linkx" + ((location.pathname.split("/").pop() || "") === "industry.html" ? " active" : "");
-    link.href = "industry-dashboard.html";
-    link.dataset.industryCode = code;
-    link.innerHTML = '<i class="bi bi-grid-1x2"></i><span>' + String(selected.name || "Industry") + " Dashboard</span>";
-    const reports = nav.querySelector('a[href="reports.html"]');
-    nav.insertBefore(link, reports || null);
+    const code = normalizedIndustryCode();
+    const items = INDUSTRY_NAV[code] || CORE_POS_NAV;
+    nav.innerHTML = items.map(item => navItemHtml(item, currentLocationKey())).join("");
+    nav.dataset.industryCode = code;
+
+    const brand = document.querySelector(".sidebar .brand");
+    if (brand) brand.href = code === "retail" ? "index.html" : "industry-dashboard.html";
+    const subtitle = document.querySelector(".sidebar .brand span");
+    if (subtitle) subtitle.textContent = code === "retail" ? "Retail POS System" : `${selected?.name || code.replaceAll("_", " ")} Management System`;
+    const footer = document.querySelector(".sidebar-footer");
+    if (footer) {
+      const label = selected?.name || code.replaceAll("_", " ");
+      footer.innerHTML = `<span class="status-dot"></span>${label} cloud mode<br><small>Tenant-scoped PostgreSQL records</small>`;
+    }
+  }
+  function normalizeModule(value) {
+    return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  }
+  function moduleCandidates(value) {
+    const normalized = normalizeModule(value);
+    const values = new Set([normalized]);
+    if (normalized.endsWith("ies")) values.add(normalized.slice(0, -3) + "y");
+    if (normalized.endsWith("s")) values.add(normalized.slice(0, -1)); else values.add(normalized + "s");
+    return [...values].filter(Boolean);
+  }
+  function activateIndustryModule() {
+    if ((location.pathname.split("/").pop() || "") !== "industry.html") return;
+    const requested = new URLSearchParams(location.search).get("module");
+    if (!requested) return;
+    const candidates = moduleCandidates(requested);
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      const select = document.querySelector("#industryEntitySelect");
+      if (select && select.options.length && ![...select.options].some(option => option.value === "Loading…")) {
+        const option = [...select.options].find(item => {
+          const value = normalizeModule(item.value);
+          const label = normalizeModule(item.textContent);
+          return candidates.some(candidate => value === candidate || label === candidate || value.endsWith(`_${candidate}`) || label.endsWith(`_${candidate}`));
+        });
+        if (option) {
+          select.value = option.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        clearInterval(timer);
+      } else if (attempts >= 40) clearInterval(timer);
+    }, 100);
   }
   function applyFeatureAccess() {
     document.querySelectorAll(".nav-linkx[href]").forEach(link => { const file = (link.getAttribute("href") || "").split(/[?#]/)[0]; const key = NAV_FEATURES[file]; if (key && !hasFeature(key)) { link.hidden = true; link.setAttribute("aria-hidden", "true"); } });
@@ -106,10 +336,10 @@
     try {
       context = unwrap(await window.AxtorAPI.apiGet("/api/v1/commercial/context"));
       const preferred = context?.user?.preferredLanguage || context?.business?.defaultLanguage || sessionStorage.getItem("axtorDisplayLanguage") || "en";
-      await loadDictionary(preferred); addLanguageSelector(); addIndustryNavigation(); applyFeatureAccess(); addPlanBanner(); showVersion();
+      await loadDictionary(preferred); addLanguageSelector(); renderIndustryNavigation(); activateIndustryModule(); applyFeatureAccess(); addPlanBanner(); showVersion();
       window.dispatchEvent(new CustomEvent("axtor:platform-ready", { detail: context }));
     } catch (error) { console.error("Axtor platform context unavailable", error); await loadDictionary("en"); }
   }
-  window.AxtorPlatform = { init, text, hasFeature, hasPermission, formatMoney, getContext: () => context, setLanguage: loadDictionary };
+  window.AxtorPlatform = { init, text, hasFeature, hasPermission, formatMoney, getContext: () => context, setLanguage: loadDictionary, renderIndustryNavigation };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true }); else init();
 })();
