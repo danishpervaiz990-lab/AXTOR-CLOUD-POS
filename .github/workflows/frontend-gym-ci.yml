@@ -1,0 +1,39 @@
+name: Gym Frontend CI
+
+on:
+  pull_request:
+    branches: [frontend-gym]
+    paths:
+      - "demo-static/gym*.html"
+      - "demo-static/css/gym-app.css"
+      - "demo-static/js/gym-app.js"
+      - "demo-static/js/axtor-api.js"
+      - "tests/gym-frontend.test.cjs"
+      - ".github/workflows/frontend-gym-ci.yml"
+  push:
+    branches: [frontend-gym]
+    paths:
+      - "demo-static/gym*.html"
+      - "demo-static/css/gym-app.css"
+      - "demo-static/js/gym-app.js"
+      - "demo-static/js/axtor-api.js"
+      - "tests/gym-frontend.test.cjs"
+      - ".github/workflows/frontend-gym-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  static-release-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - name: JavaScript syntax
+        run: |
+          node --check demo-static/js/axtor-api.js
+          node --check demo-static/js/gym-app.js
+      - name: Gym release suite
+        run: node tests/gym-frontend.test.cjs
