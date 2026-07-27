@@ -1,0 +1,30 @@
+name: School Frontend CI
+on:
+  pull_request:
+    branches: [frontend-school]
+  push:
+    branches: [frontend-school, fix/school/dedicated-frontend-v1]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: JavaScript syntax
+        run: |
+          node --check demo-static/js/axtor-api.js
+          node --check demo-static/js/school-app.js
+      - name: School release suite
+        run: node tests/school-frontend.test.cjs
+      - name: Reject generic industry primary routes
+        run: |
+          if grep -R "industry.html?module=" demo-static/school-*.html; then
+            echo "Generic industry routing detected" >&2
+            exit 1
+          fi
+      - name: Verify Vercel configuration
+        run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
