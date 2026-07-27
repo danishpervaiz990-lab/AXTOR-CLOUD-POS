@@ -86,6 +86,7 @@ paintRouter.post("/brands", paintCatalogueWrite, c.paintBrandCreate);
 paintRouter.get("/colors", c.paintColors);
 paintRouter.post("/colors", paintCatalogueWrite, c.paintColorCreate);
 paintRouter.get("/formulas", c.paintFormulas);
+paintRouter.post("/formulas", paintCatalogueWrite, c.paintFormulaCreate);
 paintRouter.post("/formulas/:id/revisions", paintCatalogueWrite, c.paintFormulaRevisionCreate);
 paintRouter.get("/mix-jobs", c.paintMixJobs);
 paintRouter.post("/mix-jobs", paintMixWrite, c.paintMixJobCreate);
