@@ -1,0 +1,27 @@
+name: Restaurant Frontend CI
+on:
+  pull_request:
+    branches: [frontend-restaurant]
+  push:
+    branches: [frontend-restaurant, fix/restaurant/dedicated-frontend-v1]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: JavaScript syntax
+        run: |
+          node --check demo-static/js/axtor-api.js
+          node --check demo-static/js/restaurant-app.js
+      - name: Restaurant release suite
+        run: node tests/restaurant-frontend.test.cjs
+      - name: Reject generic industry routes
+        run: |
+          if grep -R "industry.html?module=" demo-static/restaurant-*.html; then exit 1; fi
+      - name: Verify Vercel configuration
+        run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
