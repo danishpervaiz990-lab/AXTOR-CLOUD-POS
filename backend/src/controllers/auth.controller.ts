@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { createAuthToken, hashAuthToken, verifyAuthToken } from '../utils/auth-token.js';
 import { verifyPassword } from '../utils/password.js';
 import { hashPassword } from '../utils/password.js';
+import { serializeBusinessContext } from '../services/tenant-context.service.js';
 
 function getBearerToken(req: Request): string | null {
   const header = req.header('authorization') || '';
@@ -45,6 +46,18 @@ export async function login(req: Request, res: Response): Promise<void> {
     const business = await prisma.business.findUnique({
       where: {
         slug: businessSlug
+      },
+      include: {
+        businessIndustry: {
+          include: {
+            industry: {
+              select: {
+                code: true,
+                name: true
+              }
+            }
+          }
+        }
       }
     });
 
@@ -131,14 +144,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       token,
       tokenType: 'Bearer',
       expiresIn,
-      business: {
-        id: business.id,
-        name: business.name,
-        slug: business.slug,
-        status: business.status,
-        timezone: business.timezone,
-        currency: business.currency
-      },
+      business: serializeBusinessContext(business),
       user: {
         id: user.id,
         name: user.name,
@@ -192,7 +198,20 @@ export async function me(req: Request, res: Response): Promise<void> {
         id: payload.userId
       },
       include: {
-        business: true,
+        business: {
+          include: {
+            businessIndustry: {
+              include: {
+                industry: {
+                  select: {
+                    code: true,
+                    name: true
+                  }
+                }
+              }
+            }
+          }
+        },
         userRoles: {
           include: {
             role: true
@@ -235,14 +254,7 @@ export async function me(req: Request, res: Response): Promise<void> {
 
     res.json({
       ok: true,
-      business: {
-        id: user.business.id,
-        name: user.business.name,
-        slug: user.business.slug,
-        status: user.business.status,
-        timezone: user.business.timezone,
-        currency: user.business.currency
-      },
+      business: serializeBusinessContext(user.business),
       user: {
         id: user.id,
         name: user.name,

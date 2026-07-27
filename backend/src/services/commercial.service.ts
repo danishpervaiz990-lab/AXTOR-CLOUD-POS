@@ -216,7 +216,15 @@ export async function completeOnboarding(req: Request, businessId: string, userI
     }
     const onboarding = await tx.tenantOnboarding.upsert({ where: { businessId }, create: { businessId, currentStep: 20, completedSteps: Array.from({ length: 20 }, (_, index) => index + 1), state: "COMPLETED", answers, sampleDataRequested, completedAt: new Date() }, update: { currentStep: 20, completedSteps: Array.from({ length: 20 }, (_, index) => index + 1), state: "COMPLETED", answers, sampleDataRequested, completedAt: new Date() } });
     await writeAudit(tx, req, { businessId, userId: access.userId, action: "onboarding.completed", entityType: "TenantOnboarding", entityId: onboarding.id, after: { industryCode, planCode: plan.code, baseCurrency, language, sampleDataRequested } });
-    return plain({ onboarding, branch, warehouse, trialEndsAt, subscriptionStatus, redirect: "index.html" });
+    return plain({
+      onboarding,
+      branch,
+      warehouse,
+      trialEndsAt,
+      subscriptionStatus,
+      industryCode,
+      industry: { code: industry.code, name: industry.name },
+    });
   }, { timeout: 30000 });
 }
 

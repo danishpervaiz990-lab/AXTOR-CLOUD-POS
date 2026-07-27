@@ -176,13 +176,26 @@ model Business {
   gymMembers             GymMember[]
   gymMembershipPlans     GymMembershipPlan[]
   gymMemberships         GymMembership[]
+  gymTrainers            GymTrainer[]
+  gymClasses             GymClass[]
+  gymClassBookings       GymClassBooking[]
+  gymCheckIns            GymCheckIn[]
   schoolStudents         SchoolStudent[]
   schoolGuardians        SchoolGuardian[]
   schoolClasses          SchoolClassSection[]
   schoolEnrollments      SchoolEnrollment[]
+  schoolStudentGuardians SchoolStudentGuardian[]
+  schoolAttendanceRecords SchoolAttendance[]
+  schoolFeeHeads         SchoolFeeHead[]
+  schoolStudentFees      SchoolStudentFee[]
+  schoolFeePayments      SchoolFeePayment[]
   clinicPatients         ClinicPatient[]
   clinicPractitioners    ClinicPractitioner[]
   clinicAppointments     ClinicAppointment[]
+  clinicConsents         ClinicConsent[]
+  clinicQueueEntries     ClinicQueueEntry[]
+  clinicServices         ClinicService[]
+  clinicFollowUps        ClinicFollowUp[]
 
   @@map("businesses")
 }
@@ -2785,7 +2798,8 @@ model RestaurantKitchenTicket {
  
   @@index([businessId,status])
  
-  @@map("restaurant_kitchen_tickets") }
+  @@map("restaurant_kitchen_tickets")
+}
 
 model HardwareProductProfile {
   id String @id @default(cuid())
@@ -2890,7 +2904,8 @@ model HardwareRentalContract {
  
   @@index([businessId,status,dueAt])
  
-  @@map("hardware_rental_contracts") }
+  @@map("hardware_rental_contracts")
+}
 
 model PaintBrand {
   id String @id @default(cuid())
@@ -3020,7 +3035,8 @@ model PaintMixQualityCheck {
  
   @@index([businessId,mixJobId,checkedAt])
  
-  @@map("paint_mix_quality_checks") }
+  @@map("paint_mix_quality_checks")
+}
 
 // Release C checkpoint 2 — operational completion foundations
 model RestaurantReservation {

@@ -33,6 +33,9 @@ import commercialRoutes from "./routes/commercial.routes.js";
 import platformAdminRoutes from "./routes/platform-admin.routes.js";
 import industryRoutes from "./routes/industry.routes.js";
 import publicCatalogRoutes from "./routes/public-catalog.routes.js";
+import { clinicRouter, gymRouter, schoolRouter } from "./routes/release-ab.routes.js";
+import { hardwareRouter, paintRouter, restaurantRouter } from "./routes/release-c.routes.js";
+import { furnitureRouter, wholesaleRouter, workshopRouter } from "./routes/release-d.routes.js";
 
 export function createApp() {
   const app = express();
@@ -88,6 +91,15 @@ export function createApp() {
     platformAdmin: "/api/v1/platform-admin",
     industry: "/api/v1/industry",
     publicCatalog: "/api/v1/public",
+    gym: "/api/v1/gym",
+    school: "/api/v1/school",
+    clinic: "/api/v1/clinic",
+    restaurant: "/api/v1/restaurant",
+    hardware: "/api/v1/hardware",
+    paint: "/api/v1/paint",
+    furniture: "/api/v1/furniture",
+    workshop: "/api/v1/workshop",
+    wholesale: "/api/v1/wholesale",
   };
 
   app.get("/", (_req: Request, res: Response) => res.json({
@@ -143,6 +155,15 @@ export function createApp() {
   app.use("/api/v1/commercial", commercialRoutes);
   app.use("/api/v1/platform-admin", platformAdminRoutes);
   app.use("/api/v1/industry", industryRoutes);
+  app.use("/api/v1/gym", gymRouter);
+  app.use("/api/v1/school", schoolRouter);
+  app.use("/api/v1/clinic", clinicRouter);
+  app.use("/api/v1/restaurant", restaurantRouter);
+  app.use("/api/v1/hardware", hardwareRouter);
+  app.use("/api/v1/paint", paintRouter);
+  app.use("/api/v1/furniture", furnitureRouter);
+  app.use("/api/v1/workshop", workshopRouter);
+  app.use("/api/v1/wholesale", wholesaleRouter);
 
   app.use((req: Request, res: Response) => res.status(404).json({ ok: false, error: { message: `Route not found: ${req.method} ${req.originalUrl}`, referenceId: res.locals.requestId } }));
   app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {

@@ -380,12 +380,21 @@ export async function register(req: Request, input: Record<string, unknown>) {
         },
       });
       const response = {
-        business: { id: business.id, name: business.name, slug: business.slug, status: business.status },
+        business: {
+          id: business.id,
+          name: business.name,
+          slug: business.slug,
+          status: business.status,
+          timezone: business.timezone,
+          currency: business.currency,
+          industryCode: pack.code,
+          industry: { code: pack.code, name: pack.name },
+        },
         owner: { email: owner.email },
         industry: { code: pack.code, name: pack.name, registryVersion: INDUSTRY_REGISTRY_VERSION },
         plan: { code: plan.code, name: plan.name },
         provisioning: { state: "completed", branchId: branch.id, warehouseId: warehouse.id },
-        next: { page: "login.html", dashboard: "industry-dashboard.html" },
+        next: { page: "login.html", industryCode: pack.code },
       };
       await tx.tenantProvisioningRun.create({ data: { businessId: business.id, idempotencyKey, requestHash: fingerprint, status: "completed", response } });
       return plain(response);
