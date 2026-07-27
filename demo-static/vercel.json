@@ -1,0 +1,13 @@
+{
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/", "destination": "/furniture-dashboard.html" },
+    { "source": "/dashboard", "destination": "/furniture-dashboard.html" },
+    { "source": "/orders", "destination": "/furniture-orders.html" },
+    { "source": "/production", "destination": "/furniture-production.html" },
+    { "source": "/installations", "destination": "/furniture-installations.html" },
+    { "source": "/reports", "destination": "/furniture-reports.html" }
+  ],
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Content-Type-Options", "value": "nosniff" }, { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }] }]
+}
