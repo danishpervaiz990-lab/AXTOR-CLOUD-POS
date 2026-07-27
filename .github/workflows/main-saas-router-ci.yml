@@ -1,0 +1,37 @@
+name: Main SaaS Router CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, fix/main/saas-router-v1]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: JavaScript syntax
+        run: |
+          node --check demo-static/js/auth-redirect.js
+          node --check demo-static/js/saas-router.js
+          node --check demo-static/js/session-handoff.js
+      - name: SaaS router release suite
+        run: node tests/main-saas-router.test.cjs
+      - name: Vercel configuration
+        run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
+      - name: Reject operational links from central landing
+        run: |
+          if grep -E 'href="(terminal|sales|products|inventory|industry)\.html' demo-static/saas-index.html; then
+            echo "Operational application link detected on central landing" >&2
+            exit 1
+          fi
+      - name: Reject permanent token URL transfer
+        run: |
+          if grep -RE 'searchParams\.set\(["'"']token|[?&]token=' demo-static/js/saas-router.js demo-static/js/session-handoff.js; then
+            echo "Permanent token URL transfer detected" >&2
+            exit 1
+          fi
