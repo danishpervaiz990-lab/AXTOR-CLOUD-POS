@@ -17,5 +17,5 @@ assert.match(app, /\/api\/v1\/school/);
 assert.match(app, /\/api\/v1\/industry\/registry/);
 assert.match(app, /Idempotency-Key/);
 assert.match(app, /School tenants/);
-assert.match(app, /students\/:id\/summary|students\/"\+encodeURIComponent/);
+assert.match(app, /encodeURIComponent\(id\).*\/summary/);
 console.log(`PASS: ${pages.length} purpose-built School pages`);
