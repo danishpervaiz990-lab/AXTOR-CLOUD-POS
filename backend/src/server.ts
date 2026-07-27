@@ -5,9 +5,10 @@ import { prisma } from './db/prisma.js';
 
 const app = createApp();
 const server = createServer(app);
+const host = '0.0.0.0';
 
-server.listen(env.port, () => {
-  console.log(`${env.appName} listening on port ${env.port}`);
+server.listen(env.port, host, () => {
+  console.log(`${env.appName} listening on ${host}:${env.port}`);
 });
 
 async function shutdown(signal: string): Promise<void> {
