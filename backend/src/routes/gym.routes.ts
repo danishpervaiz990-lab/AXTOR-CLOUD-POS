@@ -1,0 +1,54 @@
+import { Router } from "express";
+import { requireAuth } from "../middleware/auth.middleware.js";
+import { requireIndustry } from "../middleware/industry-guard.middleware.js";
+import { requireAnyPermission } from "../middleware/permission.middleware.js";
+import * as c from "../controllers/release-ab.controller.js";
+import * as f from "../controllers/release-b-final.controller.js";
+import gymOperationsRouter from "./gym-operations.routes.js";
+
+const router = Router();
+router.use(requireAuth, requireIndustry("gym"));
+
+const memberWrite = requireAnyPermission("industry.gym.member.create", "industry.gym.member.update", "industry.gym.members.manage");
+const planWrite = requireAnyPermission("industry.gym.plan.create", "industry.gym.plan.update", "industry.gym.memberships.manage");
+const membershipWrite = requireAnyPermission("industry.gym.membership.create", "industry.gym.membership.update", "industry.gym.memberships.manage");
+const trainerWrite = requireAnyPermission("industry.gym.trainer.create", "industry.gym.trainer.update", "industry.gym.trainers.manage");
+const classWrite = requireAnyPermission("industry.gym.class.create", "industry.gym.class.update", "industry.gym.classes.manage");
+const checkInWrite = requireAnyPermission("industry.gym.check_in.create", "industry.gym.checkins.manage");
+const programWrite = requireAnyPermission("industry.gym.program.create", "industry.gym.program.update", "industry.gym.programs.manage");
+const facilityWrite = requireAnyPermission("industry.gym.facility.create", "industry.gym.facility.update", "industry.gym.facilities.manage");
+const paymentWrite = requireAnyPermission("industry.gym.payment.create", "industry.gym.payments.manage");
+const settingsWrite = requireAnyPermission("industry.gym.settings.manage", "gym.settings.manage");
+
+router.get("/dashboard", c.gymDashboard);
+router.get("/members", c.gymMembers);
+router.post("/members", memberWrite, c.gymMemberCreate);
+router.patch("/members/:id", memberWrite, c.gymMemberUpdate);
+router.delete("/members/:id", memberWrite, c.gymMemberArchive);
+router.get("/membership-plans", c.gymPlans);
+router.post("/membership-plans", planWrite, c.gymPlanCreate);
+router.post("/memberships", membershipWrite, c.gymMembershipCreate);
+router.get("/trainers", c.gymTrainers);
+router.post("/trainers", trainerWrite, c.gymTrainerCreate);
+router.get("/classes", c.gymClasses);
+router.post("/classes", classWrite, c.gymClassCreate);
+router.post("/class-bookings", classWrite, c.gymClassBook);
+router.post("/check-ins", checkInWrite, c.gymCheckIn);
+router.get("/programs", c.gymPrograms);
+router.post("/programs", programWrite, c.gymProgramCreate);
+router.post("/program-enrollments", programWrite, c.gymProgramEnroll);
+router.get("/facilities", c.gymFacilities);
+router.post("/facilities", facilityWrite, c.gymFacilityCreate);
+router.post("/facility-enrollments", facilityWrite, c.gymFacilityEnroll);
+router.post("/trainer-assignments", trainerWrite, c.gymTrainerAssign);
+router.post("/locker-assignments", facilityWrite, c.gymLockerAssign);
+router.post("/measurements", memberWrite, c.gymMeasurementCreate);
+router.get("/reports/summary", c.gymReports);
+router.post("/membership-payments", paymentWrite, f.gymPayment);
+router.post("/membership-renewals", membershipWrite, f.gymRenew);
+router.get("/reports/filtered", f.gymFilteredReport);
+router.get("/notification-rules", f.gymRules);
+router.put("/notification-rules", settingsWrite, f.gymRuleSave);
+router.use(gymOperationsRouter);
+
+export default router;
