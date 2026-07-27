@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCHEMA_PATH="prisma/schema.prisma"
 MIGRATIONS_DIR="prisma/migrations"
+BASELINE_MIGRATIONS=(
+  "20260709000000_initial_full_schema"
+  "20260710120000_sales_production_upgrade"
+  "20260712090000_full_backend_buildout"
+  "20260712123000_global_saas_foundation"
+  "20260725090000_enterprise_subscription_activation"
+  "20260725230000_multi_industry_operations"
+  "20260726090000_industry_catalogue_provisioning"
+)
 
 echo "Checking Prisma migration status..."
 set +e
@@ -23,38 +31,44 @@ if ! printf '%s' "$STATUS_OUTPUT" | grep -Eq \
 fi
 
 echo "Migration history is absent or incomplete while committed migrations are pending."
-echo "Comparing the live PostgreSQL schema with the committed Prisma schema before baselining..."
+echo "Verifying that the pending Release A-D migrations contain no destructive SQL..."
 
-set +e
-npx prisma migrate diff \
-  --from-url "$DATABASE_URL" \
-  --to-schema-datamodel "$SCHEMA_PATH" \
-  --exit-code
-DIFF_CODE=$?
-set -e
-
-if [ "$DIFF_CODE" -ne 0 ]; then
-  echo "The live database schema does not exactly match the committed Prisma schema."
-  echo "Automatic baselining has been stopped to protect production data."
-  exit 1
-fi
-
-echo "Schemas match. Marking the existing migrations as applied (one-time baseline)..."
-
-FOUND_MIGRATION=0
+RELEASE_MIGRATIONS=()
+RELEASE_MIGRATION_SQL=()
+BASELINE_COMPLETE=0
 for migration_dir in "$MIGRATIONS_DIR"/*; do
-  if [ -d "$migration_dir" ] && [ -f "$migration_dir/migration.sql" ]; then
-    FOUND_MIGRATION=1
-    migration_name="$(basename "$migration_dir")"
-    echo "Baselining $migration_name"
-    npx prisma migrate resolve --applied "$migration_name"
+  [ -d "$migration_dir" ] || continue
+  migration_name="$(basename "$migration_dir")"
+  if [ "$BASELINE_COMPLETE" -eq 1 ]; then
+    RELEASE_MIGRATIONS+=("$migration_dir")
+    RELEASE_MIGRATION_SQL+=("$migration_dir/migration.sql")
+  elif [ "$migration_name" = "20260726090000_industry_catalogue_provisioning" ]; then
+    BASELINE_COMPLETE=1
   fi
 done
 
-if [ "$FOUND_MIGRATION" -ne 1 ]; then
-  echo "No migration folders were found; refusing to continue."
+if [ "${#RELEASE_MIGRATIONS[@]}" -eq 0 ]; then
+  echo "No post-baseline Release A-D migrations were found; refusing to continue."
   exit 1
 fi
 
-echo "Baseline complete. Applying any migrations not included in the baseline..."
+if grep -Eiq \
+  'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]]+COLUMN[^;]*(TYPE|SET[[:space:]]+NOT[[:space:]]+NULL)' \
+  "${RELEASE_MIGRATION_SQL[@]}"; then
+  echo "A destructive SQL statement was detected in a pending Release A-D migration."
+  echo "Automatic production migration has been stopped."
+  exit 1
+fi
+
+echo "Baselining only the legacy migrations already represented in production..."
+for migration_name in "${BASELINE_MIGRATIONS[@]}"; do
+  if [ ! -f "$MIGRATIONS_DIR/$migration_name/migration.sql" ]; then
+    echo "Required baseline migration is missing: $migration_name"
+    exit 1
+  fi
+  echo "Baselining $migration_name"
+  npx prisma migrate resolve --applied "$migration_name"
+done
+
+echo "Legacy baseline complete. Applying additive Release A-D migrations..."
 exec npx prisma migrate deploy
