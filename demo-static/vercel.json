@@ -1,0 +1,13 @@
+{
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/", "destination": "/workshop-dashboard.html" },
+    { "source": "/dashboard", "destination": "/workshop-dashboard.html" },
+    { "source": "/vehicles", "destination": "/workshop-vehicles.html" },
+    { "source": "/jobs", "destination": "/workshop-jobs.html" },
+    { "source": "/quality", "destination": "/workshop-quality.html" },
+    { "source": "/reports", "destination": "/workshop-reports.html" }
+  ],
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Content-Type-Options", "value": "nosniff" }, { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }] }]
+}
