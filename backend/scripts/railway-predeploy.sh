@@ -16,12 +16,13 @@ if [ "$STATUS_CODE" -eq 0 ]; then
   exec npx prisma migrate deploy
 fi
 
-if ! printf '%s' "$STATUS_OUTPUT" | grep -q "P3005"; then
-  echo "Prisma migration status failed for a reason other than P3005; refusing automatic repair."
+if ! printf '%s' "$STATUS_OUTPUT" | grep -Eq \
+  "P3005|Following migrations have not yet been applied"; then
+  echo "Prisma migration status failed unexpectedly; refusing automatic repair."
   exit "$STATUS_CODE"
 fi
 
-echo "P3005 detected: the database has an existing schema without Prisma migration history."
+echo "Migration history is absent or incomplete while committed migrations are pending."
 echo "Comparing the live PostgreSQL schema with the committed Prisma schema before baselining..."
 
 set +e
