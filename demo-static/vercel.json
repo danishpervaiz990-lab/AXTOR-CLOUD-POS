@@ -1,0 +1,19 @@
+{
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/", "destination": "/paint-dashboard.html" },
+    { "source": "/dashboard", "destination": "/paint-dashboard.html" },
+    { "source": "/catalogue", "destination": "/paint-catalogue.html" },
+    { "source": "/formulas", "destination": "/paint-formulas.html" },
+    { "source": "/mix-jobs", "destination": "/paint-mix-jobs.html" },
+    { "source": "/quality", "destination": "/paint-quality.html" },
+    { "source": "/reports", "destination": "/paint-reports.html" }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [
+      { "key": "X-Content-Type-Options", "value": "nosniff" },
+      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+    ] }
+  ]
+}
