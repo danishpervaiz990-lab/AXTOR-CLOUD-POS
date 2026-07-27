@@ -1,0 +1,14 @@
+{
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/", "destination": "/wholesale-dashboard.html" },
+    { "source": "/dashboard", "destination": "/wholesale-dashboard.html" },
+    { "source": "/orders", "destination": "/wholesale-orders.html" },
+    { "source": "/allocation", "destination": "/wholesale-allocation.html" },
+    { "source": "/dispatch", "destination": "/wholesale-dispatch.html" },
+    { "source": "/credit", "destination": "/wholesale-credit.html" },
+    { "source": "/reports", "destination": "/wholesale-reports.html" }
+  ],
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Content-Type-Options", "value": "nosniff" }, { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }] }]
+}
