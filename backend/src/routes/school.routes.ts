@@ -1,0 +1,57 @@
+import { Router } from "express";
+import { requireAuth } from "../middleware/auth.middleware.js";
+import { requireIndustry } from "../middleware/industry-guard.middleware.js";
+import { requireAnyPermission } from "../middleware/permission.middleware.js";
+import * as c from "../controllers/release-ab.controller.js";
+import * as f from "../controllers/release-b-final.controller.js";
+import schoolOperationsRouter from "./school-operations.routes.js";
+
+const router = Router();
+router.use(requireAuth, requireIndustry("school", "education"));
+
+const studentWrite = requireAnyPermission("industry.school.student.create", "industry.school.student.update", "industry.school.students.manage");
+const admissionWrite = requireAnyPermission("industry.school.admission.create", "industry.school.admissions.manage");
+const guardianWrite = requireAnyPermission("industry.school.guardian.create", "industry.school.guardians.manage");
+const academicWrite = requireAnyPermission("industry.school.academic.create", "industry.school.academics.manage");
+const attendanceWrite = requireAnyPermission("industry.school.attendance.create", "industry.school.attendance.manage");
+const feeWrite = requireAnyPermission("industry.school.fee.create", "industry.school.fees.manage");
+const paymentWrite = requireAnyPermission("industry.school.payment.create", "industry.school.payments.manage");
+const assessmentWrite = requireAnyPermission("industry.school.assessment.create", "industry.school.assessments.manage");
+const employeeWrite = requireAnyPermission("industry.school.employee.create", "industry.school.hr.manage");
+const payrollWrite = requireAnyPermission("industry.school.payroll.post", "industry.school.payroll.manage");
+const settingsWrite = requireAnyPermission("industry.school.settings.manage", "school.settings.manage");
+
+router.get("/dashboard", c.schoolDashboard);
+router.get("/students", c.schoolStudents);
+router.post("/students", studentWrite, c.schoolStudentCreate);
+router.get("/classes", c.schoolClasses);
+router.post("/classes", academicWrite, c.schoolClassCreate);
+router.post("/enrollments", academicWrite, c.schoolEnroll);
+router.get("/guardians", c.schoolGuardians);
+router.post("/guardians", guardianWrite, c.schoolGuardianCreate);
+router.post("/student-guardians", guardianWrite, c.schoolGuardianLink);
+router.post("/attendance", attendanceWrite, c.schoolAttendanceCreate);
+router.post("/fee-heads", feeWrite, c.schoolFeeHeadCreate);
+router.get("/fees", c.schoolFees);
+router.post("/fees", feeWrite, c.schoolFeeCreate);
+router.post("/fee-payments", paymentWrite, c.schoolFeePay);
+router.get("/applicants", c.schoolApplicants);
+router.post("/applicants", admissionWrite, c.schoolApplicantCreate);
+router.post("/academic-years", academicWrite, c.schoolAcademicYearCreate);
+router.post("/academic-terms", academicWrite, c.schoolAcademicTermCreate);
+router.post("/subjects", academicWrite, c.schoolSubjectCreate);
+router.post("/teachers", academicWrite, c.schoolTeacherCreate);
+router.post("/rooms", academicWrite, c.schoolRoomCreate);
+router.post("/timetable", academicWrite, c.schoolTimetableCreate);
+router.post("/assessments", assessmentWrite, c.schoolAssessmentCreate);
+router.post("/results", assessmentWrite, c.schoolResultCreate);
+router.post("/employees", employeeWrite, c.schoolEmployeeCreate);
+router.get("/reports/summary", c.schoolReports);
+router.post("/fee-adjustments", feeWrite, f.schoolAdjustment);
+router.post("/payroll-runs", payrollWrite, f.schoolPayroll);
+router.get("/reports/filtered", f.schoolFilteredReport);
+router.get("/notification-rules", f.schoolRules);
+router.put("/notification-rules", settingsWrite, f.schoolRuleSave);
+router.use(schoolOperationsRouter);
+
+export default router;
