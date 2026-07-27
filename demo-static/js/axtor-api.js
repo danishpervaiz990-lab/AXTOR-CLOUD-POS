@@ -79,9 +79,15 @@
     return error;
   }
 
-  async function apiRequest(method, path, body) {
+  function normalizeRequestOptions(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return value;
+  }
+
+  async function apiRequest(method, path, body, requestOptions) {
     const requestMethod = String(method || "GET").toUpperCase();
     const requestPath = String(path || "");
+    const settings = normalizeRequestOptions(requestOptions);
     const token = getToken();
     if (!token) {
       goToLogin("authentication-required", { clearToken: false });
@@ -89,7 +95,7 @@
     }
 
     const cacheKey = requestMethod + " " + buildUrl(requestPath);
-    if (requestMethod === "GET") {
+    if (requestMethod === "GET" && settings.cache !== false) {
       const ttl = getCacheTtl(requestPath);
       const cached = responseCache.get(cacheKey);
       if (ttl > 0 && cached && (Date.now() - cached.time) < ttl) return cached.data;
@@ -97,17 +103,28 @@
     }
 
     const execute = async function () {
-      const headers = { Accept: "application/json", Authorization: "Bearer " + token };
-      const options = { method: requestMethod, headers: headers, cache: "no-store" };
+      const headers = Object.assign(
+        { Accept: "application/json", Authorization: "Bearer " + token },
+        settings.headers || {}
+      );
+      const options = {
+        method: requestMethod,
+        headers: headers,
+        cache: "no-store",
+        signal: settings.signal,
+      };
       if (body !== undefined && requestMethod !== "GET" && requestMethod !== "HEAD") {
-        headers["Content-Type"] = "application/json";
-        options.body = JSON.stringify(body);
+        if (!Object.keys(headers).some(function (key) { return key.toLowerCase() === "content-type"; })) {
+          headers["Content-Type"] = "application/json";
+        }
+        options.body = settings.rawBody === true ? body : JSON.stringify(body);
       }
 
       let response;
       try {
         response = await fetch(buildUrl(requestPath), options);
       } catch (networkError) {
+        if (networkError && networkError.name === "AbortError") throw networkError;
         throw createHttpError("Cannot connect to Axtor backend. Check your connection and retry.", 0, { cause: "network" });
       }
 
@@ -122,16 +139,16 @@
       if (response.status === 403) throw createHttpError(extractErrorMessage(data, "Permission denied."), 403, data);
       if (!response.ok) throw createHttpError(extractErrorMessage(data, "Backend request failed"), response.status, data);
 
-      if (requestMethod === "GET") {
+      if (requestMethod === "GET" && settings.cache !== false) {
         const ttl = getCacheTtl(requestPath);
         if (ttl > 0) responseCache.set(cacheKey, { time: Date.now(), data: data });
-      } else {
+      } else if (requestMethod !== "GET") {
         clearResponseCache();
       }
       return data;
     };
 
-    if (requestMethod !== "GET") return execute();
+    if (requestMethod !== "GET" || settings.cache === false) return execute();
     const promise = execute().finally(function () { inFlightGets.delete(cacheKey); });
     inFlightGets.set(cacheKey, promise);
     return promise;
@@ -140,7 +157,7 @@
   async function validateSession() {
     if (!getToken()) return { ok: false, status: 401, reason: "missing-token" };
     try {
-      const result = await apiRequest("GET", "/api/v1/auth/me");
+      const result = await apiRequest("GET", "/api/v1/auth/me", undefined, { cache: false });
       return { ok: true, status: 200, data: result };
     } catch (error) {
       return { ok: false, status: Number(error?.status || 0), error: error };
@@ -161,10 +178,10 @@
     validateSession: validateSession,
     clearResponseCache: clearResponseCache,
     request: apiRequest,
-    apiGet: function (path) { return apiRequest("GET", path); },
-    apiPost: function (path, body) { return apiRequest("POST", path, body); },
-    apiPut: function (path, body) { return apiRequest("PUT", path, body); },
-    apiPatch: function (path, body) { return apiRequest("PATCH", path, body); },
-    apiDelete: function (path) { return apiRequest("DELETE", path); }
+    apiGet: function (path, options) { return apiRequest("GET", path, undefined, options); },
+    apiPost: function (path, body, options) { return apiRequest("POST", path, body, options); },
+    apiPut: function (path, body, options) { return apiRequest("PUT", path, body, options); },
+    apiPatch: function (path, body, options) { return apiRequest("PATCH", path, body, options); },
+    apiDelete: function (path, options) { return apiRequest("DELETE", path, undefined, options); }
   };
 })();
