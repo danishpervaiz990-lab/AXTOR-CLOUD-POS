@@ -20,5 +20,10 @@ assert.ok(clinic.includes('requireAnyPermission'), "Clinic action permissions mi
 assert.ok(permission.includes('loadUserAccess'), "server permission lookup missing");
 assert.ok(permission.includes('hasPermission'), "server wildcard permission handling missing");
 assert.ok(!clinic.includes('requireIndustryWritePermission("clinic")'), "blanket Clinic write middleware must not override granular roles");
+for (const protectedPath of [
+  '^\\/patients\\/', '^\\/practitioners\\/', '^\\/appointments\\/',
+  '^\\/follow-ups\\/', '^\\/medication-requests\\/', '^\\/service-requests\\/'
+]) assert.ok(clinic.includes(protectedPath), `direct PATCH guard missing for ${protectedPath}`);
+assert.ok(clinic.indexOf('router.use((req: Request') < clinic.indexOf('router.use(clinicOperationsRouter)'), "operations PATCH guard must run before the operations router");
 
-console.log("PASS: dedicated Clinic routes, industry guard and action-level permission coverage verified.");
+console.log("PASS: dedicated Clinic routes, industry guard and direct-update permission coverage verified.");
