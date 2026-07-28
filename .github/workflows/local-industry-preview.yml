@@ -1,0 +1,93 @@
+name: Local Industry Preview Gallery
+
+on:
+  push:
+    branches: [ops/local-industry-preview]
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/build-local-industry-preview.mjs"
+      - ".github/workflows/local-industry-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout preview tooling
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Checkout all isolated frontend branches without deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preview
+          while IFS='|' read -r industry ref; do
+            echo "Preparing $industry from $ref"
+            git fetch --depth=1 origin "$ref"
+            git worktree add --detach "preview/$industry" FETCH_HEAD
+          done <<'BRANCHES'
+          retail|frontend-retail
+          grocery|frontend-grocery
+          pharmacy|frontend-pharmacy
+          gym|frontend-gym
+          school|frontend-school
+          clinic|frontend-clinic
+          restaurant|frontend-restaurant
+          hardware|frontend-hardware
+          paint|frontend-paint
+          furniture|frontend-furniture
+          workshop|frontend-workshop
+          wholesale|frontend-wholesale
+          manufacturing|fix/manufacturing/dedicated-frontend-v1
+          BRANCHES
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install local screenshot browser
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start local static preview server
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory preview > /tmp/axtor-preview-server.log 2>&1 &
+          echo $! > /tmp/axtor-preview-server.pid
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/retail/demo-static/retail-dashboard.html >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/axtor-preview-server.log
+          exit 1
+
+      - name: Render and certify all 13 industry previews
+        run: node scripts/build-local-industry-preview.mjs
+
+      - name: Upload preview screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: axtor-13-industry-local-preview
+          path: industry-preview-gallery
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop local server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/axtor-preview-server.pid ]; then
+            kill "$(cat /tmp/axtor-preview-server.pid)" || true
+          fi
