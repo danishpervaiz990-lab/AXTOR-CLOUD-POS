@@ -1,0 +1,48 @@
+name: Direct Vercel Package Final
+
+on:
+  push:
+    branches: [ops/direct-vercel-package-final]
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/direct-vercel-package.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify production source
+        run: |
+          set -euo pipefail
+          test -f demo-static/api/industry-asset.js
+          test -f demo-static/tenant-onboarding.html
+          test -f scripts/production-smoke.mjs
+          grep -q 'UPSTREAM_TIMEOUT_MS = 15000' demo-static/api/industry-asset.js
+          grep -q 'MAX_ASSET_BYTES = 20' demo-static/api/industry-asset.js
+          node tests/main-saas-router.test.cjs
+          node tests/industry-asset-gateway.test.cjs
+      - name: Assemble production package
+        run: |
+          set -euo pipefail
+          mkdir -p package
+          cp -a demo-static/. package/
+          test -f package/vercel.json
+          test -f package/api/industry-asset.js
+          BASE_SHA="$(git rev-parse HEAD^1 2>/dev/null || git rev-parse HEAD)"
+          printf '%s\n' "$BASE_SHA" > package/AXTOR_RELEASE_COMMIT
+          find package -type f -print0 | sort -z | xargs -0 sha256sum > package-sha256.txt
+          tar -czf axtor-vercel-production-final.tar.gz package package-sha256.txt
+      - name: Upload production package
+        uses: actions/upload-artifact@v4
+        with:
+          name: axtor-direct-vercel-package-final
+          path: |
+            axtor-vercel-production-final.tar.gz
+            package-sha256.txt
+          retention-days: 2
+          if-no-files-found: error
