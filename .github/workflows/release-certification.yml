@@ -1,0 +1,28 @@
+name: Cross-Industry Release Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "deployment/**"
+      - "scripts/certify-release-branches.mjs"
+      - ".github/workflows/release-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout certification branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - name: Certify released branches and secure router
+        run: node scripts/certify-release-branches.mjs
