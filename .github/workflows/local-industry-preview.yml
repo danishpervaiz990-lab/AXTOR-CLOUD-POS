@@ -58,6 +58,20 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
 
+      - name: Normalize navigation discovery across branch-specific layouts
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          file = Path('scripts/build-local-industry-preview.mjs')
+          source = file.read_text()
+          old = "page.locator('aside nav a, .sidebar a, .m-nav a')"
+          new = "page.locator('a')"
+          if old not in source:
+              raise SystemExit('Expected preview selector was not found')
+          file.write_text(source.replace(old, new))
+          PY
+
       - name: Start local static preview server
         shell: bash
         run: |
