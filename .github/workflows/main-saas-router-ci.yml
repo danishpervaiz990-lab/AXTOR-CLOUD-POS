@@ -20,6 +20,7 @@ jobs:
           node --check demo-static/js/saas-router.js
           node --check demo-static/js/session-handoff.js
           node --check demo-static/api/industry-asset.js
+          node --check tests/authenticated-production.e2e.mjs
       - name: SaaS router release suite
         run: node tests/main-saas-router.test.cjs
       - name: Vercel configuration
