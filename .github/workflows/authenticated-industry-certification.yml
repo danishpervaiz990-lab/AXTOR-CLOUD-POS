@@ -1,0 +1,66 @@
+name: Authenticated Industry Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/certify-authenticated-industry-sessions.mjs"
+      - "deployment/authenticated-e2e-accounts.example.json"
+      - ".github/workflows/authenticated-industry-certification.yml"
+  workflow_dispatch:
+    inputs:
+      public_origin:
+        description: Public Axtor frontend origin
+        required: false
+        default: https://axtorpos.vercel.app
+      backend_origin:
+        description: Shared Railway backend origin
+        required: false
+        default: https://axtor-cloud-pos-production.up.railway.app
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate authenticated certification runner
+        run: |
+          node --check scripts/certify-authenticated-industry-sessions.mjs
+          node -e "const value=JSON.parse(require('fs').readFileSync('deployment/authenticated-e2e-accounts.example.json','utf8')); if(!Array.isArray(value)||!value.length) process.exit(1); console.log('Authenticated E2E example valid')"
+
+  certify:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AXTOR_PUBLIC_ORIGIN: ${{ inputs.public_origin || 'https://axtorpos.vercel.app' }}
+      AXTOR_BACKEND_ORIGIN: ${{ inputs.backend_origin || 'https://axtor-cloud-pos-production.up.railway.app' }}
+      AXTOR_E2E_ACCOUNTS_JSON: ${{ secrets.AXTOR_E2E_ACCOUNTS_JSON }}
+      AXTOR_E2E_TIMEOUT_MS: "20000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require secret-backed account matrix
+        run: |
+          if [ -z "$AXTOR_E2E_ACCOUNTS_JSON" ]; then
+            echo "Repository secret AXTOR_E2E_ACCOUNTS_JSON is required." >&2
+            exit 2
+          fi
+      - name: Run authenticated multi-industry certification
+        run: node scripts/certify-authenticated-industry-sessions.mjs
+      - name: Upload redacted authenticated report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-e2e-report
+          path: authenticated-e2e-report.json
+          if-no-files-found: warn
+          retention-days: 14
