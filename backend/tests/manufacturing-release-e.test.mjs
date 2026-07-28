@@ -17,6 +17,11 @@ test('Manufacturing operational registry is production-capable',async()=>{
  assert.ok(pack.entities.some(entity=>entity.type==='manufacturing_quality_check'));
  assert.ok(pack.entities.some(entity=>entity.type==='manufacturing_finished_goods_receipt'));
  assert.ok(pack.defaultRoles['Manufacturing Manager'].includes('industry.manufacturing.*'));
+ const readOnly=pack.defaultRoles['Manufacturing Read Only'];
+ assert.ok(readOnly.includes('industry.manufacturing.work_order.view'));
+ assert.ok(readOnly.includes('industry.manufacturing.quality.view'));
+ assert.ok(readOnly.includes('industry.manufacturing.finished_goods.view'));
+ assert.ok(!readOnly.includes('industry.manufacturing.*.view'),'Permission engine does not support middle-segment wildcard permissions');
 });
 
 test('Manufacturing routes expose the complete Release E workflow',()=>{
