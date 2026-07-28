@@ -31,7 +31,13 @@ jobs:
           fi
       - name: Reject permanent token URL transfer
         run: |
-          if grep -RE 'searchParams\.set\(["'"']token|[?&]token=' demo-static/js/saas-router.js demo-static/js/session-handoff.js; then
-            echo "Permanent token URL transfer detected" >&2
-            exit 1
-          fi
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const files=['demo-static/js/saas-router.js','demo-static/js/session-handoff.js'];
+          const source=files.map(file=>fs.readFileSync(file,'utf8')).join('\n');
+          if (/searchParams\.set\(\s*["']token["']/i.test(source) || /[?&]token=/i.test(source)) {
+            console.error('Permanent token URL transfer detected');
+            process.exit(1);
+          }
+          console.log('PASS: no permanent token URL transfer');
+          NODE
