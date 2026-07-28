@@ -1,0 +1,1 @@
+{"release":"same-origin-industry-gateway-hardening-v1","changes":["malformed-percent-decoding-fails-closed","15-second-upstream-timeout","20MiB-asset-limit","etag-last-modified-forwarding","frame-and-robot-protection","executable-handler-tests"],"productionPromotion":"scheduled-after-vercel-quota-reset"}
