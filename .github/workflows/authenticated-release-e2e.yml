@@ -1,0 +1,74 @@
+name: Authenticated Cross-Industry E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/authenticated-release-smoke.mjs"
+      - ".github/workflows/authenticated-release-e2e.yml"
+      - "deployment/vercel-industry-projects.json"
+  workflow_dispatch:
+    inputs:
+      frontend_url:
+        description: Public frontend origin
+        required: false
+        default: https://axtorpos.vercel.app
+      api_url:
+        description: Shared backend API origin
+        required: false
+        default: https://axtor-cloud-pos-production.up.railway.app
+      require_all_industries:
+        description: Require authenticated accounts for all released industries
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Syntax check
+        run: node --check scripts/authenticated-release-smoke.mjs
+      - name: Credential safety check
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('scripts/authenticated-release-smoke.mjs', 'utf8');
+          const forbidden = [/password\s*[:=]\s*["'][^"']+["']/i, /Bearer\s+[A-Za-z0-9._~-]{20,}/i, /searchParams\.set\(\s*["']token/i];
+          for (const pattern of forbidden) {
+            if (pattern.test(source)) throw new Error(`Credential-safety pattern matched: ${pattern}`);
+          }
+          console.log('PASS: no embedded password, bearer token, or token URL transfer');
+          NODE
+
+  authenticated-production:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate-runner
+    runs-on: ubuntu-latest
+    environment: production-e2e
+    timeout-minutes: 15
+    env:
+      AXTOR_FRONTEND_URL: ${{ inputs.frontend_url }}
+      AXTOR_API_URL: ${{ inputs.api_url }}
+      AXTOR_E2E_REQUIRE_ALL_INDUSTRIES: ${{ inputs.require_all_industries }}
+      AXTOR_E2E_ACCOUNTS_JSON: ${{ secrets.AXTOR_E2E_ACCOUNTS_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require protected E2E account secret
+        run: |
+          if [ -z "$AXTOR_E2E_ACCOUNTS_JSON" ]; then
+            echo "Repository/environment secret AXTOR_E2E_ACCOUNTS_JSON is required." >&2
+            exit 1
+          fi
+      - name: Run authenticated production certification
+        run: node scripts/authenticated-release-smoke.mjs
