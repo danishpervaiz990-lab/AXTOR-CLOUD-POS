@@ -1,0 +1,51 @@
+name: Authenticated Production E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      frontend_base:
+        description: Public Axtor frontend origin
+        required: false
+        default: https://axtorpos.vercel.app
+      backend_base:
+        description: Shared Railway backend origin
+        required: false
+        default: https://axtor-cloud-pos-production.up.railway.app
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AXTOR_FRONTEND_BASE: ${{ inputs.frontend_base }}
+      AXTOR_BACKEND_BASE: ${{ inputs.backend_base }}
+      AXTOR_E2E_ACCOUNTS_JSON: ${{ secrets.AXTOR_E2E_ACCOUNTS_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require encrypted account manifest
+        shell: bash
+        run: |
+          if [ -z "$AXTOR_E2E_ACCOUNTS_JSON" ]; then
+            echo "Repository secret AXTOR_E2E_ACCOUNTS_JSON is required." >&2
+            exit 1
+          fi
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Run authenticated tenant-role certification
+        run: node tests/authenticated-production.e2e.mjs
+      - name: Upload screenshots and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-production-e2e-evidence
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
