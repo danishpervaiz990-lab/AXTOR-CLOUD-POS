@@ -1,0 +1,33 @@
+name: Direct Vercel Package
+
+on:
+  push:
+    branches: [ops/direct-vercel-package]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble production package
+        run: |
+          set -euo pipefail
+          mkdir -p package/api
+          cp -a demo-static/. package/
+          cp api/industry-asset.js package/api/industry-asset.js
+          test -f package/vercel.json
+          test -f package/api/industry-asset.js
+          find package -type f -print0 | sort -z | xargs -0 sha256sum > package-sha256.txt
+      - name: Upload production package
+        uses: actions/upload-artifact@v4
+        with:
+          name: axtor-direct-vercel-package
+          path: |
+            package
+            package-sha256.txt
+          retention-days: 1
+          if-no-files-found: error
