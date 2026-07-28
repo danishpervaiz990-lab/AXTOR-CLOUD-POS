@@ -1,0 +1,44 @@
+name: Direct Vercel Package
+
+on:
+  push:
+    branches: [ops/direct-vercel-package-hardened]
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/direct-vercel-package.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm hardened source commit
+        run: |
+          test "$(git rev-parse HEAD^1 2>/dev/null || git rev-parse HEAD)" != ""
+          test -f demo-static/api/industry-asset.js
+          grep -q 'UPSTREAM_TIMEOUT_MS = 15000' demo-static/api/industry-asset.js
+          grep -q 'MAX_ASSET_BYTES = 20' demo-static/api/industry-asset.js
+          node tests/industry-asset-gateway.test.cjs
+      - name: Assemble production package
+        run: |
+          set -euo pipefail
+          mkdir -p package
+          cp -a demo-static/. package/
+          test -f package/vercel.json
+          test -f package/api/industry-asset.js
+          printf '%s\n' '54a4c935c9fb99bf82f4044ce1dd1c1ec29e256d' > package/AXTOR_RELEASE_COMMIT
+          find package -type f -print0 | sort -z | xargs -0 sha256sum > package-sha256.txt
+          tar -czf axtor-vercel-production-54a4c935.tar.gz package package-sha256.txt
+      - name: Upload production package
+        uses: actions/upload-artifact@v4
+        with:
+          name: axtor-direct-vercel-package-hardened
+          path: |
+            axtor-vercel-production-54a4c935.tar.gz
+            package-sha256.txt
+          retention-days: 2
+          if-no-files-found: error
