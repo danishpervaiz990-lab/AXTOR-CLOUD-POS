@@ -1,0 +1,46 @@
+name: Cross-Industry Release Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "deployment/**"
+      - "scripts/certify-release-branches.mjs"
+      - ".github/workflows/release-certification.yml"
+      - ".github/workflows/main-saas-router-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout certification branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          show-progress: false
+      - name: Run certification and capture report
+        shell: bash
+        run: |
+          set +e
+          node scripts/certify-release-branches.mjs > certification.log 2>&1
+          echo "$?" > certification.exit
+          exit 0
+      - name: Upload certification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-industry-certification-report
+          path: |
+            certification.log
+            certification.exit
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce certification result
+        shell: bash
+        run: |
+          cat certification.log
+          test "$(cat certification.exit)" = "0"
