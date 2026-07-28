@@ -16,9 +16,8 @@ jobs:
       - name: Assemble production package
         run: |
           set -euo pipefail
-          mkdir -p package/api
+          mkdir -p package
           cp -a demo-static/. package/
-          cp api/industry-asset.js package/api/industry-asset.js
           test -f package/vercel.json
           test -f package/api/industry-asset.js
           find package -type f -print0 | sort -z | xargs -0 sha256sum > package-sha256.txt
