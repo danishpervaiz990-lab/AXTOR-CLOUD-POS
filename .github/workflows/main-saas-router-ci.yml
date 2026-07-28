@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, fix/main/saas-router-v1]
+    branches: [main, fix/main/saas-router-v1, fix/main/all-industries-code-complete]
 permissions:
   contents: read
 jobs:
@@ -21,12 +21,23 @@ jobs:
           node --check demo-static/js/session-handoff.js
           node --check demo-static/api/industry-asset.js
           node --check tests/authenticated-production.e2e.mjs
+          node --check scripts/certify-all-industry-code.mjs
       - name: SaaS router release suite
         run: node tests/main-saas-router.test.cjs
       - name: Industry asset gateway suite
         run: node tests/industry-asset-gateway.test.cjs
+      - name: All-industry branch code certification
+        run: node scripts/certify-all-industry-code.mjs
+      - name: Upload code-certification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-industry-code-certification
+          path: all-industry-code-certification.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Vercel configuration
-        run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
+        run: node -e "const v=JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); if(v.git?.deploymentEnabled?.['fix/*']!==false) process.exit(1); console.log('Vercel configuration valid and feature deployment disabled')"
       - name: Reject operational links from central landing
         run: |
           if grep -E 'href="(terminal|sales|products|inventory|industry)\.html' demo-static/saas-index.html; then
@@ -36,7 +47,7 @@ jobs:
       - name: Reject permanent token URL transfer
         run: |
           node - <<'NODE'
-          const fs=require('node:fs');
+          const fs=require('fs');
           const files=['demo-static/js/saas-router.js','demo-static/js/session-handoff.js'];
           const source=files.map(file=>fs.readFileSync(file,'utf8')).join('\n');
           if (/searchParams\.set\(\s*["']token["']/i.test(source) || /[?&]token=/i.test(source)) {
