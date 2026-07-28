@@ -1,0 +1,18 @@
+const fs=require('node:fs');
+const path=require('node:path');
+const assert=require('node:assert/strict');
+const root=path.join(__dirname,'../demo-static');
+const dashboard=fs.readFileSync(path.join(root,'retail-dashboard.html'),'utf8');
+const index=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const app=fs.readFileSync(path.join(root,'js/retail-app.js'),'utf8');
+assert.match(index,/retail-dashboard\.html/);
+assert.match(dashboard,/GENERAL RETAIL/);
+assert.match(dashboard,/terminal\.html/);
+assert.match(dashboard,/sales\.html/);
+assert.match(dashboard,/products\.html/);
+assert.doesNotMatch(dashboard,/industry\.html\?module=/);
+assert.match(app,/\/api\/v1\/industry\/registry/);
+assert.match(app,/General Retail tenants/);
+assert.match(app,/\/api\/v1\/dashboard\/summary/);
+assert.match(app,/\/api\/v1\/products/);
+console.log('PASS: isolated General Retail frontend');
