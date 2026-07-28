@@ -1,6 +1,12 @@
 name: Production Industry Smoke
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/smoke-production-industry-routes.mjs"
+      - ".github/workflows/production-industry-smoke.yml"
+      - "deployment/vercel-industry-projects.json"
   workflow_dispatch:
     inputs:
       public_origin:
@@ -18,7 +24,18 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate production smoke runner syntax
+        run: node --check scripts/smoke-production-industry-routes.mjs
+
   smoke:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
