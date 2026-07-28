@@ -14,7 +14,8 @@ const RELEASES = Object.freeze({
   paint: { branch: "frontend-paint", dashboard: "paint-dashboard.html" },
   furniture: { branch: "frontend-furniture", dashboard: "furniture-dashboard.html" },
   workshop: { branch: "frontend-workshop", dashboard: "workshop-dashboard.html" },
-  wholesale: { branch: "frontend-wholesale", dashboard: "wholesale-dashboard.html" }
+  wholesale: { branch: "frontend-wholesale", dashboard: "wholesale-dashboard.html" },
+  manufacturing: { branch: "frontend-manufacturing", dashboard: "manufacturing-dashboard.html" }
 });
 
 const CONTENT_TYPES = Object.freeze({
@@ -99,7 +100,7 @@ module.exports = async function industryAsset(req, res) {
       method: req.method,
       headers: {
         Accept: "*/*",
-        "User-Agent": "Axtor-POS-Industry-Delivery/1.1"
+        "User-Agent": "Axtor-POS-Industry-Delivery/1.2"
       },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
