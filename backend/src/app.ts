@@ -36,6 +36,7 @@ import publicCatalogRoutes from "./routes/public-catalog.routes.js";
 import { clinicRouter, gymRouter, schoolRouter } from "./routes/release-ab.routes.js";
 import { hardwareRouter, paintRouter, restaurantRouter } from "./routes/release-c.routes.js";
 import { furnitureRouter, wholesaleRouter, workshopRouter } from "./routes/release-d.routes.js";
+import manufacturingRouter from "./routes/manufacturing.routes.js";
 
 export function createApp() {
   const app = express();
@@ -100,6 +101,7 @@ export function createApp() {
     furniture: "/api/v1/furniture",
     workshop: "/api/v1/workshop",
     wholesale: "/api/v1/wholesale",
+    manufacturing: "/api/v1/manufacturing",
   };
 
   app.get("/", (_req: Request, res: Response) => res.json({
@@ -164,6 +166,7 @@ export function createApp() {
   app.use("/api/v1/furniture", furnitureRouter);
   app.use("/api/v1/workshop", workshopRouter);
   app.use("/api/v1/wholesale", wholesaleRouter);
+  app.use("/api/v1/manufacturing", manufacturingRouter);
 
   app.use((req: Request, res: Response) => res.status(404).json({ ok: false, error: { message: `Route not found: ${req.method} ${req.originalUrl}`, referenceId: res.locals.requestId } }));
   app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
