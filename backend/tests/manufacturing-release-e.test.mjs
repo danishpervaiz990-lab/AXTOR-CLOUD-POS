@@ -32,6 +32,20 @@ test('Manufacturing routes expose the complete Release E workflow',()=>{
  assert.match(routes,/manufacturing-release\.js/);
 });
 
+test('Manufacturing reads and writes are permission guarded',()=>{
+ for(const guard of ['dashboardRead','bomRead','workOrderRead','inventoryRead','qualityRead','capacityRead','reportRead','settingsRead','bomWrite','workOrderWrite','inventoryWrite','qualityWrite','capacityWrite','settingsWrite']) assert.match(routes,new RegExp(`const ${guard} = permission\\(`),`${guard} missing`);
+ assert.match(routes,/get\("\/dashboard", dashboardRead,/);
+ assert.match(routes,/get\("\/boms", bomRead,/);
+ assert.match(routes,/get\("\/work-orders", workOrderRead,/);
+ assert.match(routes,/get\("\/quality-checks", qualityRead,/);
+ assert.match(routes,/get\("\/costs", reportRead,/);
+ assert.match(routes,/get\("\/capacity", capacityRead,/);
+ assert.match(routes,/get\("\/settings", settingsRead,/);
+ assert.match(routes,/post\("\/work-orders", workOrderWrite,/);
+ assert.match(routes,/post\("\/quality-checks", qualityWrite,/);
+ assert.match(routes,/post\("\/capacity", capacityWrite,/);
+});
+
 test('Manufacturing writes are tenant scoped and idempotent',()=>{
  assert.match(existing,/businessId: businessId\(req\)/);
  assert.match(existing,/idempotencyKey\(req\)/);
