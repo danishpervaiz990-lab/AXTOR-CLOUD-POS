@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 const frontendBase = String(process.env.AXTOR_FRONTEND_BASE || "https://axtorpos.vercel.app").replace(/\/$/, "");
 const backendBase = String(process.env.AXTOR_BACKEND_BASE || "https://axtor-cloud-pos-production.up.railway.app").replace(/\/$/, "");
@@ -8,6 +9,7 @@ const rawAccounts = process.env.AXTOR_E2E_ACCOUNTS_JSON;
 if (!rawAccounts) throw new Error("AXTOR_E2E_ACCOUNTS_JSON is required");
 const accounts = JSON.parse(rawAccounts);
 assert.ok(Array.isArray(accounts) && accounts.length > 0, "At least one E2E account is required");
+fs.mkdirSync("artifacts", { recursive: true });
 
 const aliases = { general_retail: "retail", education: "school", garage: "workshop", distribution: "wholesale", supermarket: "grocery" };
 const normalize = value => aliases[String(value || "").toLowerCase()] || String(value || "").toLowerCase();
