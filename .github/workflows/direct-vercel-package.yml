@@ -27,13 +27,15 @@ jobs:
           node tests/main-saas-router.test.cjs
           node tests/industry-asset-gateway.test.cjs
       - name: Assemble production package
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           mkdir -p package
           cp -a demo-static/. package/
           test -f package/vercel.json
           test -f package/api/industry-asset.js
-          BASE_SHA="$(git rev-parse HEAD^1 2>/dev/null || git rev-parse HEAD)"
+          BASE_SHA="${PR_BASE_SHA:-$GITHUB_SHA}"
           printf '%s\n' "$BASE_SHA" > package/AXTOR_RELEASE_COMMIT
           find package -type f -print0 | sort -z | xargs -0 sha256sum > package-sha256.txt
           tar -czf axtor-vercel-production-final.tar.gz package package-sha256.txt
