@@ -3,6 +3,7 @@ const path=require('node:path');
 const assert=require('node:assert/strict');
 const root=path.join(__dirname,'../demo-static');
 const landing=fs.readFileSync(path.join(root,'saas-index.html'),'utf8');
+const login=fs.readFileSync(path.join(root,'login.html'),'utf8');
 const router=fs.readFileSync(path.join(root,'js/saas-router.js'),'utf8');
 const handoff=fs.readFileSync(path.join(root,'js/session-handoff.js'),'utf8');
 const onboarding=fs.readFileSync(path.join(root,'tenant-onboarding.html'),'utf8');
@@ -48,4 +49,23 @@ assert.match(proxy,/frontend-pharmacy/);
 assert.match(proxy,/raw\.githubusercontent\.com/);
 assert.match(proxy,/selected\.includes\("\.\."\)/);
 assert.doesNotMatch(proxy,/req\.query\.branch/);
-console.log('PASS: main is limited to SaaS entry and securely delivers isolated frontend branches on same-origin paths');
+
+// Authentication entry must never publish a working account or temporary password.
+assert.doesNotMatch(login,/owner@axtorpos\.local/i);
+assert.doesNotMatch(login,/AxtorTemp12345/i);
+assert.match(login,/placeholder="name@company\.com"/);
+assert.match(login,/placeholder="Enter your password"/);
+assert.match(login,/cache:'no-store'/);
+assert.match(login,/getRegistrations\(\)/);
+assert.match(login,/caches\.keys\(\)/);
+assert.match(login,/\/api\/v1\/auth\/me/);
+assert.match(login,/\|\| 'router\.html'/);
+assert.doesNotMatch(login,/const dedicatedHome/);
+const loginHeaderRules=vercel.headers.filter(row=>row.source==='/login.html'||row.source==='/login');
+assert.equal(loginHeaderRules.length,2,'Both /login and /login.html require explicit no-cache rules');
+for(const rule of loginHeaderRules){
+  const values=Object.fromEntries(rule.headers.map(item=>[item.key.toLowerCase(),item.value]));
+  assert.match(values['cache-control']||'',/no-store/);
+  assert.equal(values.pragma,'no-cache');
+}
+console.log('PASS: main SaaS router, isolated industry delivery and secure no-cache login entry are certified');
