@@ -1,0 +1,49 @@
+[
+  {
+    "name": "clinic-owner",
+    "businessSlug": "clinic-test-tenant",
+    "email": "owner@example.invalid",
+    "password": "REPLACE_IN_GITHUB_SECRET_ONLY",
+    "industry": "clinic",
+    "role": "Owner",
+    "dashboard": "clinic-dashboard.html",
+    "navigationChecks": 4,
+    "apiChecks": [
+      { "method": "GET", "path": "/api/v1/clinic/dashboard", "expectedStatus": 200 }
+    ]
+  },
+  {
+    "name": "clinic-read-only",
+    "businessSlug": "clinic-test-tenant",
+    "email": "viewer@example.invalid",
+    "password": "REPLACE_IN_GITHUB_SECRET_ONLY",
+    "industry": "clinic",
+    "role": "Read Only",
+    "apiChecks": [
+      { "method": "GET", "path": "/api/v1/clinic/dashboard", "expectedStatus": 200 },
+      { "method": "POST", "path": "/api/v1/clinic/patients", "body": {}, "expectedStatus": [400, 403] }
+    ]
+  },
+  {
+    "name": "pharmacy-inventory-manager",
+    "businessSlug": "pharmacy-test-tenant",
+    "email": "inventory@example.invalid",
+    "password": "REPLACE_IN_GITHUB_SECRET_ONLY",
+    "industry": "pharmacy",
+    "role": "Inventory Manager",
+    "apiChecks": [
+      { "method": "GET", "path": "/api/v1/industry/batches?limit=5", "expectedStatus": 200 }
+    ]
+  },
+  {
+    "name": "gym-receptionist",
+    "businessSlug": "gym-test-tenant",
+    "email": "reception@example.invalid",
+    "password": "REPLACE_IN_GITHUB_SECRET_ONLY",
+    "industry": "gym",
+    "role": "Receptionist",
+    "apiChecks": [
+      { "method": "GET", "path": "/api/v1/gym/memberships", "expectedStatus": 200 }
+    ]
+  }
+]
