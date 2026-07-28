@@ -36,8 +36,10 @@ import publicCatalogRoutes from "./routes/public-catalog.routes.js";
 import { clinicRouter, gymRouter, schoolRouter } from "./routes/release-ab.routes.js";
 import { hardwareRouter, paintRouter, restaurantRouter } from "./routes/release-c.routes.js";
 import { furnitureRouter, wholesaleRouter, workshopRouter } from "./routes/release-d.routes.js";
+import { installManufacturingPack } from "./industry/manufacturing-pack.js";
 
 export function createApp() {
+  installManufacturingPack();
   const app = express();
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
@@ -100,22 +102,11 @@ export function createApp() {
     furniture: "/api/v1/furniture",
     workshop: "/api/v1/workshop",
     wholesale: "/api/v1/wholesale",
+    manufacturing: "/api/v1/industry/records",
   };
 
-  app.get("/", (_req: Request, res: Response) => res.json({
-    ok: true,
-    service: "Axtor POS Cloud API",
-    message: "Backend is running",
-    version: env.appVersion,
-    routes: routeMap,
-  }));
-  app.get("/health", (_req: Request, res: Response) => res.json({
-    ok: true,
-    service: "Axtor POS Cloud API",
-    version: env.appVersion,
-    environment: process.env.NODE_ENV || "development",
-    timestamp: new Date().toISOString(),
-  }));
+  app.get("/", (_req: Request, res: Response) => res.json({ ok: true, service: "Axtor POS Cloud API", message: "Backend is running", version: env.appVersion, routes: routeMap }));
+  app.get("/health", (_req: Request, res: Response) => res.json({ ok: true, service: "Axtor POS Cloud API", version: env.appVersion, environment: process.env.NODE_ENV || "development", timestamp: new Date().toISOString() }));
   app.get("/api/v1/health/db", async (_req: Request, res: Response) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
