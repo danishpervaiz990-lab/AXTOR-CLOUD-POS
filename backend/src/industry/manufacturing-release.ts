@@ -21,7 +21,20 @@ export const MANUFACTURING_PACK: IndustryPack = {
     "Production Operator": ["industry.manufacturing.work_order.view", "industry.manufacturing.stage.*", "industry.manufacturing.material.view", "industry.manufacturing.quality.view"],
     "Storekeeper": ["industry.manufacturing.material.*", "industry.manufacturing.finished_goods.*", "inventory.*", "products.view"],
     "Quality Inspector": ["industry.manufacturing.work_order.view", "industry.manufacturing.quality.*", "industry.manufacturing.scrap.view"],
-    "Manufacturing Read Only": ["industry.manufacturing.*.view", "products.view", "inventory.view", "reports.view"]
+    "Manufacturing Read Only": [
+      "industry.manufacturing.bom.view",
+      "industry.manufacturing.work_order.view",
+      "industry.manufacturing.material.view",
+      "industry.manufacturing.stage.view",
+      "industry.manufacturing.quality.view",
+      "industry.manufacturing.finished_goods.view",
+      "industry.manufacturing.scrap.view",
+      "industry.manufacturing.capacity.view",
+      "industry.manufacturing.settings.view",
+      "products.view",
+      "inventory.view",
+      "reports.view"
+    ]
   },
   defaultSettings: {
     requireApprovedBom: true,
