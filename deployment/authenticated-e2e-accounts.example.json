@@ -1,0 +1,33 @@
+[
+  {
+    "label": "clinic-owner",
+    "industry": "clinic",
+    "businessSlug": "replace-with-clinic-slug",
+    "email": "replace-with-owner-email",
+    "password": "replace-through-GitHub-secret-only",
+    "expectedRole": "Owner",
+    "dashboard": "clinic-dashboard.html",
+    "allowed": [
+      "/api/v1/clinic/dashboard",
+      "/api/v1/clinic/patients"
+    ],
+    "denied": [
+      "/api/v1/gym/dashboard"
+    ]
+  },
+  {
+    "label": "gym-read-only",
+    "industry": "gym",
+    "businessSlug": "replace-with-gym-slug",
+    "email": "replace-with-read-only-email",
+    "password": "replace-through-GitHub-secret-only",
+    "expectedRole": "Read Only",
+    "dashboard": "gym-dashboard.html",
+    "allowed": [
+      "/api/v1/gym/dashboard"
+    ],
+    "denied": [
+      "/api/v1/clinic/dashboard"
+    ]
+  }
+]
