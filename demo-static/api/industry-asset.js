@@ -1,4 +1,6 @@
 const REPOSITORY_RAW = "https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-POS";
+const UPSTREAM_TIMEOUT_MS = 15000;
+const MAX_ASSET_BYTES = 20 * 1024 * 1024;
 
 const RELEASES = Object.freeze({
   retail: { branch: "frontend-retail", dashboard: "retail-dashboard.html" },
@@ -37,9 +39,21 @@ function first(value) {
 }
 
 function safePath(value, fallback) {
-  const decoded = decodeURIComponent(String(first(value) || "")).replace(/^\/+/, "");
+  let decoded;
+  try {
+    decoded = decodeURIComponent(String(first(value) || "")).replace(/^\/+/, "");
+  } catch {
+    return null;
+  }
+
   const selected = decoded || fallback;
-  if (!selected || selected.length > 500 || selected.includes("..") || selected.includes("\\") || !/^[A-Za-z0-9._/()-]+$/.test(selected)) {
+  if (
+    !selected ||
+    selected.length > 500 ||
+    selected.includes("..") ||
+    selected.includes("\\") ||
+    !/^[A-Za-z0-9._/()-]+$/.test(selected)
+  ) {
     return null;
   }
   return selected;
@@ -48,6 +62,13 @@ function safePath(value, fallback) {
 function extension(pathname) {
   const match = pathname.toLowerCase().match(/(\.[a-z0-9]+)$/);
   return match ? match[1] : "";
+}
+
+function numericHeader(headers, name) {
+  const raw = headers.get(name);
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 module.exports = async function industryAsset(req, res) {
@@ -78,12 +99,22 @@ module.exports = async function industryAsset(req, res) {
       method: req.method,
       headers: {
         Accept: "*/*",
-        "User-Agent": "Axtor-POS-Industry-Delivery/1.0"
-      }
+        "User-Agent": "Axtor-POS-Industry-Delivery/1.1"
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
 
     if (!upstream.ok) {
-      res.status(upstream.status === 404 ? 404 : 502).send(upstream.status === 404 ? "Industry asset not found" : "Industry asset source unavailable");
+      res.status(upstream.status === 404 ? 404 : 502).send(
+        upstream.status === 404 ? "Industry asset not found" : "Industry asset source unavailable"
+      );
+      return;
+    }
+
+    const declaredSize = numericHeader(upstream.headers, "content-length");
+    if (declaredSize !== null && declaredSize > MAX_ASSET_BYTES) {
+      res.status(413).send("Industry asset exceeds delivery limit");
       return;
     }
 
@@ -93,11 +124,18 @@ module.exports = async function industryAsset(req, res) {
     res.setHeader("Content-Type", type);
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-Robots-Tag", "noindex");
     res.setHeader("X-Axtor-Industry", industry);
     res.setHeader("X-Axtor-Frontend-Branch", release.branch);
     res.setHeader("Cache-Control", isDocument
       ? "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
       : "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400");
+
+    const etag = upstream.headers.get("etag");
+    const lastModified = upstream.headers.get("last-modified");
+    if (etag) res.setHeader("ETag", etag);
+    if (lastModified) res.setHeader("Last-Modified", lastModified);
 
     if (req.method === "HEAD") {
       res.status(200).end();
@@ -105,9 +143,20 @@ module.exports = async function industryAsset(req, res) {
     }
 
     const bytes = Buffer.from(await upstream.arrayBuffer());
+    if (bytes.byteLength > MAX_ASSET_BYTES) {
+      res.status(413).send("Industry asset exceeds delivery limit");
+      return;
+    }
+
     res.status(200).send(bytes);
   } catch (error) {
-    console.error("Industry asset proxy failed", { industry, pathname, message: error instanceof Error ? error.message : String(error) });
-    res.status(502).send("Industry asset source unavailable");
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    console.error("Industry asset proxy failed", {
+      industry,
+      pathname,
+      timedOut,
+      message: error instanceof Error ? error.message : String(error)
+    });
+    res.status(502).send(timedOut ? "Industry asset source timed out" : "Industry asset source unavailable");
   }
 };
