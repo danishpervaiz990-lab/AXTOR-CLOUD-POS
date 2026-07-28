@@ -1,0 +1,59 @@
+name: Production Industry Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/smoke-production-industry-routes.mjs"
+      - ".github/workflows/production-industry-smoke.yml"
+      - "deployment/vercel-industry-projects.json"
+  workflow_dispatch:
+    inputs:
+      public_origin:
+        description: Public Axtor frontend origin
+        required: false
+        default: https://axtorpos.vercel.app
+      backend_origin:
+        description: Shared Railway backend origin
+        required: false
+        default: https://axtor-cloud-pos-production.up.railway.app
+  schedule:
+    - cron: "15 1 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate production smoke runner syntax
+        run: node --check scripts/smoke-production-industry-routes.mjs
+
+  smoke:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AXTOR_PUBLIC_ORIGIN: ${{ inputs.public_origin || 'https://axtorpos.vercel.app' }}
+      AXTOR_BACKEND_ORIGIN: ${{ inputs.backend_origin || 'https://axtor-cloud-pos-production.up.railway.app' }}
+      AXTOR_SMOKE_TIMEOUT_MS: "20000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run production route and backend smoke checks
+        run: node scripts/smoke-production-industry-routes.mjs
+      - name: Upload production smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-smoke-report
+          path: production-smoke-report.json
+          if-no-files-found: error
+          retention-days: 30
