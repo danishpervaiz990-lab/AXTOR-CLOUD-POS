@@ -22,6 +22,8 @@ jobs:
           node --check demo-static/api/industry-asset.js
       - name: SaaS router release suite
         run: node tests/main-saas-router.test.cjs
+      - name: Industry asset gateway suite
+        run: node tests/industry-asset-gateway.test.cjs
       - name: Vercel configuration
         run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
       - name: Reject operational links from central landing
