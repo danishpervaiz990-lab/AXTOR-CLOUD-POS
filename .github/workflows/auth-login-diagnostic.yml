@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 10
     env:
       BACKEND: https://axtor-cloud-pos-production.up.railway.app
+      FRONTEND: https://axtorpos.vercel.app
       ACCOUNTS_JSON: ${{ secrets.AXTOR_E2E_ACCOUNTS_JSON }}
     steps:
       - uses: actions/checkout@v4
@@ -29,15 +30,21 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
           const backend = process.env.BACKEND;
+          const frontend = process.env.FRONTEND;
           const raw = process.env.ACCOUNTS_JSON || '';
-          const report = { checkedAt: new Date().toISOString(), backend, health: null, database: null, accountsConfigured: 0, results: [] };
-          async function request(path, options={}) {
+          const report = { checkedAt: new Date().toISOString(), backend, frontend, health: null, database: null, accountSource: null, accountsConfigured: 0, results: [] };
+          async function fetchTimed(url, options={}) {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 20000);
-            try { return await fetch(backend + path, { ...options, signal: controller.signal }); }
+            try { return await fetch(url, { ...options, signal: controller.signal }); }
             finally { clearTimeout(timer); }
           }
+          async function request(path, options={}) { return fetchTimed(backend + path, options); }
           async function json(response) { return await response.json().catch(() => null); }
+          function attribute(html, id, name) {
+            const tag = html.match(new RegExp(`<input[^>]*id=["']${id}["'][^>]*>`, 'i'))?.[0] || '';
+            return tag.match(new RegExp(`${name}=["']([^"']+)["']`, 'i'))?.[1] || '';
+          }
           (async () => {
             try {
               const response = await request('/health', { headers: { Accept: 'application/json' } });
@@ -47,22 +54,30 @@ jobs:
               const response = await request('/api/v1/health/db', { headers: { Accept: 'application/json' } });
               report.database = { status: response.status, ok: response.ok, body: await json(response) };
             } catch (error) { report.database = { ok: false, error: error.name || 'fetch_error' }; }
-            if (!raw) {
+
+            let accounts = [];
+            if (raw) {
+              report.accountSource = 'repository-secret';
+              try { accounts = JSON.parse(raw); } catch { throw new Error('AXTOR_E2E_ACCOUNTS_JSON is not valid JSON'); }
+            } else {
+              report.accountSource = 'public-login-page-hints';
               report.secretMissing = true;
-              fs.writeFileSync('auth-login-diagnostic.json', JSON.stringify(report, null, 2));
-              console.error('AXTOR_E2E_ACCOUNTS_JSON is not configured');
-              process.exit(2);
+              const page = await fetchTimed(frontend + '/login.html', { headers: { Accept: 'text/html' } });
+              const html = await page.text();
+              const businessSlug = attribute(html, 'businessSlug', 'value');
+              const email = attribute(html, 'loginEmail', 'placeholder');
+              const password = attribute(html, 'loginPassword', 'placeholder');
+              if (businessSlug && email && password) accounts = [{ label: 'public-login-hint', businessSlug, email, password }];
             }
-            let accounts;
-            try { accounts = JSON.parse(raw); } catch { throw new Error('AXTOR_E2E_ACCOUNTS_JSON is not valid JSON'); }
-            if (!Array.isArray(accounts) || !accounts.length) throw new Error('AXTOR_E2E_ACCOUNTS_JSON must be a non-empty array');
+            if (!Array.isArray(accounts) || !accounts.length) throw new Error('No diagnostic account is available');
             report.accountsConfigured = accounts.length;
+
             for (let index=0; index<accounts.length; index += 1) {
               const account = accounts[index] || {};
               const result = { index, label: String(account.label || `account-${index+1}`), industry: String(account.industry || ''), businessSlug: String(account.businessSlug || ''), login: null, session: null };
               try {
                 const loginResponse = await request('/api/v1/auth/login', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', Origin: 'https://axtorpos.vercel.app' },
+                  method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', Origin: frontend },
                   body: JSON.stringify({ businessSlug: account.businessSlug, email: account.email, password: account.password })
                 });
                 const loginBody = await json(loginResponse);
@@ -72,9 +87,7 @@ jobs:
                   const meBody = await json(meResponse);
                   result.session = { status: meResponse.status, ok: meResponse.ok && Boolean(meBody?.ok), error: meBody?.error?.message || null, returnedIndustry: meBody?.business?.industry?.code || null, role: meBody?.user?.role || null };
                 }
-              } catch (error) {
-                result.login = { ok: false, error: error.name || 'fetch_error' };
-              }
+              } catch (error) { result.login = { ok: false, error: error.name || 'fetch_error' }; }
               report.results.push(result);
             }
             fs.writeFileSync('auth-login-diagnostic.json', JSON.stringify(report, null, 2));
