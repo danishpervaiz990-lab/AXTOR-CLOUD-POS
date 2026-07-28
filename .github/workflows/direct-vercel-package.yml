@@ -21,7 +21,7 @@ jobs:
           set -euo pipefail
           test -f demo-static/api/industry-asset.js
           test -f demo-static/tenant-onboarding.html
-          test -f scripts/production-smoke.mjs
+          test -f scripts/smoke-production-industry-routes.mjs
           grep -q 'UPSTREAM_TIMEOUT_MS = 15000' demo-static/api/industry-asset.js
           grep -q 'MAX_ASSET_BYTES = 20' demo-static/api/industry-asset.js
           node tests/main-saas-router.test.cjs
