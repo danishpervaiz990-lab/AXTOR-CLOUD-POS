@@ -65,6 +65,13 @@
     }
   }
 
+  function safeBasePath(value, code) {
+    const text = String(value || "").trim().replace(/\/+$/, "");
+    const expected = "/apps/" + code;
+    if (text !== expected || text.includes("..") || text.startsWith("//")) return "";
+    return text;
+  }
+
   function localOverrides() {
     try {
       const value = JSON.parse(localStorage.getItem("axtorIndustryHosts") || "{}");
@@ -116,18 +123,29 @@
     const code = normalizeCode(selectedCode);
     const configuration = await loadConfig();
     const entry = configuration.frontends?.[code];
-    if (!entry) {
+    if (!entry || entry.delivery === "unreleased") {
       status("This industry has no released frontend.", "Selected code: " + code, "Contact the platform administrator to provision this vertical.");
       return;
     }
 
     const overrides = localOverrides();
-    const origin = safeOrigin(overrides[code] || entry.origin);
+    const override = String(overrides[code] || "").trim();
+
+    if (!override && entry.delivery === "same_origin_branch_proxy") {
+      const basePath = safeBasePath(entry.basePath, code);
+      if (!basePath) throw new Error("Invalid same-origin industry route configuration");
+      status("Opening your " + code + " workspace…", "Using the certified " + entry.branch + " release on the public Axtor origin.");
+      const sameOriginTarget = new URL(basePath + "/" + entry.dashboard, window.location.origin);
+      window.location.replace(sameOriginTarget.toString());
+      return;
+    }
+
+    const origin = safeOrigin(override || entry.origin);
     if (!origin) {
       status(
         "Frontend deployment configuration is required.",
         "Industry: " + code + "\nExpected project: " + entry.project + "\nProduction branch: " + entry.branch + "\nProject root: demo-static",
-        "The application code is released, but the independent Vercel project/domain has not been assigned in industry-hosts.json or the local administrator override."
+        "The application code is released, but no public frontend delivery route has been assigned."
       );
       document.getElementById("manualActions").hidden = false;
       return;
@@ -146,7 +164,7 @@
     document.getElementById("retryRouter").addEventListener("click", function () { window.location.reload(); });
     document.getElementById("onboardingLink").addEventListener("click", function () { window.location.href = "tenant-onboarding.html"; });
     route().catch(function (error) {
-      status("Unable to route this tenant.", error.message || "Unknown router error", "No access token was placed in the URL. Retry after checking backend and frontend deployment configuration.");
+      status("Unable to route this tenant.", error.message || "Unknown router error", "No access token was placed in the URL. Retry after checking backend and frontend delivery configuration.");
       document.getElementById("manualActions").hidden = false;
     });
   });

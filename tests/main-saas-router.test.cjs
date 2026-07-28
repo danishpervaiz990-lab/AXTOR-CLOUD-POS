@@ -5,6 +5,7 @@ const root=path.join(__dirname,'../demo-static');
 const landing=fs.readFileSync(path.join(root,'saas-index.html'),'utf8');
 const router=fs.readFileSync(path.join(root,'js/saas-router.js'),'utf8');
 const handoff=fs.readFileSync(path.join(root,'js/session-handoff.js'),'utf8');
+const proxy=fs.readFileSync(path.join(root,'api/industry-asset.js'),'utf8');
 const hosts=JSON.parse(fs.readFileSync(path.join(root,'industry-hosts.json'),'utf8'));
 const vercel=JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
 assert.match(landing,/SaaS entry/);
@@ -13,6 +14,8 @@ assert.doesNotMatch(landing,/industry\.html\?module=/);
 assert.match(router,/\/api\/v1\/auth\/handoff/);
 assert.match(router,/\/api\/v1\/industry\/registry/);
 assert.match(router,/session-handoff\.html/);
+assert.match(router,/same_origin_branch_proxy/);
+assert.match(router,/window\.location\.origin/);
 assert.doesNotMatch(router,/searchParams\.set\(["']token/);
 assert.doesNotMatch(router,/axtorAuthToken.*searchParams/);
 assert.match(handoff,/\/api\/v1\/auth\/exchange/);
@@ -23,9 +26,21 @@ for(const [code,entry] of Object.entries(hosts.frontends)){
   assert.ok(entry.project,`${code} project missing`);
   assert.ok(entry.branch,`${code} branch missing`);
   assert.ok(entry.dashboard,`${code} dashboard missing`);
+  if(code!== 'manufacturing'){
+    assert.equal(entry.delivery,'same_origin_branch_proxy',`${code} delivery mode mismatch`);
+    assert.equal(entry.basePath,`/apps/${code}`,`${code} base path mismatch`);
+    assert.match(entry.sourceAlias,/^https:\/\/axtorpos-git-frontend-/);
+  }
 }
 const rewrites=vercel.rewrites.map(row=>`${row.source}->${row.destination}`);
 assert.ok(rewrites.includes('/->/saas-index.html'));
 assert.ok(rewrites.includes('/industry.html->/router.html'));
 assert.ok(rewrites.includes('/dashboard.html->/router.html'));
-console.log('PASS: main is limited to SaaS entry, authentication, onboarding and secure routing');
+assert.ok(rewrites.includes('/apps/:industry->/api/industry-asset?industry=:industry'));
+assert.ok(rewrites.includes('/apps/:industry/:path*->/api/industry-asset?industry=:industry&path=:path*'));
+assert.match(proxy,/frontend-clinic/);
+assert.match(proxy,/frontend-pharmacy/);
+assert.match(proxy,/raw\.githubusercontent\.com/);
+assert.match(proxy,/selected\.includes\("\.\."\)/);
+assert.doesNotMatch(proxy,/req\.query\.branch/);
+console.log('PASS: main is limited to SaaS entry and securely delivers isolated frontend branches on same-origin paths');

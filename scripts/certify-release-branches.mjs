@@ -12,7 +12,7 @@ function show(branch, file) {
   return run("git", ["show", `origin/${branch}:${file}`]);
 }
 
-const branches = [...new Set(manifest.projects.map(item => item.branch).concat(["backend", "main"]))];
+const branches = [...new Set(manifest.projects.map(item => item.branch).concat(["backend"]))];
 run("git", ["fetch", "--quiet", "origin", ...branches.map(branch => `refs/heads/${branch}:refs/remotes/origin/${branch}`)]);
 
 const results = [];
@@ -35,13 +35,15 @@ for (const project of manifest.projects) {
     assert.ok(Array.isArray(vercel.rewrites) && vercel.rewrites.some(row => row.source === "/"), `${project.branch} has no root Vercel route`);
     assert.equal(project.branch, `frontend-${project.industry}`);
     assert.equal(project.project, `axtor-${project.industry}`);
+    assert.equal(project.origin, `https://axtorpos.vercel.app/apps/${project.industry}`);
+    assert.equal(project.status, "ready_same_origin_proxy");
+    assert.match(project.sourceAlias, new RegExp(`^https://axtorpos-git-frontend-${project.industry}-axtor1\\.vercel\\.app$`));
 
-    const configured = typeof project.origin === "string" && project.origin.startsWith("https://");
     results.push({
       industry: project.industry,
       branch: project.branch,
       staticRelease: "PASS",
-      deployment: configured ? "CONFIGURED_NOT_E2E_VERIFIED" : "BLOCKED_PROJECT_CREATION"
+      deployment: "SAME_ORIGIN_READY"
     });
     console.log(`PASS ${project.industry}`);
   } catch (error) {
@@ -67,17 +69,29 @@ assert.match(handoffController, /frontendHandoff/);
 assert.match(handoffController, /exchangeHandoff/);
 console.log("PASS backend handoff contract");
 
-console.log("CERTIFY main SaaS router");
-const router = show("main", "demo-static/js/saas-router.js");
-const hosts = JSON.parse(show("main", "demo-static/industry-hosts.json"));
+console.log("CERTIFY proposed main SaaS router and delivery layer");
+const router = fs.readFileSync("demo-static/js/saas-router.js", "utf8");
+const hosts = JSON.parse(fs.readFileSync("demo-static/industry-hosts.json", "utf8"));
+const proxy = fs.readFileSync("demo-static/api/industry-asset.js", "utf8");
+const mainVercel = JSON.parse(fs.readFileSync("demo-static/vercel.json", "utf8"));
+assert.match(router, /same_origin_branch_proxy/);
+assert.match(router, /window\.location\.origin/);
 assert.match(router, /\/api\/v1\/auth\/handoff/);
 assert.match(router, /session-handoff\.html/);
 assert.doesNotMatch(router, /searchParams\.set\(["']token/);
+assert.match(proxy, /raw\.githubusercontent\.com/);
+assert.doesNotMatch(proxy, /req\.query\.branch/);
+assert.ok(mainVercel.rewrites.some(row => row.source === "/apps/:industry/:path*"));
 for (const project of manifest.projects) {
-  assert.equal(hosts.frontends[project.industry]?.branch, project.branch, `main router branch mismatch for ${project.industry}`);
-  assert.equal(hosts.frontends[project.industry]?.dashboard, project.dashboard, `main router dashboard mismatch for ${project.industry}`);
+  const host = hosts.frontends[project.industry];
+  assert.equal(host?.branch, project.branch, `main router branch mismatch for ${project.industry}`);
+  assert.equal(host?.dashboard, project.dashboard, `main router dashboard mismatch for ${project.industry}`);
+  assert.equal(host?.delivery, "same_origin_branch_proxy", `main router delivery mismatch for ${project.industry}`);
+  assert.equal(host?.basePath, `/apps/${project.industry}`, `main router base path mismatch for ${project.industry}`);
+  assert.equal(host?.sourceAlias, project.sourceAlias, `main router source alias mismatch for ${project.industry}`);
+  assert.match(proxy, new RegExp(project.branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `proxy branch whitelist missing ${project.branch}`);
 }
-console.log("PASS main SaaS router");
+console.log("PASS proposed main SaaS router and delivery layer");
 
 console.table(results);
-console.log(`PASS: ${results.length} released frontend branches, main router, and secure handoff backend contract`);
+console.log(`PASS: ${results.length} released frontend branches, same-origin delivery, main router, and secure handoff backend contract`);

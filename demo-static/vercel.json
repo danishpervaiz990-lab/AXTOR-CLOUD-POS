@@ -2,6 +2,8 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [
+    { "source": "/apps/:industry", "destination": "/api/industry-asset?industry=:industry" },
+    { "source": "/apps/:industry/:path*", "destination": "/api/industry-asset?industry=:industry&path=:path*" },
     { "source": "/", "destination": "/saas-index.html" },
     { "source": "/index.html", "destination": "/saas-index.html" },
     { "source": "/login", "destination": "/login.html" },
@@ -26,6 +28,12 @@
       "source": "/industry-hosts.json",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=60, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/apps/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex" }
       ]
     }
   ]
