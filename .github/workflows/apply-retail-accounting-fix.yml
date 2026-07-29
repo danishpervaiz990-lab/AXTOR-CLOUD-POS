@@ -1,0 +1,57 @@
+name: Apply Retail Accounting Fix
+
+on:
+  pull_request:
+    branches: [backend]
+    types: [opened]
+    paths:
+      - "backend/scripts/apply-retail-accounting-fix.py"
+      - ".github/workflows/apply-retail-accounting-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply atomic source changes
+        run: python backend/scripts/apply-retail-accounting-fix.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install and validate
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma validate
+          npx prisma generate
+          npm run build
+          npm test
+          npm run verify:start
+
+      - name: Commit validated fixes
+        run: |
+          git config user.name "axtor-audit-bot"
+          git config user.email "axtor-audit-bot@users.noreply.github.com"
+          git add backend/src/services/retail-accounting.helpers.ts \
+                  backend/src/services/shifts.service.ts \
+                  backend/src/services/reports.service.ts \
+                  backend/src/controllers/sales-documents.controller.ts \
+                  backend/src/controllers/payments.controller.ts \
+                  backend/src/controllers/refunds.controller.ts \
+                  backend/tests/retail-accounting-regressions.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(retail): reconcile shifts, receipts, refunds and returns"
+          git push origin HEAD:${{ github.head_ref }}
