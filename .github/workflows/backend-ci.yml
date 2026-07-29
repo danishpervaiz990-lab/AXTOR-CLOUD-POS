@@ -61,3 +61,56 @@ jobs:
         run: npm run seed:catalog
       - name: Test and verify compiled server
         run: npm test
+      - name: Verify live production onboarding catalogue
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+
+          const api = 'https://axtor-cloud-pos-production.up.railway.app';
+          const expected = ['retail','grocery','pharmacy','hardware','paint','gym','clinic','restaurant','furniture','school','workshop','wholesale','manufacturing'];
+
+          async function json(path) {
+            let lastError;
+            for (let attempt = 1; attempt <= 12; attempt += 1) {
+              try {
+                const response = await fetch(api + path, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+                const body = await response.json().catch(() => null);
+                if (response.ok) return body;
+                lastError = new Error(`${path} returned ${response.status}: ${JSON.stringify(body)}`);
+              } catch (error) {
+                lastError = error;
+              }
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            throw lastError;
+          }
+
+          const health = await json('/health');
+          assert.equal(health.ok, true);
+          const db = await json('/api/v1/health/db');
+          assert.equal(db.ok, true);
+          assert.equal(db.database, 'ok');
+
+          const catalogEnvelope = await json('/api/v1/public/catalog');
+          const catalog = catalogEnvelope.data;
+          assert.equal(catalog.industries.length, 13);
+          assert.deepEqual(catalog.industries.map(item => item.code), expected);
+          assert.deepEqual(catalog.industries.filter(item => !item.canRegister).map(item => item.code), []);
+          for (const pack of catalog.industries) {
+            assert.equal(pack.operationalStatus, 'core_ready', `${pack.code} is not core_ready`);
+            assert.equal(pack.availabilityMessage, 'Available for production onboarding');
+            assert.ok(pack.modules.length > 0, `${pack.code} modules missing`);
+            assert.ok(pack.reports.length > 0, `${pack.code} reports missing`);
+            const detailEnvelope = await json(`/api/v1/public/industries/${encodeURIComponent(pack.code)}`);
+            assert.equal(detailEnvelope.data.canRegister, true, `${pack.code} detail onboarding disabled`);
+            assert.equal(detailEnvelope.data.operationalStatus, 'core_ready');
+          }
+
+          const frontend = await fetch('https://axtorpos.vercel.app/industries.html', { cache: 'no-store' });
+          assert.equal(frontend.status, 200);
+          const html = await frontend.text();
+          assert.match(html, /public-industries\.js/);
+          assert.match(html, /industryCatalogue/);
+
+          console.log(`PASS: live production reports ${catalog.industries.length}/13 industries onboarding-ready with healthy database and catalogue endpoints.`);
+          NODE
