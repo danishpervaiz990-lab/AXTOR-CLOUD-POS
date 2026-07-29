@@ -2,6 +2,8 @@ const REPOSITORY_RAW = "https://raw.githubusercontent.com/danishpervaiz990-lab/A
 const UPSTREAM_TIMEOUT_MS = 15000;
 const MAX_ASSET_BYTES = 20 * 1024 * 1024;
 
+export const config = Object.freeze({ runtime: "edge" });
+
 const RELEASES = Object.freeze({
   retail: { branch: "frontend-retail", dashboard: "retail-dashboard.html" },
   grocery: { branch: "frontend-grocery", dashboard: "grocery-dashboard.html" },
@@ -35,14 +37,10 @@ const CONTENT_TYPES = Object.freeze({
   ".pdf": "application/pdf"
 });
 
-function first(value) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 function safePath(value, fallback) {
   let decoded;
   try {
-    decoded = decodeURIComponent(String(first(value) || "")).replace(/^\/+/, "");
+    decoded = decodeURIComponent(String(value || "")).replace(/^\/+/, "");
   } catch {
     return null;
   }
@@ -72,24 +70,32 @@ function numericHeader(headers, name) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-module.exports = async function industryAsset(req, res) {
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    res.setHeader("Allow", "GET, HEAD");
-    res.status(405).send("Method not allowed");
-    return;
+function textResponse(message, status, extraHeaders = {}) {
+  return new Response(message, {
+    status,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      ...extraHeaders
+    }
+  });
+}
+
+export default async function industryAsset(request) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return textResponse("Method not allowed", 405, { Allow: "GET, HEAD" });
   }
 
-  const industry = String(first(req.query.industry) || "").toLowerCase().trim();
+  const requestUrl = new URL(request.url);
+  const industry = String(requestUrl.searchParams.get("industry") || "").toLowerCase().trim();
   const release = RELEASES[industry];
   if (!release) {
-    res.status(404).send("Industry frontend is not released");
-    return;
+    return textResponse("Industry frontend is not released", 404);
   }
 
-  const pathname = safePath(req.query.path, release.dashboard);
+  const pathname = safePath(requestUrl.searchParams.get("path"), release.dashboard);
   if (!pathname) {
-    res.status(400).send("Invalid industry asset path");
-    return;
+    return textResponse("Invalid industry asset path", 400);
   }
 
   const encodedPath = pathname.split("/").map(encodeURIComponent).join("/");
@@ -97,59 +103,57 @@ module.exports = async function industryAsset(req, res) {
 
   try {
     const upstream = await fetch(source, {
-      method: req.method,
+      method: request.method,
       headers: {
         Accept: "*/*",
-        "User-Agent": "Axtor-POS-Industry-Delivery/1.2"
+        "User-Agent": "Axtor-POS-Industry-Delivery/2.0"
       },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
 
     if (!upstream.ok) {
-      res.status(upstream.status === 404 ? 404 : 502).send(
-        upstream.status === 404 ? "Industry asset not found" : "Industry asset source unavailable"
+      return textResponse(
+        upstream.status === 404 ? "Industry asset not found" : "Industry asset source unavailable",
+        upstream.status === 404 ? 404 : 502
       );
-      return;
     }
 
     const declaredSize = numericHeader(upstream.headers, "content-length");
     if (declaredSize !== null && declaredSize > MAX_ASSET_BYTES) {
-      res.status(413).send("Industry asset exceeds delivery limit");
-      return;
+      return textResponse("Industry asset exceeds delivery limit", 413);
     }
 
     const type = CONTENT_TYPES[extension(pathname)] || upstream.headers.get("content-type") || "application/octet-stream";
     const isDocument = type.startsWith("text/html") || pathname === "service-worker.js" || pathname === "session-handoff.html";
-
-    res.setHeader("Content-Type", type);
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("X-Robots-Tag", "noindex");
-    res.setHeader("X-Axtor-Industry", industry);
-    res.setHeader("X-Axtor-Frontend-Branch", release.branch);
-    res.setHeader("Cache-Control", isDocument
-      ? "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
-      : "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400");
+    const headers = new Headers({
+      "Content-Type": type,
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "X-Frame-Options": "DENY",
+      "X-Robots-Tag": "noindex",
+      "X-Axtor-Industry": industry,
+      "X-Axtor-Frontend-Branch": release.branch,
+      "Cache-Control": isDocument
+        ? "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
+        : "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400"
+    });
 
     const etag = upstream.headers.get("etag");
     const lastModified = upstream.headers.get("last-modified");
-    if (etag) res.setHeader("ETag", etag);
-    if (lastModified) res.setHeader("Last-Modified", lastModified);
+    if (etag) headers.set("ETag", etag);
+    if (lastModified) headers.set("Last-Modified", lastModified);
 
-    if (req.method === "HEAD") {
-      res.status(200).end();
-      return;
+    if (request.method === "HEAD") {
+      return new Response(null, { status: 200, headers });
     }
 
-    const bytes = Buffer.from(await upstream.arrayBuffer());
+    const bytes = await upstream.arrayBuffer();
     if (bytes.byteLength > MAX_ASSET_BYTES) {
-      res.status(413).send("Industry asset exceeds delivery limit");
-      return;
+      return textResponse("Industry asset exceeds delivery limit", 413);
     }
 
-    res.status(200).send(bytes);
+    return new Response(bytes, { status: 200, headers });
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     console.error("Industry asset proxy failed", {
@@ -158,6 +162,6 @@ module.exports = async function industryAsset(req, res) {
       timedOut,
       message: error instanceof Error ? error.message : String(error)
     });
-    res.status(502).send(timedOut ? "Industry asset source timed out" : "Industry asset source unavailable");
+    return textResponse(timedOut ? "Industry asset source timed out" : "Industry asset source unavailable", 502);
   }
-};
+}

@@ -52,8 +52,10 @@ for(const item of manifest.projects){
   assert.equal(item.status,'code_complete_not_deployed');
 }
 
+const redirects=(vercel.redirects||[]).map(row=>`${row.source}->${row.destination}`);
 const rewrites=vercel.rewrites.map(row=>`${row.source}->${row.destination}`);
-assert.ok(rewrites.includes('/->/saas-index.html'));
+assert.ok(redirects.includes('/->/login.html'));
+assert.ok(redirects.includes('/index.html->/login.html'));
 assert.ok(rewrites.includes('/industry.html->/router.html'));
 assert.ok(rewrites.includes('/dashboard.html->/router.html'));
 assert.ok(rewrites.includes('/apps/:industry->/api/industry-asset?industry=:industry'));
@@ -65,7 +67,15 @@ assert.match(proxy,/raw\.githubusercontent\.com/);
 assert.match(proxy,/selected\.includes\("\.\."\)/);
 assert.match(proxy,/MAX_ASSET_BYTES/);
 assert.match(proxy,/AbortSignal\.timeout/);
-assert.doesNotMatch(proxy,/req\.query\.branch/);
+assert.match(proxy,/runtime:\s*["']edge["']/);
+assert.match(proxy,/new URL\(request\.url\)/);
+assert.match(proxy,/searchParams\.get\(["']industry["']\)/);
+assert.match(proxy,/searchParams\.get\(["']path["']\)/);
+assert.match(proxy,/export default async function industryAsset/);
+assert.doesNotMatch(proxy,/req\.query/);
+assert.doesNotMatch(proxy,/module\.exports/);
+assert.doesNotMatch(proxy,/Buffer\.from/);
+assert.doesNotMatch(proxy,/url\.parse\s*\(/);
 
 // Authentication entry must never publish a working account or temporary password.
 assert.doesNotMatch(login,/owner@axtorpos\.local/i);
@@ -85,4 +95,4 @@ for(const rule of loginHeaderRules){
   assert.match(values['cache-control']||'',/no-store/);
   assert.equal(values.pragma,'no-cache');
 }
-console.log('PASS: main SaaS router, 13 isolated industry branches, secure gateway and no-cache login entry are code-certified without deployment');
+console.log('PASS: main SaaS router, secure login entry, 13 isolated industry branches, Edge URL gateway and no-cache controls are code-certified without deployment');
