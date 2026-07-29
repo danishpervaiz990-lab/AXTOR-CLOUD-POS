@@ -15,6 +15,25 @@ jobs:
   apply-and-validate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: axtor_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d axtor_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/axtor_ci?schema=public
+      AUTH_TOKEN_SECRET: ci-only-not-a-production-secret-0123456789
+      NODE_ENV: test
+      RUN_DATABASE_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,9 +53,11 @@ jobs:
       - name: Install and validate
         working-directory: backend
         run: |
-          npm ci
+          npm ci --include=dev --no-audit --no-fund
           npx prisma validate
           npx prisma generate
+          npx prisma db push --skip-generate
+          npm run seed:catalog
           npm run build
           npm test
           npm run verify:start
