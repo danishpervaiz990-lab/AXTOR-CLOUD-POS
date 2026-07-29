@@ -4,6 +4,7 @@ import fs from 'node:fs';
 
 const route = fs.readFileSync(new URL('../src/routes/platform-features.routes.ts', import.meta.url), 'utf8');
 const service = fs.readFileSync(new URL('../src/services/platform-config.service.ts', import.meta.url), 'utf8');
+const developerKeys = fs.readFileSync(new URL('../src/services/developer-api-key.service.ts', import.meta.url), 'utf8');
 const middleware = fs.readFileSync(new URL('../src/middleware/platform-access.middleware.ts', import.meta.url), 'utf8');
 const app = fs.readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
 
@@ -42,12 +43,16 @@ test('resource middleware is tenant-aware, deny-by-default and resource-specific
 test('platform records are tenant scoped and audited', () => {
   assert.match(service, /businessId_key/);
   assert.match(service, /prisma\.auditLog\.create/);
-  assert.match(service, /createHash\("sha256"\)/);
   assert.match(service, /Insufficient gift card balance/);
   assert.match(service, /Prisma\.InputJsonValue/);
+  assert.match(developerKeys, /createHash\("sha256"\)/);
+  assert.match(developerKeys, /developer-api-key\.create/);
+  assert.match(developerKeys, /developer-api-key\.revoke/);
 });
 
-test('platform route is registered in application', () => {
+test('platform and developer routes are registered in application', () => {
   assert.match(app, /platformFeaturesRoutes/);
   assert.match(app, /\/api\/v1\/platform-features/);
+  assert.match(app, /developerApiRoutes/);
+  assert.match(app, /\/api\/v1\/developer/);
 });

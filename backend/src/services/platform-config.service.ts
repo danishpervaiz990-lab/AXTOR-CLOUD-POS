@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 import { ApiError, cleanString, numberValue } from "../utils/http.js";
@@ -76,14 +76,6 @@ export async function transactGiftCard(businessId: string, userId: string | null
   await writeSetting(businessId, "platform.gift-cards", rows);
   await prisma.auditLog.create({ data: { businessId, userId, action: `gift-card.${type}`, entityType: "gift-card", entityId: id, before: asJson(card), after: asJson(updated) } });
   return updated;
-}
-
-export async function createApiKey(businessId: string, userId: string | null, input: JsonRecord): Promise<any> {
-  const name = cleanString(input.name) || "Developer key";
-  const raw = `axt_${randomBytes(24).toString("hex")}`;
-  const hash = createHash("sha256").update(raw).digest("hex");
-  const record = await createResource(businessId, userId, "api-keys", { name, keyPrefix: raw.slice(0, 12), keyHash: hash, scopes: Array.isArray(input.scopes) ? input.scopes : ["read"], active: true, lastUsedAt: null });
-  return { ...record, keyHash: undefined, secret: raw };
 }
 
 export async function platformSummary(businessId: string): Promise<any> {
