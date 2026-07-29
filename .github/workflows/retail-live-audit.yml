@@ -20,6 +20,7 @@ jobs:
     env:
       AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
       AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_REPORTING_RELEASE: retail-report-period-timezone-20260730
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
