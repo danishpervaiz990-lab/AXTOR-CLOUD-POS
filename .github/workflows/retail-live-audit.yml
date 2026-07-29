@@ -3,7 +3,7 @@ name: Retail Live Production Audit
 on:
   pull_request:
     branches: [backend]
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-retail-live-audit.mjs"
       - "backend/scripts/qa-retail-browser-audit.mjs"
