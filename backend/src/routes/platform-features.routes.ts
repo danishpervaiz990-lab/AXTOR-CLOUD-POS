@@ -45,6 +45,11 @@ router.post(
   requireAnyPermission("platform.api_keys.manage", "platform.api_keys.*", "settings.manage", "platform.*"),
   config.createApiKey,
 );
+router.post(
+  "/api-keys/:id/revoke",
+  requireAnyPermission("platform.api_keys.manage", "platform.api_keys.*", "settings.manage", "platform.*"),
+  config.revokeApiKey,
+);
 
 router.get(
   "/backups",
