@@ -32,6 +32,7 @@ import communicationsRoutes from "./routes/communications.routes.js";
 import commercialRoutes from "./routes/commercial.routes.js";
 import platformAdminRoutes from "./routes/platform-admin.routes.js";
 import platformFeaturesRoutes from "./routes/platform-features.routes.js";
+import developerApiRoutes from "./routes/developer-api.routes.js";
 import industryRoutes from "./routes/industry.routes.js";
 import publicCatalogRoutes from "./routes/public-catalog.routes.js";
 import { clinicRouter, gymRouter, schoolRouter } from "./routes/release-ab.routes.js";
@@ -53,7 +54,7 @@ export function createApp() {
     },
     credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Accept", "Idempotency-Key", "X-Idempotency-Key"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept", "Idempotency-Key", "X-Idempotency-Key", "X-API-Key"],
     optionsSuccessStatus: 204,
   };
   app.use(cors(corsOptions));
@@ -71,7 +72,7 @@ export function createApp() {
     shifts: "/api/v1/shifts", reports: "/api/v1/reports", promotions: "/api/v1/promotions", loyalty: "/api/v1/loyalty",
     notifications: "/api/v1/notifications", approvals: "/api/v1/approvals", settings: "/api/v1/settings",
     communications: "/api/v1/communications", commercial: "/api/v1/commercial", platformAdmin: "/api/v1/platform-admin",
-    platformFeatures: "/api/v1/platform-features", industry: "/api/v1/industry", publicCatalog: "/api/v1/public",
+    platformFeatures: "/api/v1/platform-features", developer: "/api/v1/developer", industry: "/api/v1/industry", publicCatalog: "/api/v1/public",
     gym: "/api/v1/gym", school: "/api/v1/school", clinic: "/api/v1/clinic", restaurant: "/api/v1/restaurant",
     hardware: "/api/v1/hardware", paint: "/api/v1/paint", furniture: "/api/v1/furniture", workshop: "/api/v1/workshop",
     wholesale: "/api/v1/wholesale", manufacturing: "/api/v1/manufacturing",
@@ -92,6 +93,7 @@ export function createApp() {
 
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/public", publicCatalogRoutes);
+  app.use("/api/v1/developer", developerApiRoutes);
   app.use("/api/v1/access-control", accessControlRoutes);
   app.use("/api/v1/dashboard", dashboardRoutes);
   app.use("/api/v1/customers", customersRoutes);
