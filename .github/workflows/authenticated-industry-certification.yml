@@ -41,7 +41,7 @@ jobs:
           node -e "const value=JSON.parse(require('fs').readFileSync('deployment/authenticated-e2e-accounts.example.json','utf8')); if(!Array.isArray(value)||!value.length) process.exit(1); console.log('Authenticated E2E example valid')"
 
   certify:
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/ops/authenticated-production-certification-2026-07-29'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/ops/authenticated-production-certification-2026-07-29' || (github.event_name == 'pull_request' && github.head_ref == 'ops/authenticated-production-certification-2026-07-29')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
