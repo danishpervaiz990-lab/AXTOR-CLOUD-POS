@@ -3,7 +3,7 @@ name: Apply Retail Accounting Fix
 on:
   pull_request:
     branches: [backend]
-    types: [opened]
+    types: [opened, reopened]
     paths:
       - "backend/scripts/apply-retail-accounting-fix.py"
       - ".github/workflows/apply-retail-accounting-fix.yml"
