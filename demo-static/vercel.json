@@ -11,11 +11,13 @@
   },
   "cleanUrls": false,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/", "destination": "/login.html", "permanent": false },
+    { "source": "/index.html", "destination": "/login.html", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/apps/:industry", "destination": "/api/industry-asset?industry=:industry" },
     { "source": "/apps/:industry/:path*", "destination": "/api/industry-asset?industry=:industry&path=:path*" },
-    { "source": "/", "destination": "/login.html" },
-    { "source": "/index.html", "destination": "/login.html" },
     { "source": "/login", "destination": "/login.html" },
     { "source": "/register", "destination": "/register.html" },
     { "source": "/onboarding", "destination": "/tenant-onboarding.html" },
