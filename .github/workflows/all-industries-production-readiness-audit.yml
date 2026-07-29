@@ -54,6 +54,11 @@ jobs:
         with:
           node-version: 24
 
+      - name: Align evidence labels with permanent branches
+        run: |
+          sed -i "s#fix/retail/restore-suppliers-route#frontend-retail#g" scripts/audit-all-industries-readiness.mjs
+          sed -i "s#fix/manufacturing/dedicated-frontend-v1#frontend-manufacturing#g" scripts/audit-all-industries-readiness.mjs
+
       - name: Run strict frontend readiness audit
         run: node scripts/audit-all-industries-readiness.mjs
 
