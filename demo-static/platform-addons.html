@@ -20,10 +20,11 @@
     <div class="col-lg-6"><section class="card p-3 h-100"><h2 class="h5">Encrypted backup request</h2><p class="text-muted small" id="backupHelp">A configured storage worker is required before a backup request can be created.</p><button id="backupBtn" class="btn btn-primary" disabled>Request backup</button><div id="backups" class="mt-3"></div></section></div>
   </div>
 </main>
-<script src="js/axtor-api.js?v=20260729-platform-v2"></script><script src="js/industry-theme-loader.js?v=20260729-platform-v2"></script><script src="js/platform-addons.js?v=20260729-platform-v2"></script>
+<script src="js/axtor-api.js?v=20260729-platform-v3"></script><script src="js/industry-theme-loader.js?v=20260729-platform-v3"></script><script src="js/platform-addons.js?v=20260729-platform-v3"></script>
 <script>
 (() => {
  const A=window.AxtorAddons, alertBox=document.getElementById('alert'), backupBtn=document.getElementById('backupBtn');
+ let backupProviderName='';
  const show=(m,t='success')=>{alertBox.innerHTML=`<div class="alert alert-${t}">${m}</div>`;setTimeout(()=>alertBox.innerHTML='',5000)};
  const data=p=>p?.data??p;
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -42,18 +43,18 @@
    ]);
    const s=data(summary)||{};document.getElementById('summary').innerHTML=Object.entries(s).map(([k,v])=>`<div class="col-6 col-lg-2"><div class="feature-card"><div class="text-muted small">${esc(k)}</div><div class="h4 mb-0">${esc(v)}</div></div></div>`).join('');
    const statusData=data(status)||{},caps=statusData.features||statusData.capabilities||{};document.getElementById('capabilities').innerHTML=Object.entries(caps).map(([k,v])=>`<div class="col-md-6 col-xl-4"><div class="feature-card"><span class="status-dot ${statusClass(v)} me-2"></span><strong>${esc(k)}</strong><div class="small text-muted mt-2">${esc(statusText(v))}</div></div></div>`).join('');
-   const backupCapability=caps.scheduled_backups||{};backupBtn.disabled=!backupCapability.providerConfigured;document.getElementById('backupHelp').textContent=backupCapability.providerConfigured?'Encrypted backup storage is configured. Requests are tracked and processed by the storage worker.':'Backup storage is not configured. Add BACKUP_STORAGE_URL and the Railway storage worker before requesting backups.';
+   const backupCapability=caps.scheduled_backups||{};backupProviderName=String(backupCapability.provider||'').trim();backupBtn.disabled=!(backupCapability.providerConfigured&&backupProviderName);document.getElementById('backupHelp').textContent=backupCapability.providerConfigured&&backupProviderName?`Encrypted backup storage is configured with ${backupProviderName}. Requests are tracked and processed by the storage worker.`:'Backup storage is not configured. Add BACKUP_PROVIDER, BACKUP_STORAGE_URL, BACKUP_ENCRYPTION_KEY and the storage worker before requesting backups.';
    document.getElementById('giftCards').innerHTML=gifts.forbidden?'<p class="text-muted">You do not have permission to view gift cards.</p>':(data(gifts)||[]).map(x=>`<div class="border rounded p-2 mb-2"><strong>${esc(x.code)}</strong><span class="float-end">${esc(x.currency)} ${esc(x.balance)}</span></div>`).join('')||'<p class="text-muted">No gift cards.</p>';
    document.getElementById('apiKeys').innerHTML=keys.forbidden?'<p class="text-muted">You do not have permission to view API keys.</p>':(data(keys)||[]).map(x=>`<div class="border rounded p-2 mb-2"><strong>${esc(x.name)}</strong><div class="small text-muted">${esc(x.keyPrefix)}…</div></div>`).join('')||'<p class="text-muted">No API keys.</p>';
    document.getElementById('companies').innerHTML=companies.forbidden?'<p class="text-muted">You do not have permission to view company contexts.</p>':(data(companies)||[]).map(x=>`<div class="border rounded p-2 mb-2">${esc(x.name)}</div>`).join('')||'<p class="text-muted">No company contexts.</p>';
    document.getElementById('backups').innerHTML=backups.forbidden?'<p class="text-muted">You do not have permission to view backups.</p>':(data(backups)||[]).slice().reverse().map(x=>`<div class="border rounded p-2 mb-2"><strong>${esc(x.status)}</strong><div class="small text-muted">${esc(x.requestedAt)}</div></div>`).join('')||'<p class="text-muted">No backup requests.</p>';
-  }catch(e){show(esc(e.message),'danger')}
+  }catch(e){backupProviderName='';backupBtn.disabled=true;show(esc(e.message),'danger')}
  }
  document.getElementById('refresh').onclick=load;
  document.getElementById('giftForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await A.api('/api/v1/platform-features/gift-cards',{method:'POST',body:JSON.stringify(Object.fromEntries(f))});e.target.reset();show('Gift card issued.');load()}catch(x){show(esc(x.message),'danger')}};
  document.getElementById('keyForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{const r=data(await A.api('/api/v1/platform-features/api-keys',{method:'POST',body:JSON.stringify({name:f.get('name'),scopes:['read']})}));const box=document.getElementById('apiSecret');box.classList.remove('d-none');box.querySelector('.codebox').textContent=r.secret;e.target.reset();load()}catch(x){show(esc(x.message),'danger')}};
  document.getElementById('companyForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await A.api('/api/v1/platform-features/resources/companies',{method:'POST',body:JSON.stringify({name:f.get('name'),active:true})});e.target.reset();show('Company context added.');load()}catch(x){show(esc(x.message),'danger')}};
- backupBtn.onclick=async()=>{if(backupBtn.disabled)return;try{await A.api('/api/v1/platform-features/backups',{method:'POST',body:JSON.stringify({provider:'railway-volume'})});show('Backup request recorded.');load()}catch(x){show(esc(x.message),'danger')}};
+ backupBtn.onclick=async()=>{if(backupBtn.disabled||!backupProviderName)return;try{await A.api('/api/v1/platform-features/backups',{method:'POST',body:JSON.stringify({provider:backupProviderName})});show('Backup request recorded.');load()}catch(x){show(esc(x.message),'danger')}};
  load();
 })();
 </script>
