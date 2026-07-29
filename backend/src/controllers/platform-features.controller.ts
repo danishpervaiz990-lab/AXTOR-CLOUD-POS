@@ -28,7 +28,7 @@ export async function createAuditLog(req: Request, res: Response) {
     if (!action) return res.status(400).json({ ok: false, error: { message: "action is required" } });
     const data = await service.writeAuditLog({
       businessId: context.businessId,
-      userId: context.userId,
+      userId: context.userId || undefined,
       action,
       entityType: req.body?.entityType ? String(req.body.entityType) : undefined,
       entityId: req.body?.entityId ? String(req.body.entityId) : undefined,
