@@ -39,7 +39,7 @@ assert.match(reportsApp,/exportCsv/);
 assert.match(reportsApp,/isPercentColumn/);
 assert.match(reportsApp,/Gross profit ÷ product sales/);
 assert.match(reportsApp,/Amount paid ÷ customer sales/);
-assert.match(reportsApp,/Amount paid ÷ invoice total/);
+assert.match(reportsApp,/Paid amount ÷ invoice total/);
 assert.match(reportsApp,/Gross Profit is the gross margin/);
 
 console.log('PASS: isolated General Retail frontend, accessible reports, percentage columns and dashboard reconciliation');
