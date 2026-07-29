@@ -13,10 +13,10 @@ test('platform features require authentication and expose expected routes', () =
 
 test('platform records are tenant scoped and audited', () => {
   assert.match(service, /businessId_key/);
-  assert.match(service, /businessId/);
   assert.match(service, /prisma\.auditLog\.create/);
   assert.match(service, /createHash\("sha256"\)/);
   assert.match(service, /Insufficient gift card balance/);
+  assert.match(service, /Prisma\.InputJsonValue/);
 });
 
 test('platform route is registered in application', () => {
