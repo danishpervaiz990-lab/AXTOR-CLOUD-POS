@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Platform Add-ons · Axtor POS Cloud</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/industry-themes.css">
+  <style>
+    .addon-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}.addon-card{border:1px solid var(--industry-border,rgba(15,23,42,.12));border-radius:18px;padding:18px;background:var(--industry-card,#fff);box-shadow:0 10px 26px rgba(15,23,42,.06)}.addon-card h3{font-size:1rem}.addon-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--industry-primary,#0f9f78) 14%,transparent);color:var(--industry-primary,#0f9f78);font-size:1.2rem}.status-ready{color:#15803d}.status-config{color:#b45309}.camera-preview{width:100%;min-height:220px;background:#111;border-radius:14px;object-fit:cover}.insight{border-left:4px solid var(--industry-accent,#f59e0b);padding:10px 12px;background:rgba(148,163,184,.1);border-radius:8px}
+  </style>
+</head>
+<body>
+  <main class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+      <div><span class="text-uppercase small fw-bold opacity-75">Shared SaaS platform</span><h1 class="h3 mb-1">Add-ons Control Center</h1><p class="text-muted mb-0">Cross-industry tools with tenant and permission-aware backend contracts.</p></div>
+      <a class="btn btn-outline-secondary" href="index.html"><i class="bi bi-arrow-left"></i> Dashboard</a>
+    </div>
+    <div class="alert alert-warning"><strong>Configuration required:</strong> WhatsApp, email, SMS, backup storage, exchange-rate and AI providers require production credentials and backend endpoints before customer activation.</div>
+    <section class="addon-grid" id="addonGrid"></section>
+    <section class="row g-4 mt-2">
+      <div class="col-lg-6"><div class="addon-card h-100"><div class="d-flex gap-3 align-items-center mb-3"><div class="addon-icon"><i class="bi bi-upc-scan"></i></div><div><h2 class="h5 mb-0">Mobile barcode and QR scanner</h2><small class="text-muted">Uses the rear camera where supported</small></div></div><video id="scannerVideo" class="camera-preview" playsinline muted></video><div class="d-flex gap-2 mt-3"><button id="scanStart" class="btn btn-primary">Start scanner</button><button id="scanStop" class="btn btn-outline-secondary" disabled>Stop</button></div><p id="scanResult" class="mt-3 mb-0"></p></div></div>
+      <div class="col-lg-6"><div class="addon-card h-100"><div class="d-flex gap-3 align-items-center mb-3"><div class="addon-icon"><i class="bi bi-stars"></i></div><div><h2 class="h5 mb-0">Business insights preview</h2><small class="text-muted">Deterministic analysis; production AI remains server-controlled</small></div></div><div id="insights"></div></div></div>
+      <div class="col-lg-6"><div class="addon-card h-100"><h2 class="h5">Offline synchronization</h2><p class="text-muted">Queued writes are retried when connectivity returns.</p><p><strong>Queued:</strong> <span id="queueCount">0</span></p><button id="syncNow" class="btn btn-primary">Sync now</button><span id="syncStatus" class="ms-2"></span></div></div>
+      <div class="col-lg-6"><div class="addon-card h-100"><h2 class="h5">Client audit trail</h2><p class="text-muted">UI actions are captured locally and designed to be forwarded to the immutable server audit service.</p><p><strong>Recent records:</strong> <span id="auditCount">0</span></p><button id="auditSample" class="btn btn-outline-primary">Record test event</button></div></div>
+    </section>
+  </main>
+  <script src="js/industry-theme-loader.js"></script>
+  <script src="js/platform-addons.js"></script>
+  <script>
+    const features=[['AI business insights','bi-stars','Foundation ready'],['Barcode / QR camera','bi-upc-scan','Ready where browser supported'],['WhatsApp sharing','bi-whatsapp','Ready'],['Email automation','bi-envelope','Backend provider required'],['SMS notifications','bi-chat-dots','Backend provider required'],['Loyalty program','bi-gem','Backend domain required'],['Gift cards','bi-gift','Backend domain required'],['Multi-warehouse','bi-buildings','Backend domain required'],['Offline synchronization','bi-cloud-arrow-up','Runtime ready'],['Audit logs','bi-shield-check','Client runtime ready'],['Approval workflows','bi-check2-square','Backend domain required'],['Multi-company','bi-diagram-3','Backend context required'],['Multi-country tax','bi-percent','Tax rules required'],['Currency rate locking','bi-currency-exchange','Runtime ready'],['Scheduled backups','bi-database-check','Storage provider required'],['Advanced analytics','bi-graph-up-arrow','Data endpoints required'],['Custom dashboards','bi-grid-1x2','Schema required'],['Developer portal','bi-code-slash','OpenAPI required']];
+    document.getElementById('addonGrid').innerHTML=features.map(([name,icon,status])=>`<article class="addon-card"><div class="d-flex gap-3"><div class="addon-icon"><i class="bi ${icon}"></i></div><div><h3>${name}</h3><div class="small ${status.includes('Ready')||status.includes('ready')?'status-ready':'status-config'}">${status}</div></div></div></article>`).join('');
+    let scanner;
+    scanStart.onclick=async()=>{scanResult.textContent='Opening camera…';try{scanner=await AxtorAddons.scanBarcode({video:scannerVideo,onDetected:(value)=>{scanResult.innerHTML=`Detected: <strong>${value}</strong>`;scanStart.disabled=false;scanStop.disabled=true;}});scanStart.disabled=true;scanStop.disabled=false;}catch(e){scanResult.textContent=e.message;}};
+    scanStop.onclick=()=>{scanner?.stop();scanStart.disabled=false;scanStop.disabled=true;};
+    const renderCounts=()=>{queueCount.textContent=AxtorAddons.getOfflineQueue().length;auditCount.textContent=AxtorAddons.getAuditRecords().length;};
+    syncNow.onclick=async()=>{syncStatus.textContent='Syncing…';const result=await AxtorAddons.flushOfflineQueue();syncStatus.textContent=`${result.processed} synced, ${result.remaining} remaining`;renderCounts();};
+    auditSample.onclick=()=>{AxtorAddons.recordAudit('CONTROL_CENTER_TEST','platform',null);renderCounts();};
+    const sample=AxtorAddons.calculateInsights({sales:12500,priorSales:11000,grossProfit:3100,lowStock:4,overdue:2});
+    insights.innerHTML=sample.map(x=>`<div class="insight mb-2"><strong>${x.title}</strong><div>${x.message}</div></div>`).join('');
+    renderCounts();
+  </script>
+</body>
+</html>
