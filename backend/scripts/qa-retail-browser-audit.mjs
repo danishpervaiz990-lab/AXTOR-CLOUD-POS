@@ -35,6 +35,8 @@ async function readRetailReportingState(page, mode) {
       const canvas = document.querySelector(selector);
       return Boolean(canvas && window.Chart && typeof window.Chart.getChart === 'function' && window.Chart.getChart(canvas));
     };
+    const planBlock = document.querySelector('.axtor-plan-block');
+    const planBlockVisible = Boolean(planBlock && getComputedStyle(planBlock).display !== 'none' && planBlock.getBoundingClientRect().width > 0 && planBlock.getBoundingClientRect().height > 0);
     if (view === 'sales') {
       return {
         gross: text('#salesOverviewGross'),
@@ -45,6 +47,7 @@ async function readRetailReportingState(page, mode) {
         paymentChart: chartReady('#paymentMixChart'),
         topProductRows: document.querySelectorAll('#salesOverviewTopProductsBody tr').length,
         liveStatus: text('#salesOverviewLiveStatus'),
+        planBlockVisible,
       };
     }
     const reconciliation = Array.from(document.querySelectorAll('#retailReconciliationBody tr')).map((row) => row.innerText.trim());
@@ -58,6 +61,7 @@ async function readRetailReportingState(page, mode) {
       topProductRows: document.querySelectorAll('#retailTopProductsBody tr').length,
       reconciliation,
       liveStatus: text('#retailReportingStatus'),
+      planBlockVisible,
     };
   }, mode);
 }
@@ -140,6 +144,8 @@ try {
           && reportsReporting.paymentChart
           && salesReporting.topProductRows > 0
           && reportsReporting.topProductRows > 0
+          && !salesReporting.planBlockVisible
+          && !reportsReporting.planBlockVisible
           && reconciledRowsPass;
       }
     } catch (error) {
@@ -181,8 +187,8 @@ report.acceptance['Five-login browser test'] = { result: allPass ? 'PASS' : 'FAI
 report.acceptance['Sales Overview and Reports UI reconciliation'] = {
   result: reportingPass ? 'PASS' : 'FAIL',
   detail: reportingPass
-    ? 'Gross sales, paid invoices, outstanding credit and returns match; Monthly Sales, Payment Mix, Top Products and reconciliation rendered from the same live summary'
-    : 'Sales Overview and Reports did not fully reconcile or a required chart/table failed to render',
+    ? 'Gross sales, paid invoices, outstanding credit and returns match; Monthly Sales, Payment Mix, Top Products and reconciliation rendered from the same live summary without a plan-block overlay'
+    : 'Sales Overview and Reports did not fully reconcile, a required chart/table failed to render, or an incorrect plan-block overlay remained visible',
 };
 for (const row of report.users) {
   const browserRow = results.find((item) => item.user === row.user);
@@ -190,4 +196,4 @@ for (const row of report.users) {
 }
 if (!allPass || !reportingPass) report.overall = 'FAIL';
 await fs.writeFile(reportPath, JSON.stringify(report, null, 2));
-console.log(`Browser audit completed: ${allPass && reportingPass ? 'PASS' : 'FAIL'} for ${results.length} accounts; Sales/Reports sync ${reportingPass ? 'PASS' : 'FAIL'}.`);
+console.log(`Browser audit completed: ${allPass && reportingPass ? 'PASS' : 'FAIL'} for ${results.length} accounts; Sales/Reports sync and plan access ${reportingPass ? 'PASS' : 'FAIL'}.`);
