@@ -13,7 +13,7 @@ const go = (fn: (req: Request, businessId: string, userId: string | null) => Pro
     const t = tenant(req);
     return res.json({ ok: true, data: await fn(req, t.businessId, t.userId) });
   } catch (error) {
-    handleError(res, error);
+    return handleError(res, error);
   }
 };
 
