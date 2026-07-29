@@ -1,11 +1,11 @@
 import type { Request, Response } from "express";
-import { handleError, tenant } from "../utils/http.js";
+import { ApiError, handleError, tenant } from "../utils/http.js";
 import * as service from "../services/platform-config.service.js";
 
 const allowedResources = new Set(["companies", "webhooks", "dashboards", "notification-providers", "offline-policies"]);
 function resource(req: Request): string {
   const value = String(req.params.resource || "");
-  if (!allowedResources.has(value)) throw new Error("Unsupported platform resource");
+  if (!allowedResources.has(value)) throw new ApiError(400, "Unsupported platform resource");
   return value;
 }
 const go = (fn: (req: Request, businessId: string, userId: string | null) => Promise<any>) => async (req: Request, res: Response) => {
