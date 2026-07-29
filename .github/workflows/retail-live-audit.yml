@@ -1,0 +1,75 @@
+name: Retail Live Production Audit
+
+on:
+  pull_request:
+    branches: [backend]
+    types: [opened, reopened]
+    paths:
+      - "backend/scripts/qa-retail-live-audit.mjs"
+      - "backend/scripts/qa-retail-browser-audit.mjs"
+      - "backend/scripts/retail-audit-recipient-cert.pem"
+      - ".github/workflows/retail-live-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  retail-live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Run production Retail transaction audit
+        id: transaction_audit
+        continue-on-error: true
+        run: node backend/scripts/qa-retail-live-audit.mjs
+
+      - name: Install browser runtime
+        if: hashFiles('retail-live-audit-runtime.json') != ''
+        run: |
+          mkdir -p /tmp/axtor-playwright
+          npm init -y --prefix /tmp/axtor-playwright >/dev/null
+          npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
+          /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Test all five users through the live login page
+        if: hashFiles('retail-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-retail-browser-audit.mjs
+
+      - name: Encrypt credential report
+        if: hashFiles('retail-live-audit-credentials.json') != ''
+        run: |
+          openssl cms -encrypt -binary -aes-256-cbc \
+            -in retail-live-audit-credentials.json \
+            -out retail-live-audit-credentials.p7m \
+            -outform DER \
+            backend/scripts/retail-audit-recipient-cert.pem
+          test -s retail-live-audit-credentials.p7m
+          shred -u retail-live-audit-credentials.json retail-live-audit-runtime.json
+
+      - name: Upload encrypted audit package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retail-live-audit-${{ github.run_id }}
+          path: |
+            retail-live-audit-report.json
+            retail-live-audit-credentials.p7m
+            retail-live-audit-cleanup.sql
+            retail-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce launch-readiness result
+        if: always()
+        run: |
+          test -s retail-live-audit-report.json
+          node -e "const r=require('./retail-live-audit-report.json'); console.log('Retail audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
