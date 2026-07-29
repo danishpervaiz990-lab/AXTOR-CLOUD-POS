@@ -24,10 +24,10 @@ const industries = [
 ];
 
 const retailPages = new Set([
-  'retail-dashboard.html', 'terminal.html', 'sales.html', 'customers.html', 'products.html', 'inventory.html',
-  'purchases.html', 'suppliers.html', 'branches.html', 'counters.html', 'shifts.html', 'returns.html',
-  'payments.html', 'salesmen.html', 'promotions.html', 'loyalty.html', 'reports.html', 'accounts.html',
-  'expenses.html', 'settings.html'
+  'retail-dashboard.html', 'terminal.html', 'sales.html', 'customer.html', 'customers.html', 'products.html', 'inventory.html',
+  'purchase.html', 'purchases.html', 'suppliers.html', 'branches.html', 'counters.html', 'shifts.html', 'returns.html',
+  'payments.html', 'salesmen.html', 'promotions.html', 'loyalty.html', 'reports.html', 'accounts.html', 'expenses.html',
+  'settings.html', 'barcode-labels.html', 'approvals.html', 'notifications.html', 'invoice-designer.html', 'setup.html'
 ]);
 
 function walk(dir) {
@@ -38,13 +38,8 @@ function walk(dir) {
   });
 }
 
-function text(file) {
-  return fs.readFileSync(file, 'utf8');
-}
-
-function unique(values) {
-  return [...new Set(values)];
-}
+const text = file => fs.readFileSync(file, 'utf8');
+const unique = values => [...new Set(values)];
 
 function localRefs(html) {
   const refs = [];
@@ -67,12 +62,17 @@ function duplicateIds(html) {
 
 function navSignature(runtime, dashboard) {
   const labels = [];
-  for (const match of runtime.matchAll(/\[\s*["'][^"']+\.html["']\s*,\s*["']([^"']+)["']\s*\]/g)) labels.push(match[1].trim());
+  for (const match of runtime.matchAll(/\[\s*["'][^"']+["']\s*,\s*["']([^"']+)["']\s*,\s*["'][^"']+\.html["']/g)) {
+    labels.push(match[1].trim());
+  }
+  for (const match of runtime.matchAll(/\[\s*["'][^"']+\.html["']\s*,\s*["']([^"']+)["']\s*\]/g)) {
+    labels.push(match[1].trim());
+  }
   for (const match of dashboard.matchAll(/<a\b[^>]*href=["'][^"']+\.html[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)) {
     const label = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     if (label) labels.push(label);
   }
-  return unique(labels).slice(0, 40);
+  return unique(labels).slice(0, 60);
 }
 
 function credentialFindings(content, file) {
@@ -83,8 +83,9 @@ function credentialFindings(content, file) {
   return findings;
 }
 
-function pageSet(spec, staticRoot) {
-  const allHtml = walk(staticRoot).filter(file => file.endsWith('.html'));
+function activePages(spec, staticRoot) {
+  const nestedRoot = path.join(staticRoot, 'demo-static') + path.sep;
+  const allHtml = walk(staticRoot).filter(file => file.endsWith('.html') && !file.startsWith(nestedRoot));
   if (spec.code === 'retail') return allHtml.filter(file => retailPages.has(path.basename(file)));
   return allHtml.filter(file => path.basename(file).startsWith(`${spec.code}-`));
 }
@@ -118,7 +119,17 @@ for (const spec of industries) {
   resultCheck(result, fs.existsSync(path.join(staticRoot, 'session-handoff.html')) ? 'PASS' : 'FAIL', 'handoff.exists', 'Session handoff receiver exists');
   resultCheck(result, fs.existsSync(path.join(staticRoot, 'vercel.json')) ? 'PASS' : 'FAIL', 'vercel.exists', 'Branch-local Vercel configuration exists');
 
-  if (result.failures) {
+  const nestedRoot = path.join(staticRoot, 'demo-static');
+  const nestedFiles = walk(nestedRoot).map(file => path.relative(staticRoot, file).replaceAll('\\', '/'));
+  resultCheck(
+    result,
+    nestedFiles.length ? 'FAIL' : 'PASS',
+    'structure.nested_demo_static',
+    nestedFiles.length ? `Nested demo-static/demo-static directory contains ${nestedFiles.length} files` : 'No nested demo-static/demo-static directory',
+    nestedFiles
+  );
+
+  if (!fs.existsSync(dashboardPath) || !fs.existsSync(runtimePath) || !fs.existsSync(path.join(staticRoot, 'vercel.json'))) {
     result.status = 'FAIL';
     report.industries.push(result);
     continue;
@@ -126,7 +137,7 @@ for (const spec of industries) {
 
   const dashboard = text(dashboardPath);
   const runtime = text(runtimePath);
-  const pages = pageSet(spec, staticRoot);
+  const pages = activePages(spec, staticRoot);
   result.pages = pages.map(file => path.relative(staticRoot, file).replaceAll('\\', '/'));
   resultCheck(result, pages.length >= spec.minPages ? 'PASS' : 'FAIL', 'pages.minimum', `${pages.length} dedicated pages found; minimum ${spec.minPages}`, result.pages);
 
@@ -146,10 +157,8 @@ for (const spec of industries) {
   const nav = navSignature(runtime, dashboard);
   result.navigation = nav;
   resultCheck(result, nav.length >= 4 ? 'PASS' : 'FAIL', 'navigation.minimum', `${nav.length} dedicated navigation labels detected`, nav);
-  const signature = crypto.createHash('sha256').update(nav.join('|').toLowerCase()).digest('hex');
-  signatures.set(spec.code, signature);
-  const dashboardHash = crypto.createHash('sha256').update(dashboard.replace(/\s+/g, ' ').trim()).digest('hex');
-  dashboardHashes.set(spec.code, dashboardHash);
+  signatures.set(spec.code, crypto.createHash('sha256').update(nav.join('|').toLowerCase()).digest('hex'));
+  dashboardHashes.set(spec.code, crypto.createHash('sha256').update(dashboard.replace(/\s+/g, ' ').trim()).digest('hex'));
 
   const testFiles = walk(path.join(repoRoot, 'tests')).filter(file => path.basename(file).toLowerCase().includes(spec.code));
   resultCheck(result, testFiles.length > 0 ? 'PASS' : 'WARN', 'tests.present', `${testFiles.length} industry-named test files found`, testFiles.map(file => path.relative(repoRoot, file)));
