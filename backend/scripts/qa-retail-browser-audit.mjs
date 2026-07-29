@@ -19,10 +19,16 @@ const results = [];
 try {
   for (const user of runtime.users) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-    const page = await context.newPage();
+    let page = await context.newPage();
     const errors = [];
-    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(`console: ${msg.text()}`); });
-    page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+    const attachDiagnostics = (targetPage) => {
+      targetPage.on('console', (msg) => { if (msg.type() === 'error') errors.push(`console: ${msg.text()}`); });
+      targetPage.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+      targetPage.on('response', (response) => {
+        if (response.status() >= 400) errors.push(`http ${response.status()}: ${response.url()}`);
+      });
+    };
+    attachDiagnostics(page);
     let loginOk = false;
     let retailRouteOk = false;
     let sidebarOk = false;
@@ -47,6 +53,11 @@ try {
       roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === String(user.role).toLowerCase());
       loginOk = tokenStored && String(session.business?.slug || '').toLowerCase() === String(report.environment.businessSlug).toLowerCase();
 
+      // The login page redirects immediately. Close it after capturing storage so
+      // that its pending router navigation cannot abort the independent dashboard proof.
+      await page.close();
+      page = await context.newPage();
+      attachDiagnostics(page);
       await page.goto(`${runtime.publicOrigin}/apps/retail/retail-dashboard.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForTimeout(2500);
       finalUrl = page.url();
