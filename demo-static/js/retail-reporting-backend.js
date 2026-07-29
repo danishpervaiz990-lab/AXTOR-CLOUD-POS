@@ -2,7 +2,14 @@
 (function () {
   "use strict";
 
-  var state = { loading: false, summary: null, charts: {}, refreshTimer: 0 };
+  var state = {
+    loading: false,
+    summary: null,
+    charts: {},
+    refreshTimer: 0,
+    reportPeriodInitialized: false,
+    reportRangeReplayScheduled: false
+  };
 
   function q(selector, root) { return (root || document).querySelector(selector); }
   function qa(selector, root) { return Array.from((root || document).querySelectorAll(selector)); }
@@ -30,12 +37,33 @@
   function qty(value) { return number(value).toLocaleString("en-QA", { maximumFractionDigits: 3 }); }
   function dateValue(primary, fallback) { return String(q(primary)?.value || q(fallback)?.value || "").trim(); }
   function queryString() {
+    if (q("#reportTable") && !state.reportPeriodInitialized) return "";
     var params = new URLSearchParams();
     var from = dateValue("#retailReportFrom", "#reportFrom");
     var to = dateValue("#retailReportTo", "#reportTo");
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     return params.toString();
+  }
+  function synchronizeReportPeriod(data) {
+    if (!q("#reportTable") || state.reportPeriodInitialized) return false;
+    var from = q("#reportFrom");
+    var to = q("#reportTo");
+    var serverFrom = String(data?.period?.from || "").trim();
+    var serverTo = String(data?.period?.to || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(serverFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(serverTo)) {
+      throw new Error("Backend reporting period is unavailable or invalid.");
+    }
+    if (from) from.value = serverFrom;
+    if (to) to.value = serverTo;
+    state.reportPeriodInitialized = true;
+    if (state.reportRangeReplayScheduled) return false;
+    state.reportRangeReplayScheduled = true;
+    return true;
+  }
+  function replayReportWithServerPeriod() {
+    var button = q("#runReportBtn");
+    if (button) button.click();
   }
   function status(message, type) {
     ["#retailReportingStatus", "#salesOverviewLiveStatus"].forEach(function (selector) {
@@ -171,18 +199,24 @@
   async function refresh() {
     if (state.loading) return;
     state.loading = true;
+    var replayReport = false;
     ensureSalesOverview(); ensureReportsOverview(); status("Loading synchronized live sales and report totals…", "muted");
     try {
       var suffix = queryString();
       var data = unwrap(await apiGet("/api/v1/dashboard/summary" + (suffix ? "?" + suffix : ""))) || {};
-      state.summary = data; renderSalesOverview(data); renderReports(data); await loadChartJs(); renderCharts(data);
+      state.summary = data;
+      replayReport = synchronizeReportPeriod(data);
+      renderSalesOverview(data); renderReports(data); await loadChartJs(); renderCharts(data);
       var stamp = data.generatedAt ? new Date(data.generatedAt).toLocaleString("en-QA") : new Date().toLocaleString("en-QA");
       status("Live database totals synchronized. Updated " + stamp + ".", "success");
     } catch (error) {
       console.error("Retail reporting refresh failed:", error);
       status("Unable to load synchronized reporting data. " + (error?.message || "Please retry."), "danger");
       ["salesOverviewGross", "salesOverviewPaid", "salesOverviewCredit", "salesOverviewReturns"].forEach(function (id) { var target = q("#" + id); if (target) target.textContent = "Unavailable"; });
-    } finally { state.loading = false; }
+    } finally {
+      state.loading = false;
+      if (replayReport) window.setTimeout(replayReportWithServerPeriod, 0);
+    }
   }
 
   function scheduleRefresh() { clearTimeout(state.refreshTimer); state.refreshTimer = window.setTimeout(refresh, 2500); window.setTimeout(refresh, 6500); }
