@@ -25,10 +25,15 @@ assert.ok(apiIndex>=0 && addonsIndex>apiIndex,'canonical API bootstrap must load
 assert.match(page,/statusData\.features\|\|statusData\.capabilities/);
 assert.match(page,/scheduled_backups/);
 assert.match(page,/providerConfigured/);
+assert.match(page,/backupProviderName=String\(backupCapability\.provider/);
+assert.match(page,/backupCapability\.providerConfigured&&backupProviderName/);
+assert.match(page,/provider:backupProviderName/);
+assert.match(page,/BACKUP_PROVIDER, BACKUP_STORAGE_URL, BACKUP_ENCRYPTION_KEY/);
+assert.doesNotMatch(page,/provider:'railway-volume'/);
 assert.match(page,/backupBtn\.disabled/);
 assert.match(page,/scopes:\['read'\]/);
 assert.match(page,/optional\('\/api\/v1\/platform-features\/api-keys'/);
 assert.match(page,/You do not have permission to view API keys/);
 assert.doesNotMatch(page,/scopes:\['read','write'\]/);
 
-console.log('PASS: platform add-ons API bootstrap, RBAC-aware UI, provider gate and bounded offline queue');
+console.log('PASS: platform add-ons API bootstrap, RBAC-aware UI, backend-selected provider gate and bounded offline queue');
