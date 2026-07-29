@@ -1,0 +1,38 @@
+:root {
+  --industry-primary: #0f766e;
+  --industry-secondary: #134e4a;
+  --industry-accent: #f59e0b;
+  --industry-surface: #f8fafc;
+  --industry-on-primary: #ffffff;
+  --industry-on-surface: #0f172a;
+  --industry-muted: #64748b;
+  --industry-border: color-mix(in srgb, var(--industry-primary) 22%, transparent);
+  --industry-focus: 0 0 0 .25rem color-mix(in srgb, var(--industry-accent) 35%, transparent);
+}
+
+html[data-industry="retail"] { --industry-primary:#0f766e; --industry-secondary:#134e4a; --industry-accent:#f59e0b; --industry-surface:#f8fafc; }
+html[data-industry="grocery"] { --industry-primary:#15803d; --industry-secondary:#166534; --industry-accent:#facc15; --industry-surface:#f7fee7; }
+html[data-industry="pharmacy"] { --industry-primary:#0e7490; --industry-secondary:#155e75; --industry-accent:#22c55e; --industry-surface:#f8fafc; }
+html[data-industry="gym"] { --industry-primary:#dc2626; --industry-secondary:#111827; --industry-accent:#f97316; --industry-surface:#0f172a; --industry-on-surface:#f8fafc; --industry-muted:#cbd5e1; }
+html[data-industry="school"] { --industry-primary:#2563eb; --industry-secondary:#7c3aed; --industry-accent:#fbbf24; --industry-surface:#f8fafc; }
+html[data-industry="clinic"] { --industry-primary:#0284c7; --industry-secondary:#0f766e; --industry-accent:#38bdf8; --industry-surface:#f8fafc; }
+html[data-industry="restaurant"] { --industry-primary:#111111; --industry-secondary:#27272a; --industry-accent:#facc15; --industry-surface:#18181b; --industry-on-primary:#facc15; --industry-on-surface:#fafafa; --industry-muted:#d4d4d8; }
+html[data-industry="hardware"] { --industry-primary:#334155; --industry-secondary:#1e293b; --industry-accent:#f97316; --industry-surface:#f8fafc; }
+html[data-industry="paint"] { --industry-primary:#7c3aed; --industry-secondary:#db2777; --industry-accent:#22d3ee; --industry-surface:#faf5ff; }
+html[data-industry="furniture"] { --industry-primary:#78350f; --industry-secondary:#44403c; --industry-accent:#d6a756; --industry-surface:#fafaf9; }
+html[data-industry="workshop"] { --industry-primary:#1f2937; --industry-secondary:#0f172a; --industry-accent:#ef4444; --industry-surface:#f8fafc; }
+html[data-industry="wholesale"] { --industry-primary:#1d4ed8; --industry-secondary:#334155; --industry-accent:#10b981; --industry-surface:#f8fafc; }
+html[data-industry="manufacturing"] { --industry-primary:#374151; --industry-secondary:#111827; --industry-accent:#f59e0b; --industry-surface:#f8fafc; }
+
+.industry-themed-page { background:var(--industry-surface); color:var(--industry-on-surface); }
+.industry-themed-page .sidebar { background:linear-gradient(180deg,var(--industry-secondary),var(--industry-primary)); }
+.industry-themed-page .hero { background:linear-gradient(135deg,var(--industry-primary),var(--industry-secondary)); }
+.industry-themed-page .btn-brand { background:var(--industry-primary); border-color:var(--industry-primary); color:var(--industry-on-primary); }
+.industry-themed-page .btn-brand:hover { filter:brightness(.92); color:var(--industry-on-primary); }
+.industry-themed-page .text-brand { color:var(--industry-primary)!important; }
+.industry-themed-page .badge-industry { background:var(--industry-accent); color:#111827; }
+.industry-themed-page :focus-visible { outline:none; box-shadow:var(--industry-focus); }
+
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; animation-iteration-count:1!important; }
+}

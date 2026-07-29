@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "industries": {
+    "retail": {"theme":"retail-commerce","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api"]},
+    "grocery": {"theme":"grocery-fresh","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","batch_expiry"]},
+    "pharmacy": {"theme":"pharmacy-clinical","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","batch_expiry","restricted_approval"]},
+    "gym": {"theme":"gym-performance","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","membership_qr"]},
+    "school": {"theme":"school-bright","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","student_qr"]},
+    "clinic": {"theme":"clinic-calm","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","patient_qr","practitioner_approval"]},
+    "restaurant": {"theme":"restaurant-black-yellow","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","table_qr","kitchen_alerts"]},
+    "hardware": {"theme":"hardware-industrial","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","bin_management"]},
+    "paint": {"theme":"paint-color-studio","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","batch_expiry","color_swatch"]},
+    "furniture": {"theme":"furniture-warm-premium","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","delivery_tracking"]},
+    "workshop": {"theme":"workshop-automotive","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","vehicle_qr","job_status"]},
+    "wholesale": {"theme":"wholesale-logistics","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","bulk_pricing"]},
+    "manufacturing": {"theme":"manufacturing-production","capabilities":["ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards","multi_warehouse","offline_sync","audit_logs","approvals","multi_company","tax_engine","currency_lock","scheduled_backups","advanced_analytics","dashboard_builder","developer_api","work_order_scan","material_traceability"]}
+  },
+  "themes": {
+    "retail-commerce":{"primary":"#0F766E","secondary":"#134E4A","accent":"#F59E0B","surface":"#F8FAFC"},
+    "grocery-fresh":{"primary":"#15803D","secondary":"#166534","accent":"#FACC15","surface":"#F7FEE7"},
+    "pharmacy-clinical":{"primary":"#0E7490","secondary":"#155E75","accent":"#22C55E","surface":"#F8FAFC"},
+    "gym-performance":{"primary":"#DC2626","secondary":"#111827","accent":"#F97316","surface":"#0F172A"},
+    "school-bright":{"primary":"#2563EB","secondary":"#7C3AED","accent":"#FBBF24","surface":"#F8FAFC"},
+    "clinic-calm":{"primary":"#0284C7","secondary":"#0F766E","accent":"#38BDF8","surface":"#F8FAFC"},
+    "restaurant-black-yellow":{"primary":"#111111","secondary":"#27272A","accent":"#FACC15","surface":"#18181B"},
+    "hardware-industrial":{"primary":"#334155","secondary":"#1E293B","accent":"#F97316","surface":"#F8FAFC"},
+    "paint-color-studio":{"primary":"#7C3AED","secondary":"#DB2777","accent":"#22D3EE","surface":"#FAF5FF"},
+    "furniture-warm-premium":{"primary":"#78350F","secondary":"#44403C","accent":"#D6A756","surface":"#FAFAF9"},
+    "workshop-automotive":{"primary":"#1F2937","secondary":"#0F172A","accent":"#EF4444","surface":"#F8FAFC"},
+    "wholesale-logistics":{"primary":"#1D4ED8","secondary":"#334155","accent":"#10B981","surface":"#F8FAFC"},
+    "manufacturing-production":{"primary":"#374151","secondary":"#111827","accent":"#F59E0B","surface":"#F8FAFC"}
+  }
+}
