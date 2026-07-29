@@ -71,6 +71,9 @@ jobs:
   final-backend-build:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - name: Checkout final Manufacturing backend candidate
         uses: actions/checkout@v4
@@ -81,8 +84,9 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
+          cache-dependency-path: backend/package-lock.json
 
       - name: Clean install
         run: npm ci
@@ -96,7 +100,7 @@ jobs:
         run: npm run build
 
       - name: Backend tests
-        run: npm test -- --runInBand
+        run: npm test
 
       - name: Verify compiled server entry
         shell: bash
