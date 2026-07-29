@@ -15,11 +15,17 @@ function cleanErrors(errors) {
 }
 
 async function waitForSynchronizedStatus(page, selector) {
-  await page.waitForFunction((target) => {
-    const element = document.querySelector(target);
-    const text = String(element?.textContent || '');
-    return /synchronized/i.test(text) && !/unable|failed|unavailable/i.test(text);
-  }, selector, { timeout: 45000 });
+  try {
+    await page.waitForFunction((target) => {
+      const element = document.querySelector(target);
+      const text = String(element?.textContent || '').trim();
+      return /^Live database totals synchronized\. Updated /i.test(text)
+        && !/loading|unable|failed|unavailable/i.test(text);
+    }, selector, { timeout: 45000 });
+  } catch (error) {
+    const current = await page.locator(selector).textContent().catch(() => 'status element missing');
+    throw new Error(`Retail reporting did not complete: ${String(current || '').trim() || error.message}`);
+  }
 }
 
 async function readRetailReportingState(page, mode) {
@@ -138,6 +144,9 @@ try {
       }
     } catch (error) {
       errors.push(`browser: ${error.message}`);
+      if (user.key === 'owner' && !page.isClosed()) {
+        await page.screenshot({ path: `${evidenceDir}/owner-reporting-failure.png`, fullPage: true }).catch(() => {});
+      }
     }
     const filtered = cleanErrors(errors);
     const reportingOk = user.key === 'owner' ? salesReportsSync === true : true;
