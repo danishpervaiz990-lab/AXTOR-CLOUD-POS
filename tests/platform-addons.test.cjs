@@ -31,9 +31,22 @@ assert.match(page,/provider:backupProviderName/);
 assert.match(page,/BACKUP_PROVIDER, BACKUP_STORAGE_URL, BACKUP_ENCRYPTION_KEY/);
 assert.doesNotMatch(page,/provider:'railway-volume'/);
 assert.match(page,/backupBtn\.disabled/);
-assert.match(page,/scopes:\['read'\]/);
-assert.match(page,/optional\('\/api\/v1\/platform-features\/api-keys'/);
-assert.match(page,/You do not have permission to view API keys/);
+
+assert.match(page,/name="access"/);
+assert.match(page,/Status only/);
+assert.match(page,/Status \+ product catalog/);
+assert.match(page,/name="expiresAt"/);
+assert.match(page,/developer\.status\.read/);
+assert.match(page,/products\.read/);
+assert.match(page,/data-revoke-key/);
+assert.match(page,/api-keys\/\$\{encodeURIComponent\(id\)\}\/revoke/);
+assert.match(page,/method:'POST',body:'\{\}'/);
+assert.match(page,/Copy this secret now\. It will not be shown again/);
+assert.match(page,/Last used:/);
+assert.match(page,/key\.revokedAt/);
 assert.doesNotMatch(page,/scopes:\['read','write'\]/);
 
-console.log('PASS: platform add-ons API bootstrap, RBAC-aware UI, backend-selected provider gate and bounded offline queue');
+assert.match(page,/optional\('\/api\/v1\/platform-features\/api-keys'/);
+assert.match(page,/You do not have permission to view API keys/);
+
+console.log('PASS: platform add-ons API bootstrap, RBAC-aware UI, API key lifecycle, provider gate and bounded offline queue');
