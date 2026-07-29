@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 import { ApiError, cleanString, numberValue } from "../utils/http.js";
+import { requireBackupProvider } from "./backup-provider.service.js";
 
 type JsonRecord = Record<string, any>;
 const asJson = (value: any): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
@@ -91,5 +92,14 @@ export async function platformSummary(businessId: string): Promise<any> {
 }
 
 export async function createBackupManifest(businessId: string, userId: string | null, input: JsonRecord): Promise<any> {
-  return createResource(businessId, userId, "backups", { status: "requested", provider: cleanString(input.provider) || "manual", encrypted: true, requestedAt: new Date().toISOString(), completedAt: null, checksum: null, storageKey: null });
+  const provider = requireBackupProvider(input.provider);
+  return createResource(businessId, userId, "backups", {
+    status: "requested",
+    provider: provider.provider,
+    encrypted: true,
+    requestedAt: new Date().toISOString(),
+    completedAt: null,
+    checksum: null,
+    storageKey: null,
+  });
 }
