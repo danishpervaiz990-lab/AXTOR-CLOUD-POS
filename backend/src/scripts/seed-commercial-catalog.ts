@@ -1,4 +1,5 @@
 import { prisma } from "../db/prisma.js";
+import "../industry/activate-launch-ready-packs.js";
 import { getIndustryPack, INDUSTRY_REGISTRY_VERSION, publicIndustryRegistry } from "../industry/registry.js";
 
 const plans = [
@@ -24,7 +25,15 @@ const industries = [
           ? { product: "Fee / Item", sale: "Fee Invoice", customer: "Student / Guardian" }
           : pack.code === "pharmacy"
             ? { product: "Medicine", sale: "Dispensing Sale", customer: "Patient / Customer" }
-            : { product: "Product", sale: "Sale", customer: "Customer" },
+            : pack.code === "restaurant"
+              ? { product: "Menu Item", sale: "Restaurant Order", customer: "Guest / Customer" }
+              : pack.code === "workshop"
+                ? { product: "Part / Service", sale: "Workshop Invoice", customer: "Vehicle Owner" }
+                : pack.code === "wholesale"
+                  ? { product: "Trade Item", sale: "Sales Order", customer: "Trade Customer" }
+                  : pack.code === "manufacturing"
+                    ? { product: "Material / Finished Good", sale: "Customer Order", customer: "Customer" }
+                    : { product: "Product", sale: "Sale", customer: "Customer" },
   })),
   (() => {
     const pack = getIndustryPack("hardware_paint");
@@ -53,7 +62,7 @@ async function main() {
   }
   for (const industryInput of industries) {
     const { features, terminology, ...data } = industryInput;
-    const industry = await prisma.industryProfile.upsert({ where: { code: data.code }, create: { ...data, registryVersion: INDUSTRY_REGISTRY_VERSION, defaultTerminology: terminology }, update: { ...data, registryVersion: INDUSTRY_REGISTRY_VERSION, defaultTerminology: terminology } });
+    const industry = await prisma.industryProfile.upsert({ where: { code: data.code }, create: { ...data, active: true, registryVersion: INDUSTRY_REGISTRY_VERSION, defaultTerminology: terminology }, update: { ...data, active: true, registryVersion: INDUSTRY_REGISTRY_VERSION, defaultTerminology: terminology } });
     for (const featureKey of features) await prisma.industryFeature.upsert({ where: { industryId_featureKey: { industryId: industry.id, featureKey } }, create: { industryId: industry.id, featureKey, enabled: true }, update: { enabled: true } });
   }
   for (const [code, name, symbol, decimalPrecision] of currencyRows) await prisma.currency.upsert({ where: { code }, create: { code, name, symbol, decimalPrecision }, update: { name, symbol, decimalPrecision, active: true } });
