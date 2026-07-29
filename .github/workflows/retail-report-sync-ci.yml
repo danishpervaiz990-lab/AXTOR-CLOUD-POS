@@ -1,0 +1,28 @@
+name: Retail Reporting Sync CI
+
+on:
+  pull_request:
+    branches: [frontend-retail]
+  push:
+    branches: [fix/retail-report-sync-v2-20260730]
+
+permissions:
+  contents: read
+
+jobs:
+  retail-reporting-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate JavaScript syntax
+        run: |
+          node --check demo-static/js/retail-reporting-backend.js
+          node --check demo-static/js/salesmen-bootstrap.js
+          node --check demo-static/js/reports-backend.js
+      - name: Run Retail reporting contract tests
+        run: node --test tests/retail-reporting-sync-v2.test.cjs
