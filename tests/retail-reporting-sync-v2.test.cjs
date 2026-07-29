@@ -31,3 +31,13 @@ test("Reports exposes reconciliation and return-adjusted top products", () => {
   assert.equal(reportingJs.includes("row.profit"), true);
   assert.equal(reportingJs.includes('String(row.result).toUpperCase() === "PASS"'), true);
 });
+
+test("Reports initializes its date range from the Qatar-aware backend period", () => {
+  assert.equal(reportingJs.includes('q("#reportTable") && !state.reportPeriodInitialized'), true);
+  assert.equal(reportingJs.includes('data?.period?.from'), true);
+  assert.equal(reportingJs.includes('data?.period?.to'), true);
+  assert.equal(reportingJs.includes('state.reportPeriodInitialized = true'), true);
+  assert.equal(reportingJs.includes('replayReportWithServerPeriod'), true);
+  assert.equal(reportingJs.includes('q("#runReportBtn")'), true);
+  assert.equal(reportingJs.includes('Backend reporting period is unavailable or invalid.'), true);
+});
