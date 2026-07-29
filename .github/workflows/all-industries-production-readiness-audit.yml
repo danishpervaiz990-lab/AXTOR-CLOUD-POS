@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Checkout all permanent frontend branches without deployment
+      - name: Checkout all frontend release candidates without deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -34,7 +34,7 @@ jobs:
             git fetch --depth=1 origin "$ref"
             git worktree add --detach "audit-worktrees/$industry" FETCH_HEAD
           done <<'BRANCHES'
-          retail|frontend-retail
+          retail|fix/retail/restore-suppliers-route
           grocery|frontend-grocery
           pharmacy|frontend-pharmacy
           gym|frontend-gym
@@ -74,6 +74,10 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/axtor_ci?schema=public
+      AUTH_TOKEN_SECRET: ci-only-not-a-production-secret-0123456789
+      NODE_ENV: test
     steps:
       - name: Checkout final Manufacturing backend candidate
         uses: actions/checkout@v4
@@ -89,7 +93,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Clean install
-        run: npm ci
+        run: npm ci --include=dev --no-audit --no-fund
 
       - name: Prisma validation and client generation
         run: |
