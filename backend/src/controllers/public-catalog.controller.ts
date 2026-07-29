@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
-import * as service from "../services/public-catalog.service.js";
+import * as service from "../services/public-catalog-launch.service.js";
 import { createAuthToken, hashAuthToken } from "../utils/auth-token.js";
 import { verifyPassword } from "../utils/password.js";
 
@@ -30,11 +30,19 @@ function fail(res: Response, error: unknown) {
 }
 
 export async function catalog(_req: Request, res: Response) {
-  try { res.json({ ok: true, data: await service.catalogue() }); } catch (error) { fail(res, error); }
+  try {
+    res.json({ ok: true, data: await service.catalogue() });
+  } catch (error) {
+    fail(res, error);
+  }
 }
 
 export async function industry(req: Request, res: Response) {
-  try { res.json({ ok: true, data: service.industryDetail(req.params.code) }); } catch (error) { fail(res, error); }
+  try {
+    res.json({ ok: true, data: service.industryDetail(req.params.code) });
+  } catch (error) {
+    fail(res, error);
+  }
 }
 
 async function createProvisionedOwnerSession(req: Request, result: any, password: string) {
@@ -53,7 +61,7 @@ async function createProvisionedOwnerSession(req: Request, result: any, password
     throw new service.PublicCatalogError(401, "OWNER_CREDENTIAL_MISMATCH", "Workspace already exists, but the supplied owner password does not match it. Use the password from the original completed registration.");
   }
 
-  const role = user.userRoles[0]?.role.name || "Owner";
+  const role = user.userRoles.find(item => item.role.name === "Owner")?.role.name || user.userRoles[0]?.role.name || "Owner";
   const sessionId = crypto.randomUUID();
   const token = createAuthToken({ userId: user.id, businessId, businessSlug, email: user.email, role, sessionId });
   const expiresIn = Number(process.env.AUTH_TOKEN_EXPIRES_SECONDS || "86400");
