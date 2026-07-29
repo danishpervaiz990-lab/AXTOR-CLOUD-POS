@@ -31,6 +31,7 @@ import settingsRoutes from "./routes/settings.routes.js";
 import communicationsRoutes from "./routes/communications.routes.js";
 import commercialRoutes from "./routes/commercial.routes.js";
 import platformAdminRoutes from "./routes/platform-admin.routes.js";
+import platformFeaturesRoutes from "./routes/platform-features.routes.js";
 import industryRoutes from "./routes/industry.routes.js";
 import publicCatalogRoutes from "./routes/public-catalog.routes.js";
 import { clinicRouter, gymRouter, schoolRouter } from "./routes/release-ab.routes.js";
@@ -62,62 +63,22 @@ export function createApp() {
   app.use("/api/v1/auth/login", loginRateLimit);
 
   const routeMap = {
-    health: "/health",
-    dbHealth: "/api/v1/health/db",
-    auth: "/api/v1/auth",
-    accessControl: "/api/v1/access-control",
-    dashboard: "/api/v1/dashboard",
-    customers: "/api/v1/customers",
-    products: "/api/v1/products",
-    salesDocuments: "/api/v1/sales-documents",
-    payments: "/api/v1/payments",
-    salesReturns: "/api/v1/sales-returns",
-    refunds: "/api/v1/refunds",
-    salesmen: "/api/v1/salesmen",
-    suppliers: "/api/v1/suppliers",
-    purchases: "/api/v1/purchases",
-    inventory: "/api/v1/inventory",
-    branches: "/api/v1/branches",
-    accounts: "/api/v1/accounts",
-    expenses: "/api/v1/expenses",
-    shifts: "/api/v1/shifts",
-    reports: "/api/v1/reports",
-    promotions: "/api/v1/promotions",
-    loyalty: "/api/v1/loyalty",
-    notifications: "/api/v1/notifications",
-    approvals: "/api/v1/approvals",
-    settings: "/api/v1/settings",
-    communications: "/api/v1/communications",
-    commercial: "/api/v1/commercial",
-    platformAdmin: "/api/v1/platform-admin",
-    industry: "/api/v1/industry",
-    publicCatalog: "/api/v1/public",
-    gym: "/api/v1/gym",
-    school: "/api/v1/school",
-    clinic: "/api/v1/clinic",
-    restaurant: "/api/v1/restaurant",
-    hardware: "/api/v1/hardware",
-    paint: "/api/v1/paint",
-    furniture: "/api/v1/furniture",
-    workshop: "/api/v1/workshop",
-    wholesale: "/api/v1/wholesale",
-    manufacturing: "/api/v1/manufacturing",
+    health: "/health", dbHealth: "/api/v1/health/db", auth: "/api/v1/auth", accessControl: "/api/v1/access-control",
+    dashboard: "/api/v1/dashboard", customers: "/api/v1/customers", products: "/api/v1/products",
+    salesDocuments: "/api/v1/sales-documents", payments: "/api/v1/payments", salesReturns: "/api/v1/sales-returns",
+    refunds: "/api/v1/refunds", salesmen: "/api/v1/salesmen", suppliers: "/api/v1/suppliers", purchases: "/api/v1/purchases",
+    inventory: "/api/v1/inventory", branches: "/api/v1/branches", accounts: "/api/v1/accounts", expenses: "/api/v1/expenses",
+    shifts: "/api/v1/shifts", reports: "/api/v1/reports", promotions: "/api/v1/promotions", loyalty: "/api/v1/loyalty",
+    notifications: "/api/v1/notifications", approvals: "/api/v1/approvals", settings: "/api/v1/settings",
+    communications: "/api/v1/communications", commercial: "/api/v1/commercial", platformAdmin: "/api/v1/platform-admin",
+    platformFeatures: "/api/v1/platform-features", industry: "/api/v1/industry", publicCatalog: "/api/v1/public",
+    gym: "/api/v1/gym", school: "/api/v1/school", clinic: "/api/v1/clinic", restaurant: "/api/v1/restaurant",
+    hardware: "/api/v1/hardware", paint: "/api/v1/paint", furniture: "/api/v1/furniture", workshop: "/api/v1/workshop",
+    wholesale: "/api/v1/wholesale", manufacturing: "/api/v1/manufacturing",
   };
 
-  app.get("/", (_req: Request, res: Response) => res.json({
-    ok: true,
-    service: "Axtor POS Cloud API",
-    message: "Backend is running",
-    version: env.appVersion,
-    routes: routeMap,
-  }));
-  app.get("/health", (_req: Request, res: Response) => res.json({
-    ok: true,
-    service: "Axtor POS Cloud API",
-    version: env.appVersion,
-    environment: process.env.NODE_ENV || "development",
-    timestamp: new Date().toISOString(),
-  }));
+  app.get("/", (_req: Request, res: Response) => res.json({ ok: true, service: "Axtor POS Cloud API", message: "Backend is running", version: env.appVersion, routes: routeMap }));
+  app.get("/health", (_req: Request, res: Response) => res.json({ ok: true, service: "Axtor POS Cloud API", version: env.appVersion, environment: process.env.NODE_ENV || "development", timestamp: new Date().toISOString() }));
   app.get("/api/v1/health/db", async (_req: Request, res: Response) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -156,6 +117,7 @@ export function createApp() {
   app.use("/api/v1/communications", communicationsRoutes);
   app.use("/api/v1/commercial", commercialRoutes);
   app.use("/api/v1/platform-admin", platformAdminRoutes);
+  app.use("/api/v1/platform-features", platformFeaturesRoutes);
   app.use("/api/v1/industry", industryRoutes);
   app.use("/api/v1/gym", gymRouter);
   app.use("/api/v1/school", schoolRouter);
