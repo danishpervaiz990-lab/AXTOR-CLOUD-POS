@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [frontend-retail]
   push:
-    branches: [frontend-retail, fix/retail/isolated-frontend-v1]
+    branches: [frontend-retail, fix/retail/isolated-frontend-v1, fix/retail/reports-percentages-20260730]
 permissions:
   contents: read
 jobs:
@@ -16,5 +16,6 @@ jobs:
           node-version: 24
       - run: node --check demo-static/js/axtor-api.js
       - run: node --check demo-static/js/retail-app.js
+      - run: node --check demo-static/js/reports-backend.js
       - run: node tests/retail-frontend.test.cjs
       - run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
