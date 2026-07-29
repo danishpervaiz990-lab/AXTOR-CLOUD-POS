@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Checkout all frontend release candidates without deployment
+      - name: Checkout all permanent frontend branches without deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -34,7 +34,7 @@ jobs:
             git fetch --depth=1 origin "$ref"
             git worktree add --detach "audit-worktrees/$industry" FETCH_HEAD
           done <<'BRANCHES'
-          retail|fix/retail/restore-suppliers-route
+          retail|frontend-retail
           grocery|frontend-grocery
           pharmacy|frontend-pharmacy
           gym|frontend-gym
@@ -46,7 +46,7 @@ jobs:
           furniture|frontend-furniture
           workshop|frontend-workshop
           wholesale|frontend-wholesale
-          manufacturing|fix/manufacturing/dedicated-frontend-v1
+          manufacturing|frontend-manufacturing
           BRANCHES
 
       - name: Set up Node.js
@@ -79,10 +79,10 @@ jobs:
       AUTH_TOKEN_SECRET: ci-only-not-a-production-secret-0123456789
       NODE_ENV: test
     steps:
-      - name: Checkout final Manufacturing backend candidate
+      - name: Checkout current shared backend
         uses: actions/checkout@v4
         with:
-          ref: fix/manufacturing/release-e-backend
+          ref: backend
           fetch-depth: 1
 
       - name: Set up Node.js
@@ -111,4 +111,4 @@ jobs:
         run: |
           test -f dist/server.js
           node --check dist/server.js
-          echo "PASS: final shared backend candidate builds without deployment"
+          echo "PASS: current shared backend builds without deployment"
