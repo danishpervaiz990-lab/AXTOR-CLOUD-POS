@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
 const reportHtml = fs.readFileSync(path.join(root, "demo-static", "reports.html"), "utf8");
+const reportsBackend = fs.readFileSync(path.join(root, "demo-static", "js", "reports-backend.js"), "utf8");
 const reportingJs = fs.readFileSync(path.join(root, "demo-static", "js", "retail-reporting-backend.js"), "utf8");
 const salesBootstrap = fs.readFileSync(path.join(root, "demo-static", "js", "salesmen-bootstrap.js"), "utf8");
 
@@ -40,4 +41,16 @@ test("Reports initializes its date range from the Qatar-aware backend period", (
   assert.equal(reportingJs.includes('replayReportWithServerPeriod'), true);
   assert.equal(reportingJs.includes('q("#runReportBtn")'), true);
   assert.equal(reportingJs.includes('Backend reporting period is unavailable or invalid.'), true);
+});
+
+test("Detailed Reports defaults use Qatar dates even in a UTC browser", () => {
+  assert.equal(reportsBackend.includes('timeZone: "Asia/Qatar"'), true);
+  assert.equal(reportsBackend.includes('function qatarDate(date)'), true);
+  assert.equal(reportsBackend.includes('document.getElementById("reportTo").value = today'), true);
+  assert.equal(reportsBackend.includes('(from || qatarDate(new Date())).slice(0, 7)'), true);
+});
+
+test("new reporting release URLs bypass cached pre-fix scripts", () => {
+  assert.equal(reportHtml.includes("20260730-retail-report-qatar3"), true);
+  assert.equal(salesBootstrap.includes("20260730-retail-report-qatar3"), true);
 });
