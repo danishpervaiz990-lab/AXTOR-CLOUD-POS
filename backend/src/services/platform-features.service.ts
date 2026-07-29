@@ -1,5 +1,6 @@
 import { prisma } from "../db/prisma.js";
 import { getBackupProviderStatus } from "./backup-provider.service.js";
+import { listApiKeys } from "./developer-api-key.service.js";
 
 export const PLATFORM_FEATURES = [
   "ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards",
@@ -9,7 +10,7 @@ export const PLATFORM_FEATURES = [
 
 export async function getCapabilityStatus(businessId: string) {
   const backupProvider = getBackupProviderStatus();
-  const [business, warehouseCount, approvalCount, loyaltyCount, auditCount, communicationCount, currencyCount, taxRateCount] = await Promise.all([
+  const [business, warehouseCount, approvalCount, loyaltyCount, auditCount, communicationCount, currencyCount, taxRateCount, apiKeys] = await Promise.all([
     prisma.business.findUnique({ where: { id: businessId }, select: { id: true, name: true, country: true, currency: true, defaultLanguage: true } }),
     prisma.warehouse.count({ where: { businessId } }),
     prisma.approvalRule.count({ where: { businessId, active: true } }),
@@ -18,6 +19,7 @@ export async function getCapabilityStatus(businessId: string) {
     prisma.communicationLog.count({ where: { businessId } }),
     prisma.businessCurrency.count({ where: { businessId, active: true } }),
     prisma.taxRate.count({ where: { businessId, active: true } }),
+    listApiKeys(businessId),
   ]);
   return {
     business,
@@ -45,7 +47,12 @@ export async function getCapabilityStatus(businessId: string) {
       },
       advanced_analytics: { state: "available" },
       dashboard_builder: { state: "settings-backed" },
-      developer_api: { state: "contract-ready" },
+      developer_api: {
+        state: "active",
+        mode: "tenant-addressable-api-key-v2",
+        activeKeyCount: apiKeys.filter((key) => key.active !== false && !key.revokedAt).length,
+        endpoints: ["/api/v1/developer/status", "/api/v1/developer/products"],
+      },
       communications: { state: "active", logCount: communicationCount },
     },
   };
