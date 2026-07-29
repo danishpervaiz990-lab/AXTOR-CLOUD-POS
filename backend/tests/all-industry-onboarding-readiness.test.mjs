@@ -83,7 +83,7 @@ test("preview industries have authenticated routes, writes and reports", () => {
     "wholesaleRouter.post", "wholesaleRouter.patch", "wholesaleRouter.get(\"/reports\"",
   ]) assert.ok(releaseD.includes(marker), `Release D marker missing: ${marker}`);
 
-  assert.match(manufacturing, /router\.post/);
+  assert.match(manufacturing, /manufacturingRouter\.post/);
   assert.match(manufacturing, /reports/);
   assert.match(releaseC, /requireAuth/);
   assert.match(releaseD, /requireAuth/);
