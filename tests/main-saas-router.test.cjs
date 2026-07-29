@@ -52,8 +52,10 @@ for(const item of manifest.projects){
   assert.equal(item.status,'code_complete_not_deployed');
 }
 
+const redirects=(vercel.redirects||[]).map(row=>`${row.source}->${row.destination}`);
 const rewrites=vercel.rewrites.map(row=>`${row.source}->${row.destination}`);
-assert.ok(rewrites.includes('/->/saas-index.html'));
+assert.ok(redirects.includes('/->/login.html'));
+assert.ok(redirects.includes('/index.html->/login.html'));
 assert.ok(rewrites.includes('/industry.html->/router.html'));
 assert.ok(rewrites.includes('/dashboard.html->/router.html'));
 assert.ok(rewrites.includes('/apps/:industry->/api/industry-asset?industry=:industry'));
@@ -93,4 +95,4 @@ for(const rule of loginHeaderRules){
   assert.match(values['cache-control']||'',/no-store/);
   assert.equal(values.pragma,'no-cache');
 }
-console.log('PASS: main SaaS router, 13 isolated industry branches, Edge URL gateway and no-cache login entry are code-certified without deployment');
+console.log('PASS: main SaaS router, secure login entry, 13 isolated industry branches, Edge URL gateway and no-cache controls are code-certified without deployment');
