@@ -1,0 +1,45 @@
+name: Frontend Core Structure CI
+
+on:
+  push:
+    branches: [fix/shared/remove-nested-demo-static]
+  pull_request:
+    branches: [frontend-core]
+    paths:
+      - "demo-static/demo-static/**"
+      - ".github/workflows/frontend-core-structure-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Reject nested duplicate frontend tree
+        shell: bash
+        run: |
+          if [ -e demo-static/demo-static ]; then
+            echo "FAIL: obsolete demo-static/demo-static still exists"
+            find demo-static/demo-static -maxdepth 3 -type f -print
+            exit 1
+          fi
+          echo "PASS: nested duplicate frontend tree removed"
+      - name: Verify active shared runtime files remain
+        shell: bash
+        run: |
+          test -f demo-static/js/main.js
+          test -f demo-static/js/platform-runtime.js
+          test -f demo-static/js/terminal-backend.js
+          test -f demo-static/sales.html
+          test -f demo-static/terminal.html
+          test -f demo-static/sw.js
+          node --check demo-static/js/main.js
+          node --check demo-static/js/platform-runtime.js
+          node --check demo-static/js/terminal-backend.js
+          node --check demo-static/sw.js
+          echo "PASS: active frontend files remain valid"
