@@ -1,6 +1,12 @@
 import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
 import { ApiError, handleError, plain, tenant } from "../utils/http.js";
+import { developerApiSpec } from "../services/developer-api-spec.js";
+
+export function openapi(_req: Request, res: Response) {
+  res.setHeader("Cache-Control", "public, max-age=300, s-maxage=3600");
+  return res.json(developerApiSpec);
+}
 
 export async function status(req: Request, res: Response) {
   try {
