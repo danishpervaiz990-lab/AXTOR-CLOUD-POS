@@ -2,6 +2,7 @@ const REPOSITORY_RAW = "https://raw.githubusercontent.com/danishpervaiz990-lab/A
 const UPSTREAM_TIMEOUT_MS = 15000;
 const MAX_ASSET_BYTES = 20 * 1024 * 1024;
 
+export const runtime = "edge";
 export const config = { runtime: "edge" };
 
 const RELEASES = Object.freeze({
