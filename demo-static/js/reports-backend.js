@@ -54,16 +54,21 @@
     target.innerHTML = text ? '<div class="alert alert-' + esc(type || "info") + ' py-2 mb-0">' + esc(text) + "</div>" : "";
   }
 
-  function localDate(date) {
-    const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-    return shifted.toISOString().slice(0, 10);
+  function qatarDate(date) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Qatar",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.filter(function (part) { return part.type !== "literal"; }).map(function (part) { return [part.type, part.value]; }));
+    return values.year + "-" + values.month + "-" + values.day;
   }
 
   function setDefaultDates() {
-    const now = new Date();
-    const first = new Date(now.getFullYear(), now.getMonth(), 1);
-    document.getElementById("reportFrom").value = localDate(first);
-    document.getElementById("reportTo").value = localDate(now);
+    const today = qatarDate(new Date());
+    document.getElementById("reportFrom").value = today.slice(0, 8) + "01";
+    document.getElementById("reportTo").value = today;
   }
 
   function populateReportSelect() {
@@ -100,7 +105,7 @@
     const to = String(document.getElementById("reportTo").value || "").trim();
     const entity = String(document.getElementById("reportEntityFilter").value || "").trim();
     if (definition.id === "salesman-commission") {
-      params.set("month", (from || localDate(new Date())).slice(0, 7));
+      params.set("month", (from || qatarDate(new Date())).slice(0, 7));
     } else {
       if (from) params.set("from", from);
       if (to) params.set("to", to);
