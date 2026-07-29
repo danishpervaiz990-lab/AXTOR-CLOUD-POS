@@ -3,34 +3,44 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
-  <title>Customers · Axtor POS Cloud</title>
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('axtorTheme')||'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+  <title>Reports · Axtor POS Cloud</title>
   <link rel="icon" href="assets/images/logo.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="css/style.css?v=20260618-sales-qr1" rel="stylesheet">
-  <link href="css/retro-pos-theme.css?v=20260618-sales-qr1" rel="stylesheet">
+  <link href="css/style.css?v=20260730-retail-reports1" rel="stylesheet">
+  <link href="css/retro-pos-theme.css?v=20260730-retail-reports1" rel="stylesheet">
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#0f9f78">
+  <style>
+    .report-toolbar{display:grid;grid-template-columns:minmax(220px,1.6fr) repeat(2,minmax(150px,.8fr)) minmax(170px,1fr) auto;gap:.75rem;align-items:end}
+    .report-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem}
+    .report-kpi{border:1px solid var(--axtor-border,rgba(15,159,120,.18));border-radius:16px;padding:1rem;background:var(--axtor-surface,#fff)}
+    .report-kpi strong{display:block;font-size:1.15rem;margin-top:.3rem;word-break:break-word}
+    .percentage-cell{white-space:nowrap;font-weight:800}
+    .percentage-badge{display:inline-flex;align-items:center;min-width:72px;justify-content:center;padding:.3rem .55rem;border-radius:999px;background:rgba(15,159,120,.12);color:#08765a}
+    .report-meta{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
+    #reportTable th{white-space:nowrap}
+    #reportTable td{vertical-align:middle}
+    @media(max-width:1100px){.report-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.report-toolbar .report-run{grid-column:span 2}}
+    @media(max-width:620px){.report-toolbar{grid-template-columns:1fr}.report-toolbar .report-run{grid-column:auto}.report-actions .btn{width:100%}}
+    @media print{.sidebar,.topbar,.report-controls,.report-actions,.search-overlay{display:none!important}.main{margin:0!important}.page{padding:0!important}.cardx{box-shadow:none!important;border:0!important}.table-wrap{overflow:visible!important}body{background:#fff!important}}
+  </style>
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="sidebar-inner">
-        <a class="brand" href="index.html">
-          <div class="brand-mark">A</div>
-          <div><h1>Axtor POS Cloud</h1><span>Retail • Grocery • Pharmacy • Paint</span></div>
-        </a>
-
+        <a class="brand" href="retail-dashboard.html"><div class="brand-mark">A</div><div><h1>Axtor POS Cloud</h1><span>General Retail</span></div></a>
         <nav class="nav-menu">
-          <a class="nav-linkx" href="index.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
+          <a class="nav-linkx" href="retail-dashboard.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
           <a class="nav-linkx" href="terminal.html"><i class="bi bi-upc-scan"></i><span>Terminal</span></a>
           <a class="nav-linkx" href="sales.html"><i class="bi bi-cart-check"></i><span>Sales</span></a>
           <a class="nav-linkx" href="shifts.html"><i class="bi bi-clock-history"></i><span>Shifts / Closing</span></a>
-          <a class="nav-linkx active" href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
+          <a class="nav-linkx" href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
           <a class="nav-linkx" href="salesmen.html"><i class="bi bi-trophy"></i><span>Salesmen & Commission</span></a>
           <a class="nav-linkx" href="products.html"><i class="bi bi-box-seam"></i><span>Products</span></a>
           <a class="nav-linkx" href="inventory.html"><i class="bi bi-boxes"></i><span>Inventory</span></a>
@@ -40,7 +50,7 @@
           <a class="nav-linkx" href="promotions.html"><i class="bi bi-percent"></i><span>Promotions</span></a>
           <a class="nav-linkx" href="loyalty.html"><i class="bi bi-gem"></i><span>Loyalty</span></a>
           <a class="nav-linkx" href="approvals.html"><i class="bi bi-shield-check"></i><span>Approvals</span></a>
-          <a class="nav-linkx" href="reports.html"><i class="bi bi-graph-up-arrow"></i><span>Reports</span></a>
+          <a class="nav-linkx active" href="reports.html" aria-current="page"><i class="bi bi-graph-up-arrow"></i><span>Reports</span></a>
           <a class="nav-linkx" href="accounts.html"><i class="bi bi-bank"></i><span>Accounts</span></a>
           <a class="nav-linkx" href="expenses.html"><i class="bi bi-wallet2"></i><span>Expenses</span></a>
           <a class="nav-linkx" href="setup.html"><i class="bi bi-magic"></i><span>Setup Wizard</span></a>
@@ -48,316 +58,69 @@
           <a class="nav-linkx" href="invoice-designer.html"><i class="bi bi-file-earmark-richtext"></i><span>Invoice Designer</span></a>
           <a class="nav-linkx" href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
         </nav>
-
-        <div class="sidebar-footer"><span class="status-dot"></span>Customer Ready Mode<br><small>Local Browser Mode</small></div>
+        <div class="sidebar-footer"><span class="status-dot"></span>Live PostgreSQL Reports<br><small>Tenant-scoped Retail data</small></div>
       </div>
     </aside>
 
     <div class="sidebar-backdrop"></div>
-
     <div class="main">
       <header class="topbar">
         <button class="btn-icon d-xl-none" data-sidebar-toggle aria-label="Toggle menu"><i class="bi bi-list"></i></button>
-        <div class="page-title"><h2>Customers</h2><p>Customer list, add customer and statement of account.</p></div>
-        <button class="search-pill" data-search-open><i class="bi bi-search"></i><span>Search invoice, customer, stock...</span><kbd class="shortcut">F8</kbd></button>
+        <div class="page-title"><h2>Retail Reports</h2><p>Live financial and operational reporting with percentage analysis.</p></div>
+        <button class="search-pill" data-search-open><i class="bi bi-search"></i><span>Search pages and reports...</span><kbd class="shortcut">F8</kbd></button>
         <a class="btn-icon" href="notifications.html" title="Notifications"><i class="bi bi-bell"></i></a>
-        <div class="user-chip"><div class="avatar">O</div><span class="fw-bold">Owner</span></div>
+        <div class="user-chip"><div class="avatar">R</div><span class="fw-bold">Reports</span></div>
       </header>
 
       <main class="page">
-        <ul class="nav nav-tabs mb-3">
-          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#customers-list">Customers List</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#add-customer">Add New Customer</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#customer-soa">Customer SOA</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#credit-control">Credit Control</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#customer-loyalty">Loyalty</button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#customer-invoice-settings">Customer Invoice Settings</button></li>
-        </ul>
+        <div id="reportStatus" class="mb-3" role="status" aria-live="polite"></div>
 
-        <div class="tab-content">
-          <section class="tab-pane fade show active section-anchor" id="customers-list">
-            <div class="row g-3 mb-3">
-              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Total customers</div><div class="kpi-value">0</div></div></div>
-              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Receivable</div><div class="kpi-value">QAR 0.00</div></div></div>
-              <div class="col-md-4"><div class="cardx"><div class="smallcaps">Overdue</div><div class="kpi-value text-danger">QAR 0.00</div></div></div>
-            </div>
-
-            <div class="cardx">
-              <div class="d-flex justify-content-between mb-3">
-                <h5 class="cardx-title">Customer directory</h5>
-                <input id="customerSearchInput" class="form-control w-auto" placeholder="Search customers" autocomplete="off">
-              </div>
-
-              <div class="table-wrap">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Phone</th>
-                      <th>Email</th>
-                      <th>Type</th>
-                      <th>Balance</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="customersTableBody">
-                    <tr><td colspan="7" class="text-muted">Loading backend customers...</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-          <section class="tab-pane fade section-anchor" id="add-customer">
-            <div class="cardx">
-              <h5 class="cardx-title mb-3">Add New Customer</h5>
-
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label">Customer name</label>
-                  <input id="customerNameInput" class="form-control" placeholder="e.g. Customer Name" autocomplete="off">
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Phone</label>
-                  <input id="customerPhoneInput" class="form-control" placeholder="Qatar mobile number" autocomplete="off">
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Email</label>
-                  <input id="customerEmailInput" class="form-control" placeholder="customer@email.com" autocomplete="off">
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Customer type</label>
-                  <select id="customerTypeInput" class="form-select">
-                    <option>Retail</option>
-                    <option>Wholesale</option>
-                    <option>Credit</option>
-                  </select>
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Opening balance</label>
-                  <input id="customerOpeningBalanceInput" class="form-control" type="number" min="0" step="0.01" value="0.00">
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Credit limit</label>
-                  <input id="customerCreditLimitInput" class="form-control" type="number" min="0" step="0.01" value="5000">
-                </div>
-
-                <div class="col-12">
-                  <label class="form-label">Address</label>
-                  <textarea id="customerAddressInput" class="form-control" rows="3"></textarea>
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Credit days</label>
-                  <input id="customerCreditDaysInput" class="form-control" type="number" min="0" step="1" value="30">
-                </div>
-
-                <div class="col-12">
-                  <button id="saveCustomerBtn" class="btn btn-brand" type="button">Save Customer</button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="tab-pane fade section-anchor" id="customer-soa">
-            <div class="cardx">
-              <h5 class="cardx-title">Customer Statement of Account</h5>
-              <div class="row g-3 mb-3">
-                <div class="col-md-4"><select class="form-select" id="customerStatementCustomer"></select></div>
-                <div class="col-md-3"><input type="date" class="form-control" id="customerStatementFrom"></div>
-                <div class="col-md-3"><input type="date" class="form-control" id="customerStatementTo"></div>
-                <div class="col-md-2"><button class="btn btn-brand w-100" id="runCustomerStatementBtn" type="button">Run</button></div>
-              </div>
-
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th>Date</th><th>Ref</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
-                  <tbody id="customerStatementBody"><tr><td colspan="6" class="text-muted">Select a customer to load the live statement.</td></tr></tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-          <section class="tab-pane fade section-anchor" id="credit-control">
-            <div class="cardx mb-3">
-              <h5 class="cardx-title">Customer Credit Control</h5>
-              <p class="text-muted">Live overdue balances, credit limits and server-enforced credit holds.</p>
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th>Customer</th><th>0-30 Days</th><th>31-60 Days</th><th>60+ Days</th><th>Total</th><th>Status</th><th></th></tr></thead>
-                  <tbody id="creditAgingBody"></tbody>
-                </table>
-              </div>
-            </div>
-
-            <div class="cardx">
-              <h5 class="cardx-title mb-3">Follow-up Reminders</h5>
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th>Time</th><th>Customer</th><th>Note</th></tr></thead>
-                  <tbody id="creditReminderBody"></tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-          <section class="tab-pane fade section-anchor" id="customer-loyalty">
-            <div class="cardx">
-              <h5 class="cardx-title mb-3">Customer Loyalty Points</h5>
-              <div class="table-wrap">
-                <table class="table">
-                  <thead><tr><th>Customer</th><th>Balance</th><th>Points</th><th>Tier</th><th></th></tr></thead>
-                  <tbody id="customerLoyaltyBody"></tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-          <section class="tab-pane fade section-anchor" id="customer-invoice-settings">
-            <div class="row g-3">
-              <div class="col-lg-5">
-                <div class="cardx">
-                  <h5 class="cardx-title mb-3">Customer-wise Invoice Template Settings</h5>
-
-                  <div id="customerInvoicePrefsForm" class="row g-3">
-                    <div class="col-12">
-                      <label class="form-label">Customer</label>
-                      <select id="customerPrefName" class="form-select">
-                        <option>Customer Name</option>
-                        <option>Customer Name</option>
-                        <option>Customer</option>
-                      </select>
-                    </div>
-
-                    <div class="col-12">
-                      <label class="form-label">Default invoice template</label>
-                      <select class="form-select" data-customer-pref="template">
-                        <option value="modern-a4">Modern A4 Invoice</option>
-                        <option value="compact-a4">Compact A4 Invoice</option>
-                        <option value="paint-store">Paint Store Invoice</option>
-                        <option value="thermal-80">Thermal Receipt 80mm</option>
-                        <option value="tax-invoice">Tax Invoice</option>
-                        <option value="bilingual">Bilingual English/Arabic Invoice</option>
-                      </select>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label class="form-label">Default price level</label>
-                      <select class="form-select" data-customer-pref="priceLevel">
-                        <option>Retail</option>
-                        <option>Wholesale</option>
-                        <option>Garage</option>
-                        <option>VIP</option>
-                      </select>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label class="form-label">Payment terms</label>
-                      <select class="form-select" data-customer-pref="paymentTerms">
-                        <option>Cash</option>
-                        <option>7 Days</option>
-                        <option>15 Days</option>
-                        <option>30 Days</option>
-                      </select>
-                    </div>
-
-                    <div class="col-12">
-                      <label class="form-label">Default delivery address</label>
-                      <textarea class="form-control" rows="2" data-customer-pref="deliveryAddress"></textarea>
-                    </div>
-
-                    <div class="col-md-6"><label class="form-check"><input class="form-check-input" type="checkbox" data-customer-pref="showBalance"> Show balance on invoice</label></div>
-                    <div class="col-md-6"><label class="form-check"><input class="form-check-input" type="checkbox" data-customer-pref="showCreditLimit"> Show customer credit limit</label></div>
-                    <div class="col-md-6"><label class="form-check"><input class="form-check-input" type="checkbox" data-customer-pref="whatsappDefault"> Send invoice on WhatsApp by default</label></div>
-
-                    <div class="col-md-6">
-                      <label class="form-label">Preferred language</label>
-                      <select class="form-select" data-customer-pref="language">
-                        <option>English</option>
-                        <option>Arabic</option>
-                        <option>Bilingual</option>
-                      </select>
-                    </div>
-
-                    <div class="col-md-6">
-                      <label class="form-label">Preferred print size</label>
-                      <select class="form-select" data-customer-pref="printSize">
-                        <option>A4</option>
-                        <option>A5</option>
-                        <option>Thermal 80mm</option>
-                      </select>
-                    </div>
-
-                    <div class="col-12"><button id="saveCustomerInvoicePrefsBtn" class="btn btn-brand">Save Customer Invoice Preferences</button></div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="col-lg-7">
-                <div class="cardx">
-                  <h5 class="cardx-title">Customer Invoice Actions</h5>
-                  <p class="text-muted">Preview uses customer template if available, otherwise global default invoice template.</p>
-                  <button class="btn btn-brand" data-invoice-preview="paint-store">Preview Paint Store Invoice</button>
-                  <button class="btn btn-soft" data-invoice-print="paint-store">Print Paint Invoice</button>
-                  <button class="btn btn-soft" data-whatsapp-invoice>WhatsApp Invoice Demo</button>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <div class="modal fade" id="redeemModal" tabindex="-1">
-          <div class="modal-dialog">
-            <div class="modal-content cardx">
-              <div class="modal-header">
-                <h5 class="modal-title fw-bold">Redeem Points</h5>
-                <button class="btn-close" data-bs-dismiss="modal"></button>
-              </div>
-              <div class="modal-body">
-                <label class="form-label">Customer</label>
-                <input id="redeemCustomer" class="form-control mb-2" readonly>
-                <label class="form-label">Points to redeem</label>
-                <input id="redeemPoints" class="form-control" type="number" value="500">
-                <div class="mini-stat mt-3">
-                  <div class="d-flex justify-content-between"><span>Discount value</span><strong id="redeemValue">QAR 25</strong></div>
-                </div>
-              </div>
-              <div class="modal-footer">
-                <button class="btn btn-soft" data-bs-dismiss="modal">Cancel</button>
-                <button id="confirmRedeemBtn" class="btn btn-brand">Redeem</button>
-              </div>
+        <section class="cardx report-controls mb-3">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div><h5 class="cardx-title mb-1">Report controls</h5><p class="text-muted mb-0">Each percentage column uses the business basis shown beside the report title.</p></div>
+            <div class="report-actions d-flex gap-2 flex-wrap">
+              <button id="exportReportBtn" class="btn btn-soft" type="button"><i class="bi bi-filetype-csv me-1"></i>Export CSV</button>
+              <button id="printReportBtn" class="btn btn-soft" type="button"><i class="bi bi-printer me-1"></i>Print</button>
             </div>
           </div>
-        </div>
+          <div class="report-toolbar">
+            <div><label class="form-label" for="reportSelect">Report</label><select id="reportSelect" class="form-select"></select></div>
+            <div><label class="form-label" for="reportFrom">From</label><input id="reportFrom" type="date" class="form-control"></div>
+            <div><label class="form-label" for="reportTo">To</label><input id="reportTo" type="date" class="form-control"></div>
+            <div><label class="form-label" for="reportEntityFilter">Filter</label><select id="reportEntityFilter" class="form-select"><option value="">All records</option></select></div>
+            <div class="report-run"><button id="runReportBtn" class="btn btn-brand w-100" type="button"><i class="bi bi-play-fill me-1"></i>Run Report</button></div>
+          </div>
+        </section>
+
+        <section class="report-kpis mb-3" id="reportSummary" aria-label="Report summary"></section>
+
+        <section class="cardx">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+              <h5 id="reportTitle" class="cardx-title mb-1">Select a report</h5>
+              <div class="report-meta text-muted small"><span id="reportBasis">Percentage basis will appear here.</span><span id="reportRowCount"></span></div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="table" id="reportTable">
+              <thead id="reportTableHead"><tr><th>Report</th><th>Percentage</th></tr></thead>
+              <tbody id="reportTableBody"><tr><td colspan="2" class="text-muted">Loading report options...</td></tr></tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
   </div>
 
   <div class="search-overlay" id="globalSearch">
-    <div class="search-box">
-      <div class="search-head">
-        <i class="bi bi-search fs-4 text-brand"></i>
-        <input id="globalSearchInput" placeholder="Type to search pages, sections, invoices..." autocomplete="off">
-        <button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button>
-      </div>
-      <div class="search-results" id="globalSearchResults"></div>
-    </div>
+    <div class="search-box"><div class="search-head"><i class="bi bi-search fs-4 text-brand"></i><input id="globalSearchInput" placeholder="Type to search pages, sections, reports..." autocomplete="off"><button class="btn-icon" data-search-close><i class="bi bi-x-lg"></i></button></div><div class="search-results" id="globalSearchResults"></div></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/axtor-api.js?v=20260622-phase3b"></script>
-  <script src="js/core-data.js?v=20260618-sales-qr1"></script>
-  <script src="js/main.js?v=20260618-sales-qr1"></script>
-  <script src="js/theme-switcher.js?v=20260618-sales-qr1"></script>
-  <script src="js/app-data.js?v=20260618-sales-qr1"></script>
-  <script src="js/retail-advanced.js?v=20260618-sales-qr1"></script>
-  <script src="js/invoice-templates.js?v=20260618-sales-qr1"></script>
-  <script src="js/customers-backend.js?v=20260720-credit-control1"></script>
+  <script src="js/axtor-api.js?v=20260730-retail-reports1"></script>
+  <script src="js/core-data.js?v=20260730-retail-reports1"></script>
+  <script src="js/main.js?v=20260730-retail-reports1"></script>
+  <script src="js/theme-switcher.js?v=20260730-retail-reports1"></script>
+  <script src="js/reports-backend.js?v=20260730-retail-reports1"></script>
 </body>
 </html>
