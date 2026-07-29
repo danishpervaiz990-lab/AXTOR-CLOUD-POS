@@ -1,0 +1,22 @@
+name: Manufacturing Frontend CI
+on:
+  push:
+    branches: [fix/manufacturing/dedicated-frontend-v1]
+  pull_request:
+    branches: [frontend-manufacturing]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: JavaScript syntax
+        run: node --check demo-static/js/manufacturing-app.js
+      - name: Manufacturing release suite
+        run: node tests/manufacturing-frontend.test.cjs
+      - name: Vercel configuration
+        run: node -e "const v=JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); if(v.git?.deploymentEnabled?.['fix/*']!==false) process.exit(1); console.log('Vercel deployment disabled for work branch')"
