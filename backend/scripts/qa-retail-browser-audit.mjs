@@ -38,12 +38,16 @@ try {
         page.locator('#loginButton').click(),
         page.waitForFunction(() => Boolean(localStorage.getItem('axtorAuthToken')), null, { timeout: 30000 }),
       ]);
-      const session = await page.evaluate(() => ({ token: localStorage.getItem('axtorAuthToken'), user: JSON.parse(localStorage.getItem('currentUser') || '{}'), business: JSON.parse(localStorage.getItem('axtorBusiness') || '{}') }));
+      await page.waitForTimeout(750);
+      const storage = await context.storageState();
+      const originState = storage.origins.find((entry) => entry.origin === runtime.publicOrigin);
+      const values = Object.fromEntries((originState?.localStorage || []).map((entry) => [entry.name, entry.value]));
+      const session = { token: values.axtorAuthToken || '', user: JSON.parse(values.currentUser || '{}'), business: JSON.parse(values.axtorBusiness || '{}') };
       tokenStored = Boolean(session.token);
       roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === String(user.role).toLowerCase());
       loginOk = tokenStored && String(session.business?.slug || '').toLowerCase() === String(report.environment.businessSlug).toLowerCase();
 
-      await page.goto(`${runtime.publicOrigin}/app/retail/retail-dashboard.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(`${runtime.publicOrigin}/apps/retail/retail-dashboard.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForTimeout(2500);
       finalUrl = page.url();
       const body = await page.locator('body').innerText().catch(() => '');
