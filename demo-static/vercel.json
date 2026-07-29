@@ -14,8 +14,8 @@
   "rewrites": [
     { "source": "/apps/:industry", "destination": "/api/industry-asset?industry=:industry" },
     { "source": "/apps/:industry/:path*", "destination": "/api/industry-asset?industry=:industry&path=:path*" },
-    { "source": "/", "destination": "/saas-index.html" },
-    { "source": "/index.html", "destination": "/saas-index.html" },
+    { "source": "/", "destination": "/login.html" },
+    { "source": "/index.html", "destination": "/login.html" },
     { "source": "/login", "destination": "/login.html" },
     { "source": "/register", "destination": "/register.html" },
     { "source": "/onboarding", "destination": "/tenant-onboarding.html" },
@@ -31,7 +31,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "no-referrer" },
         { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        { "key": "Permissions-Policy", "value": "camera=(self), microphone=(), geolocation=()" }
       ]
     },
     {
