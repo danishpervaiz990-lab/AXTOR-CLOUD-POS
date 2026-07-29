@@ -1,5 +1,5 @@
 {
-  "version": "2026-07-28-same-origin-branch-delivery-v1",
+  "version": "2026-07-28-all-industries-code-complete-v2",
   "deploymentMode": "same_origin_branch_proxy",
   "frontends": {
     "retail": { "project": "axtor-retail", "delivery": "same_origin_branch_proxy", "basePath": "/apps/retail", "sourceAlias": "https://axtorpos-git-frontend-retail-axtor1.vercel.app", "dashboard": "retail-dashboard.html", "branch": "frontend-retail" },
@@ -14,6 +14,6 @@
     "furniture": { "project": "axtor-furniture", "delivery": "same_origin_branch_proxy", "basePath": "/apps/furniture", "sourceAlias": "https://axtorpos-git-frontend-furniture-axtor1.vercel.app", "dashboard": "furniture-dashboard.html", "branch": "frontend-furniture" },
     "workshop": { "project": "axtor-workshop", "delivery": "same_origin_branch_proxy", "basePath": "/apps/workshop", "sourceAlias": "https://axtorpos-git-frontend-workshop-axtor1.vercel.app", "dashboard": "workshop-dashboard.html", "branch": "frontend-workshop" },
     "wholesale": { "project": "axtor-wholesale", "delivery": "same_origin_branch_proxy", "basePath": "/apps/wholesale", "sourceAlias": "https://axtorpos-git-frontend-wholesale-axtor1.vercel.app", "dashboard": "wholesale-dashboard.html", "branch": "frontend-wholesale" },
-    "manufacturing": { "project": "axtor-manufacturing", "delivery": "unreleased", "basePath": "", "sourceAlias": "", "dashboard": "manufacturing-dashboard.html", "branch": "frontend-manufacturing" }
+    "manufacturing": { "project": "axtor-manufacturing", "delivery": "same_origin_branch_proxy", "basePath": "/apps/manufacturing", "sourceAlias": "https://axtorpos-git-frontend-manufacturing-axtor1.vercel.app", "dashboard": "manufacturing-dashboard.html", "branch": "frontend-manufacturing" }
   }
 }

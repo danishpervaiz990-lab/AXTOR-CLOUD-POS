@@ -10,6 +10,9 @@ const onboarding=fs.readFileSync(path.join(root,'tenant-onboarding.html'),'utf8'
 const proxy=fs.readFileSync(path.join(root,'api/industry-asset.js'),'utf8');
 const hosts=JSON.parse(fs.readFileSync(path.join(root,'industry-hosts.json'),'utf8'));
 const vercel=JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
+const manifest=JSON.parse(fs.readFileSync(path.join(__dirname,'../deployment/vercel-industry-projects.json'),'utf8'));
+const expected=['retail','grocery','pharmacy','gym','school','clinic','restaurant','hardware','paint','furniture','workshop','wholesale','manufacturing'];
+
 assert.match(landing,/SaaS entry/);
 assert.doesNotMatch(landing,/href="terminal\.html"/);
 assert.doesNotMatch(landing,/industry\.html\?module=/);
@@ -27,27 +30,41 @@ assert.match(handoff,/targetOrigin: window\.location\.origin/);
 assert.match(onboarding,/window\.location\.replace\(target\)/);
 assert.match(onboarding,/setup\.html/);
 assert.ok(fs.existsSync(path.join(root,'setup.html')),'setup.html onboarding implementation is missing');
-assert.ok(Object.keys(hosts.frontends).length>=13);
-for(const [code,entry] of Object.entries(hosts.frontends)){
-  assert.ok(entry.project,`${code} project missing`);
-  assert.ok(entry.branch,`${code} branch missing`);
-  assert.ok(entry.dashboard,`${code} dashboard missing`);
-  if(code!== 'manufacturing'){
-    assert.equal(entry.delivery,'same_origin_branch_proxy',`${code} delivery mode mismatch`);
-    assert.equal(entry.basePath,`/apps/${code}`,`${code} base path mismatch`);
-    assert.match(entry.sourceAlias,/^https:\/\/axtorpos-git-frontend-/);
-  }
+
+assert.deepEqual(Object.keys(hosts.frontends).sort(),expected.slice().sort(),'Router must contain exactly the 13 supported industry frontends');
+for(const code of expected){
+  const entry=hosts.frontends[code];
+  assert.ok(entry,`${code} router entry missing`);
+  assert.equal(entry.project,`axtor-${code}`,`${code} project mismatch`);
+  assert.equal(entry.branch,`frontend-${code}`,`${code} branch mismatch`);
+  assert.equal(entry.dashboard,`${code}-dashboard.html`,`${code} dashboard mismatch`);
+  assert.equal(entry.delivery,'same_origin_branch_proxy',`${code} delivery mode mismatch`);
+  assert.equal(entry.basePath,`/apps/${code}`,`${code} base path mismatch`);
+  assert.match(entry.sourceAlias,new RegExp(`^https://axtorpos-git-frontend-${code}-`),`${code} source alias mismatch`);
 }
+
+assert.equal(manifest.projects.length,13,'Deployment manifest must include all 13 industries');
+assert.deepEqual(manifest.projects.map(item=>item.industry).sort(),expected.slice().sort());
+assert.deepEqual(manifest.unreleased,[],'No industry should remain marked unreleased after Release E');
+for(const item of manifest.projects){
+  assert.equal(item.branch,`frontend-${item.industry}`);
+  assert.equal(item.dashboard,`${item.industry}-dashboard.html`);
+  assert.equal(item.status,'code_complete_not_deployed');
+}
+
 const rewrites=vercel.rewrites.map(row=>`${row.source}->${row.destination}`);
 assert.ok(rewrites.includes('/->/saas-index.html'));
 assert.ok(rewrites.includes('/industry.html->/router.html'));
 assert.ok(rewrites.includes('/dashboard.html->/router.html'));
 assert.ok(rewrites.includes('/apps/:industry->/api/industry-asset?industry=:industry'));
 assert.ok(rewrites.includes('/apps/:industry/:path*->/api/industry-asset?industry=:industry&path=:path*'));
-assert.match(proxy,/frontend-clinic/);
-assert.match(proxy,/frontend-pharmacy/);
+for(const code of expected){
+  assert.match(proxy,new RegExp(`\\b${code}: \\{ branch: "frontend-${code}", dashboard: "${code}-dashboard\\.html" \\}`),`${code} gateway entry missing`);
+}
 assert.match(proxy,/raw\.githubusercontent\.com/);
 assert.match(proxy,/selected\.includes\("\.\."\)/);
+assert.match(proxy,/MAX_ASSET_BYTES/);
+assert.match(proxy,/AbortSignal\.timeout/);
 assert.doesNotMatch(proxy,/req\.query\.branch/);
 
 // Authentication entry must never publish a working account or temporary password.
@@ -68,4 +85,4 @@ for(const rule of loginHeaderRules){
   assert.match(values['cache-control']||'',/no-store/);
   assert.equal(values.pragma,'no-cache');
 }
-console.log('PASS: main SaaS router, isolated industry delivery and secure no-cache login entry are certified');
+console.log('PASS: main SaaS router, 13 isolated industry branches, secure gateway and no-cache login entry are code-certified without deployment');

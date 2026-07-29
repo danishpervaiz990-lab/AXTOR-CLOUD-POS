@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 
 const manifest = JSON.parse(fs.readFileSync("deployment/vercel-industry-projects.json", "utf8"));
+const certificationRefs = { manufacturing: "fix/manufacturing/dedicated-frontend-v1" };
 
 function run(command, args) {
   return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -12,38 +13,41 @@ function show(branch, file) {
   return run("git", ["show", `origin/${branch}:${file}`]);
 }
 
-const branches = [...new Set(manifest.projects.map(item => item.branch).concat(["backend"]))];
+const frontendRefs = manifest.projects.map(item => certificationRefs[item.industry] || item.branch);
+const branches = [...new Set(frontendRefs.concat(["backend"]))];
 run("git", ["fetch", "--quiet", "origin", ...branches.map(branch => `refs/heads/${branch}:refs/remotes/origin/${branch}`)]);
 
 const results = [];
 for (const project of manifest.projects) {
-  console.log(`CERTIFY ${project.industry} (${project.branch})`);
+  const certificationRef = certificationRefs[project.industry] || project.branch;
+  console.log(`CERTIFY ${project.industry} (${certificationRef})`);
   try {
     const runtimeFile = project.runtime || `${project.industry}-app.js`;
-    const dashboard = show(project.branch, `demo-static/${project.dashboard}`);
-    const runtime = show(project.branch, `demo-static/js/${runtimeFile}`);
-    const handoff = show(project.branch, "demo-static/session-handoff.html");
-    const vercel = JSON.parse(show(project.branch, "demo-static/vercel.json"));
+    const dashboard = show(certificationRef, `demo-static/${project.dashboard}`);
+    const runtime = show(certificationRef, `demo-static/js/${runtimeFile}`);
+    const handoff = show(certificationRef, "demo-static/session-handoff.html");
+    const vercel = JSON.parse(show(certificationRef, "demo-static/vercel.json"));
 
-    assert.match(dashboard, new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), `${project.branch} dashboard does not load its vertical runtime`);
-    assert.doesNotMatch(dashboard, /industry\.html\?module=/, `${project.branch} dashboard still routes through a generic industry page`);
-    assert.match(runtime, /\/api\/v1\//, `${project.branch} runtime has no API integration`);
-    assert.match(runtime, /industry\/registry|tenant|available only|tenant context/i, `${project.branch} runtime has no tenant-industry guard`);
-    assert.match(handoff, /\/api\/v1\/auth\/exchange/, `${project.branch} has no handoff exchange`);
-    assert.match(handoff, /history\.replaceState/, `${project.branch} does not remove the one-time code from browser history`);
-    assert.doesNotMatch(handoff, /searchParams\.set\(["']token|[?&]token=/, `${project.branch} transfers a permanent token in a URL`);
-    assert.ok(Array.isArray(vercel.rewrites) && vercel.rewrites.some(row => row.source === "/"), `${project.branch} has no root Vercel route`);
+    assert.match(dashboard, new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), `${certificationRef} dashboard does not load its vertical runtime`);
+    assert.doesNotMatch(dashboard, /industry\.html\?module=/, `${certificationRef} dashboard still routes through a generic industry page`);
+    assert.match(runtime, /\/api\/v1\//, `${certificationRef} runtime has no API integration`);
+    assert.match(runtime, /industry\/registry|tenant|available only|tenant context/i, `${certificationRef} runtime has no tenant-industry guard`);
+    assert.match(handoff, /\/api\/v1\/auth\/exchange/, `${certificationRef} has no handoff exchange`);
+    assert.match(handoff, /history\.replaceState/, `${certificationRef} does not remove the one-time code from browser history`);
+    assert.doesNotMatch(handoff, /searchParams\.set\(["']token|[?&]token=/, `${certificationRef} transfers a permanent token in a URL`);
+    assert.ok(Array.isArray(vercel.rewrites) && vercel.rewrites.some(row => row.source === "/"), `${certificationRef} has no root Vercel route`);
     assert.equal(project.branch, `frontend-${project.industry}`);
     assert.equal(project.project, `axtor-${project.industry}`);
     assert.equal(project.origin, `https://axtorpos.vercel.app/apps/${project.industry}`);
-    assert.equal(project.status, "ready_same_origin_proxy");
+    assert.equal(project.status, "code_complete_not_deployed");
     assert.match(project.sourceAlias, new RegExp(`^https://axtorpos-git-frontend-${project.industry}-axtor1\\.vercel\\.app$`));
 
     results.push({
       industry: project.industry,
       branch: project.branch,
+      certificationRef,
       staticRelease: "PASS",
-      deployment: "SAME_ORIGIN_READY"
+      deployment: "CODE_COMPLETE_NOT_DEPLOYED"
     });
     console.log(`PASS ${project.industry}`);
   } catch (error) {
@@ -91,7 +95,9 @@ for (const project of manifest.projects) {
   assert.equal(host?.sourceAlias, project.sourceAlias, `main router source alias mismatch for ${project.industry}`);
   assert.match(proxy, new RegExp(project.branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `proxy branch whitelist missing ${project.branch}`);
 }
+assert.equal(manifest.projects.length, 13);
+assert.deepEqual(manifest.unreleased, []);
 console.log("PASS proposed main SaaS router and delivery layer");
 
 console.table(results);
-console.log(`PASS: ${results.length} released frontend branches, same-origin delivery, main router, and secure handoff backend contract`);
+console.log(`PASS: ${results.length} code-complete frontend branches, proposed same-origin delivery, main router, and secure handoff backend contract; no Vercel deployment was attempted`);
