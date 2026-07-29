@@ -37,7 +37,7 @@
   function loadRetailReporting() {
     if (!document.getElementById("sales-overview") || window.AxtorRetailReporting || document.querySelector('script[data-axtor-retail-reporting="1"]')) return;
     var script = document.createElement("script");
-    script.src = "js/retail-reporting-backend.js?v=20260730-retail-report-sync2";
+    script.src = "js/retail-reporting-backend.js?v=20260730-retail-report-qatar3";
     script.async = false;
     script.dataset.axtorRetailReporting = "1";
     script.onerror = function () {
