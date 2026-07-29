@@ -264,6 +264,17 @@ export async function createPayment(req: Request, res: Response) {
     const result = await prisma.$transaction(async (tx: any) => {
       const access = await loadUserAccess(tx, businessId, getUserId(req));
       requirePermission(access, "payments.create", true);
+      const requestedShiftId = cleanString(req.body?.shiftId);
+      const activeShift = await tx.shift.findFirst({
+        where: {
+          businessId,
+          status: "OPEN",
+          ...(requestedShiftId ? { id: requestedShiftId } : {}),
+          OR: [{ cashierUserId: access.userId }, { openedByUserId: access.userId }],
+        },
+        orderBy: { openedAt: "desc" },
+      });
+      if (requestedShiftId && !activeShift) throw new Error("Selected shift is not open for the current user");
       if (idempotencyKey) {
         await tx.$queryRawUnsafe("SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtext($1))", `axtor:payment-idempotency:${businessId}:${idempotencyKey}`);
         const existing = await tx.customerPayment.findFirst({ where: { businessId, idempotencyKey } });
@@ -363,6 +374,11 @@ export async function createPayment(req: Request, res: Response) {
             depositAccount: cleanString(req.body?.depositAccount) ?? null,
             referenceNo: cleanString(req.body?.referenceNo) ?? null,
             notes: cleanString(req.body?.notes) ?? null,
+            source: "receive_payment",
+            shiftId: activeShift?.id ?? null,
+            counterId: activeShift?.counterId ?? null,
+            branchId: activeShift?.branchId ?? invoice.branchId ?? null,
+            createdByUserId: access.userId,
           },
         },
       });
