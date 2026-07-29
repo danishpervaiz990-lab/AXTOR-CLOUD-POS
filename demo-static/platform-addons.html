@@ -1,47 +1,50 @@
 <!doctype html>
 <html lang="en" data-theme="light">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Platform Add-ons · Axtor POS Cloud</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/industry-themes.css">
-  <style>
-    .addon-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}.addon-card{border:1px solid var(--industry-border,rgba(15,23,42,.12));border-radius:18px;padding:18px;background:var(--industry-card,#fff);box-shadow:0 10px 26px rgba(15,23,42,.06)}.addon-card h3{font-size:1rem}.addon-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--industry-primary,#0f9f78) 14%,transparent);color:var(--industry-primary,#0f9f78);font-size:1.2rem}.status-ready{color:#15803d}.status-config{color:#b45309}.camera-preview{width:100%;min-height:220px;background:#111;border-radius:14px;object-fit:cover}.insight{border-left:4px solid var(--industry-accent,#f59e0b);padding:10px 12px;background:rgba(148,163,184,.1);border-radius:8px}
-  </style>
+  <link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="css/industry-themes.css">
+  <style>.feature-card{border:1px solid var(--axtor-border,rgba(15,159,120,.18));border-radius:18px;padding:18px;height:100%;background:var(--axtor-surface,#fff)}.status-dot{width:.65rem;height:.65rem;border-radius:50%;display:inline-block}.status-live{background:#22c55e}.status-config{background:#f59e0b}.codebox{font-family:ui-monospace,monospace;word-break:break-all}</style>
 </head>
 <body>
-  <main class="container py-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-      <div><span class="text-uppercase small fw-bold opacity-75">Shared SaaS platform</span><h1 class="h3 mb-1">Add-ons Control Center</h1><p class="text-muted mb-0">Cross-industry tools with tenant and permission-aware backend contracts.</p></div>
-      <a class="btn btn-outline-secondary" href="index.html"><i class="bi bi-arrow-left"></i> Dashboard</a>
-    </div>
-    <div class="alert alert-warning"><strong>Configuration required:</strong> WhatsApp, email, SMS, backup storage, exchange-rate and AI providers require production credentials and backend endpoints before customer activation.</div>
-    <section class="addon-grid" id="addonGrid"></section>
-    <section class="row g-4 mt-2">
-      <div class="col-lg-6"><div class="addon-card h-100"><div class="d-flex gap-3 align-items-center mb-3"><div class="addon-icon"><i class="bi bi-upc-scan"></i></div><div><h2 class="h5 mb-0">Mobile barcode and QR scanner</h2><small class="text-muted">Uses the rear camera where supported</small></div></div><video id="scannerVideo" class="camera-preview" playsinline muted></video><div class="d-flex gap-2 mt-3"><button id="scanStart" class="btn btn-primary">Start scanner</button><button id="scanStop" class="btn btn-outline-secondary" disabled>Stop</button></div><p id="scanResult" class="mt-3 mb-0"></p></div></div>
-      <div class="col-lg-6"><div class="addon-card h-100"><div class="d-flex gap-3 align-items-center mb-3"><div class="addon-icon"><i class="bi bi-stars"></i></div><div><h2 class="h5 mb-0">Business insights preview</h2><small class="text-muted">Deterministic analysis; production AI remains server-controlled</small></div></div><div id="insights"></div></div></div>
-      <div class="col-lg-6"><div class="addon-card h-100"><h2 class="h5">Offline synchronization</h2><p class="text-muted">Queued writes are retried when connectivity returns.</p><p><strong>Queued:</strong> <span id="queueCount">0</span></p><button id="syncNow" class="btn btn-primary">Sync now</button><span id="syncStatus" class="ms-2"></span></div></div>
-      <div class="col-lg-6"><div class="addon-card h-100"><h2 class="h5">Client audit trail</h2><p class="text-muted">UI actions are captured locally and designed to be forwarded to the immutable server audit service.</p><p><strong>Recent records:</strong> <span id="auditCount">0</span></p><button id="auditSample" class="btn btn-outline-primary">Record test event</button></div></div>
-    </section>
-  </main>
-  <script src="js/industry-theme-loader.js"></script>
-  <script src="js/platform-addons.js"></script>
-  <script>
-    const features=[['AI business insights','bi-stars','Foundation ready'],['Barcode / QR camera','bi-upc-scan','Ready where browser supported'],['WhatsApp sharing','bi-whatsapp','Ready'],['Email automation','bi-envelope','Backend provider required'],['SMS notifications','bi-chat-dots','Backend provider required'],['Loyalty program','bi-gem','Backend domain required'],['Gift cards','bi-gift','Backend domain required'],['Multi-warehouse','bi-buildings','Backend domain required'],['Offline synchronization','bi-cloud-arrow-up','Runtime ready'],['Audit logs','bi-shield-check','Client runtime ready'],['Approval workflows','bi-check2-square','Backend domain required'],['Multi-company','bi-diagram-3','Backend context required'],['Multi-country tax','bi-percent','Tax rules required'],['Currency rate locking','bi-currency-exchange','Runtime ready'],['Scheduled backups','bi-database-check','Storage provider required'],['Advanced analytics','bi-graph-up-arrow','Data endpoints required'],['Custom dashboards','bi-grid-1x2','Schema required'],['Developer portal','bi-code-slash','OpenAPI required']];
-    document.getElementById('addonGrid').innerHTML=features.map(([name,icon,status])=>`<article class="addon-card"><div class="d-flex gap-3"><div class="addon-icon"><i class="bi ${icon}"></i></div><div><h3>${name}</h3><div class="small ${status.includes('Ready')||status.includes('ready')?'status-ready':'status-config'}">${status}</div></div></div></article>`).join('');
-    let scanner;
-    scanStart.onclick=async()=>{scanResult.textContent='Opening camera…';try{scanner=await AxtorAddons.scanBarcode({video:scannerVideo,onDetected:(value)=>{scanResult.innerHTML=`Detected: <strong>${value}</strong>`;scanStart.disabled=false;scanStop.disabled=true;}});scanStart.disabled=true;scanStop.disabled=false;}catch(e){scanResult.textContent=e.message;}};
-    scanStop.onclick=()=>{scanner?.stop();scanStart.disabled=false;scanStop.disabled=true;};
-    const renderCounts=()=>{queueCount.textContent=AxtorAddons.getOfflineQueue().length;auditCount.textContent=AxtorAddons.getAuditRecords().length;};
-    syncNow.onclick=async()=>{syncStatus.textContent='Syncing…';const result=await AxtorAddons.flushOfflineQueue();syncStatus.textContent=`${result.processed} synced, ${result.remaining} remaining`;renderCounts();};
-    auditSample.onclick=()=>{AxtorAddons.recordAudit('CONTROL_CENTER_TEST','platform',null);renderCounts();};
-    const sample=AxtorAddons.calculateInsights({sales:12500,priorSales:11000,grossProfit:3100,lowStock:4,overdue:2});
-    insights.innerHTML=sample.map(x=>`<div class="insight mb-2"><strong>${x.title}</strong><div>${x.message}</div></div>`).join('');
-    renderCounts();
-  </script>
-</body>
-</html>
+<main class="container py-4">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4"><div><h1 class="h3 mb-1">Platform Add-ons</h1><p class="text-muted mb-0">Shared tenant features, provider readiness and developer controls.</p></div><a class="btn btn-outline-secondary" href="index.html"><i class="bi bi-arrow-left"></i> Dashboard</a></div>
+  <div id="alert"></div><div class="row g-3 mb-4" id="summary"></div>
+  <section class="card p-3 mb-4"><div class="d-flex justify-content-between align-items-center"><div><h2 class="h5 mb-1">Capability status</h2><p class="text-muted small mb-0">Live backend configuration and tenant records.</p></div><button id="refresh" class="btn btn-primary btn-sm">Refresh</button></div><div id="capabilities" class="row g-3 mt-1"></div></section>
+  <div class="row g-3">
+    <div class="col-lg-6"><section class="card p-3 h-100"><h2 class="h5">Issue gift card</h2><form id="giftForm" class="row g-2"><div class="col-7"><input class="form-control" name="amount" type="number" min="0.01" step="0.01" placeholder="Amount" required></div><div class="col-5"><input class="form-control" name="currency" value="QAR" maxlength="3"></div><div class="col-12"><input class="form-control" name="customerId" placeholder="Customer ID (optional)"></div><div class="col-12"><button class="btn btn-primary">Issue gift card</button></div></form><div id="giftCards" class="mt-3"></div></section></div>
+    <div class="col-lg-6"><section class="card p-3 h-100"><h2 class="h5">Developer API key</h2><form id="keyForm" class="d-flex gap-2"><input class="form-control" name="name" placeholder="Key name" required><button class="btn btn-primary">Create</button></form><div id="apiSecret" class="alert alert-warning mt-3 d-none"><strong>Copy this secret now:</strong><div class="codebox mt-1"></div></div><div id="apiKeys" class="mt-3"></div></section></div>
+    <div class="col-lg-6"><section class="card p-3 h-100"><h2 class="h5">Company contexts</h2><form id="companyForm" class="d-flex gap-2"><input class="form-control" name="name" placeholder="Company name" required><button class="btn btn-primary">Add</button></form><div id="companies" class="mt-3"></div></section></div>
+    <div class="col-lg-6"><section class="card p-3 h-100"><h2 class="h5">Encrypted backup request</h2><p class="text-muted small">Creates a tracked backup manifest. A configured Railway storage worker completes the archive.</p><button id="backupBtn" class="btn btn-primary">Request backup</button><div id="backups" class="mt-3"></div></section></div>
+  </div>
+</main>
+<script src="js/industry-theme-loader.js"></script><script src="js/platform-addons.js"></script>
+<script>
+(() => {
+ const A=window.AxtorAddons, alertBox=document.getElementById('alert');
+ const show=(m,t='success')=>{alertBox.innerHTML=`<div class="alert alert-${t}">${m}</div>`;setTimeout(()=>alertBox.innerHTML='',5000)};
+ const data=p=>p?.data??p;
+ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ async function load(){
+  try{
+   const [status,summary,gifts,keys,companies,backups]=await Promise.all([
+    A.api('/api/v1/platform-features/status'),A.api('/api/v1/platform-features/summary'),A.api('/api/v1/platform-features/gift-cards'),A.api('/api/v1/platform-features/api-keys'),A.api('/api/v1/platform-features/resources/companies'),A.api('/api/v1/platform-features/backups')]);
+   const s=data(summary)||{};document.getElementById('summary').innerHTML=Object.entries(s).map(([k,v])=>`<div class="col-6 col-lg-2"><div class="feature-card"><div class="text-muted small">${esc(k)}</div><div class="h4 mb-0">${esc(v)}</div></div></div>`).join('');
+   const caps=data(status)?.capabilities||data(status)||{};document.getElementById('capabilities').innerHTML=Object.entries(caps).map(([k,v])=>`<div class="col-md-6 col-xl-4"><div class="feature-card"><span class="status-dot ${v?.ready||v?.configured?'status-live':'status-config'} me-2"></span><strong>${esc(k)}</strong><div class="small text-muted mt-2">${esc(v?.reason||v?.status||JSON.stringify(v))}</div></div></div>`).join('');
+   document.getElementById('giftCards').innerHTML=(data(gifts)||[]).map(x=>`<div class="border rounded p-2 mb-2"><strong>${esc(x.code)}</strong><span class="float-end">${esc(x.currency)} ${esc(x.balance)}</span></div>`).join('')||'<p class="text-muted">No gift cards.</p>';
+   document.getElementById('apiKeys').innerHTML=(data(keys)||[]).map(x=>`<div class="border rounded p-2 mb-2"><strong>${esc(x.name)}</strong><div class="small text-muted">${esc(x.keyPrefix)}…</div></div>`).join('')||'<p class="text-muted">No API keys.</p>';
+   document.getElementById('companies').innerHTML=(data(companies)||[]).map(x=>`<div class="border rounded p-2 mb-2">${esc(x.name)}</div>`).join('')||'<p class="text-muted">No company contexts.</p>';
+   document.getElementById('backups').innerHTML=(data(backups)||[]).slice().reverse().map(x=>`<div class="border rounded p-2 mb-2"><strong>${esc(x.status)}</strong><div class="small text-muted">${esc(x.requestedAt)}</div></div>`).join('')||'<p class="text-muted">No backup requests.</p>';
+  }catch(e){show(esc(e.message),'danger')}
+ }
+ document.getElementById('refresh').onclick=load;
+ document.getElementById('giftForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await A.api('/api/v1/platform-features/gift-cards',{method:'POST',body:JSON.stringify(Object.fromEntries(f))});e.target.reset();show('Gift card issued.');load()}catch(x){show(esc(x.message),'danger')}};
+ document.getElementById('keyForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{const r=data(await A.api('/api/v1/platform-features/api-keys',{method:'POST',body:JSON.stringify({name:f.get('name'),scopes:['read','write']})}));const box=document.getElementById('apiSecret');box.classList.remove('d-none');box.querySelector('.codebox').textContent=r.secret;e.target.reset();load()}catch(x){show(esc(x.message),'danger')}};
+ document.getElementById('companyForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await A.api('/api/v1/platform-features/resources/companies',{method:'POST',body:JSON.stringify({name:f.get('name'),active:true})});e.target.reset();show('Company context added.');load()}catch(x){show(esc(x.message),'danger')}};
+ document.getElementById('backupBtn').onclick=async()=>{try{await A.api('/api/v1/platform-features/backups',{method:'POST',body:JSON.stringify({provider:'railway-volume'})});show('Backup request recorded.');load()}catch(x){show(esc(x.message),'danger')}};
+ load();
+})();
+</script>
+</body></html>
