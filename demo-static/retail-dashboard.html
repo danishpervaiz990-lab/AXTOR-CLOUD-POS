@@ -1,1 +1,91 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Axtor General Retail</title><link rel="stylesheet" href="css/retail-app.css?v=20260728"></head><body><div class="retail-shell"><aside class="retail-nav"><div class="retail-brand">AXTOR · GENERAL RETAIL</div><a class="active" href="retail-dashboard.html">Dashboard</a><a href="terminal.html">POS Terminal</a><a href="sales.html">Sales & Returns</a><a href="customer.html">Customers</a><a href="products.html">Products</a><a href="inventory.html">Inventory</a><a href="purchase.html">Purchases</a><a href="suppliers.html">Suppliers</a><a href="shifts.html">Shifts</a><a href="salesmen.html">Sales Team</a><a href="promotions.html">Promotions</a><a href="loyalty.html">Loyalty</a><a href="reports.html">Reports</a><a href="accounts.html">Accounts</a><a href="expenses.html">Expenses</a><a href="settings.html">Settings</a></aside><main class="retail-main"><section class="retail-hero"><h1>General Retail Dashboard</h1><p>Fast checkout, customer sales, stock, purchasing and financial control</p></section><div class="retail-kpis"><div class="retail-kpi"><span>Today Sales</span><strong id="todaySales">—</strong></div><div class="retail-kpi"><span>Invoices</span><strong id="invoiceCount">—</strong></div><div class="retail-kpi"><span>Products</span><strong id="productCount">—</strong></div><div class="retail-kpi"><span>Customers</span><strong id="customerCount">—</strong></div></div><section class="retail-panel"><div class="retail-actions"><a class="retail-action" href="terminal.html"><strong>New Checkout</strong><span>Open the retail POS terminal</span></a><a class="retail-action" href="sales.html"><strong>Sales Register</strong><span>Invoices, returns and payments</span></a><a class="retail-action" href="products.html"><strong>Product Catalogue</strong><span>SKU, barcode and pricing</span></a><a class="retail-action" href="purchase.html"><strong>Purchase Stock</strong><span>Suppliers and receiving</span></a></div></section><section class="retail-panel"><h2>Retail Control</h2><p>Low-stock items: <strong id="lowStock">—</strong></p><p>Outstanding receivables: <strong id="receivables">—</strong></p><div class="retail-note">This branch is isolated for General Retail. Grocery, Pharmacy, Gym, School and other vertical interfaces are deployed from separate branches.</div><div id="retailStatus" class="retail-status"></div></section></main></div><script src="js/axtor-api.js?v=20260728"></script><script src="js/retail-app.js?v=20260728"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Axtor General Retail Dashboard</title>
+  <link rel="stylesheet" href="css/retail-app.css?v=20260730-report-sync1">
+</head>
+<body>
+  <div class="retail-shell">
+    <aside class="retail-nav">
+      <div class="retail-brand">AXTOR · GENERAL RETAIL</div>
+      <a class="active" href="retail-dashboard.html">Dashboard</a>
+      <a href="terminal.html">POS Terminal</a>
+      <a href="sales.html">Sales & Returns</a>
+      <a href="customer.html">Customers</a>
+      <a href="products.html">Products</a>
+      <a href="inventory.html">Inventory</a>
+      <a href="purchase.html">Purchases</a>
+      <a href="suppliers.html">Suppliers</a>
+      <a href="shifts.html">Shifts</a>
+      <a href="salesmen.html">Sales Team</a>
+      <a href="promotions.html">Promotions</a>
+      <a href="loyalty.html">Loyalty</a>
+      <a href="reports.html">Reports</a>
+      <a href="accounts.html">Accounts</a>
+      <a href="expenses.html">Expenses</a>
+      <a href="settings.html">Settings</a>
+    </aside>
+
+    <main class="retail-main">
+      <section class="retail-hero">
+        <div>
+          <h1>General Retail Dashboard</h1>
+          <p>Fast checkout, customer sales, stock, purchasing and financial control</p>
+        </div>
+        <div class="retail-sync"><span class="retail-sync-dot"></span><span id="dashboardSyncText">Synchronizing with Reports…</span></div>
+      </section>
+
+      <div class="retail-kpis retail-kpis-expanded">
+        <div class="retail-kpi"><span>Today Sales</span><strong id="todaySales">—</strong><small>Daily Sales report</small></div>
+        <div class="retail-kpi"><span>Today Invoices</span><strong id="invoiceCount">—</strong><small>Invoice-only count</small></div>
+        <div class="retail-kpi"><span id="monthlySalesLabel">Monthly Sales</span><strong id="monthlySales">—</strong><small>Daily Sales report</small></div>
+        <div class="retail-kpi"><span>Monthly Gross Profit</span><strong id="monthlyGrossProfit">—</strong><small>Profit & Loss report</small></div>
+        <div class="retail-kpi"><span>Gross Margin</span><strong id="monthlyGrossMargin">—</strong><small>Gross profit ÷ net sales</small></div>
+        <div class="retail-kpi"><span>Products</span><strong id="productCount">—</strong><small>Active catalogue</small></div>
+        <div class="retail-kpi"><span>Customers</span><strong id="customerCount">—</strong><small>Active customers</small></div>
+        <div class="retail-kpi"><span>Outstanding Receivables</span><strong id="receivables">—</strong><small>All open invoice balances</small></div>
+      </div>
+
+      <section class="retail-panel">
+        <div class="retail-panel-head">
+          <div><h2>Top Products This Month</h2><p>Exactly the same rows and values used by Sales by Product report.</p></div>
+          <a class="retail-link-button" href="reports.html">Open Full Reports</a>
+        </div>
+        <div class="retail-table-wrap">
+          <table class="retail-table">
+            <thead><tr><th>Product</th><th>Qty</th><th>Sales</th><th>Profit</th><th>Margin %</th></tr></thead>
+            <tbody id="topProductsBody"><tr><td colspan="5">Loading report-backed products…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="retail-panel">
+        <div class="retail-panel-head">
+          <div><h2>Retail Control</h2><p>Operational values that complement the financial reports.</p></div>
+        </div>
+        <div class="retail-control-grid">
+          <div><span>Low-stock items</span><strong id="lowStock">—</strong></div>
+          <div><span>Report period</span><strong id="reportPeriod">—</strong></div>
+          <div><span>Top-product rows</span><strong id="topProductCount">—</strong></div>
+        </div>
+        <div class="retail-note">Monthly Sales, Monthly Gross Profit, Gross Margin and Top Products are loaded directly from the same report endpoints used by the Reports page. They cannot use a separate formula or include quotations and delivery notes.</div>
+        <div id="retailStatus" class="retail-status" role="status" aria-live="polite"></div>
+      </section>
+
+      <section class="retail-panel">
+        <div class="retail-actions">
+          <a class="retail-action" href="terminal.html"><strong>New Checkout</strong><span>Open the retail POS terminal</span></a>
+          <a class="retail-action" href="sales.html"><strong>Sales Register</strong><span>Invoices, returns and payments</span></a>
+          <a class="retail-action" href="products.html"><strong>Product Catalogue</strong><span>SKU, barcode and pricing</span></a>
+          <a class="retail-action" href="reports.html"><strong>Financial Reports</strong><span>Amounts, percentages and exports</span></a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/axtor-api.js?v=20260730-report-sync1"></script>
+  <script src="js/retail-app.js?v=20260730-report-sync1"></script>
+</body>
+</html>
