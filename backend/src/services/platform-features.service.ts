@@ -1,4 +1,5 @@
 import { prisma } from "../db/prisma.js";
+import { getBackupProviderStatus } from "./backup-provider.service.js";
 
 export const PLATFORM_FEATURES = [
   "ai_insights","mobile_scanner","whatsapp","email","sms","loyalty","gift_cards",
@@ -7,6 +8,7 @@ export const PLATFORM_FEATURES = [
 ] as const;
 
 export async function getCapabilityStatus(businessId: string) {
+  const backupProvider = getBackupProviderStatus();
   const [business, warehouseCount, approvalCount, loyaltyCount, auditCount, communicationCount, currencyCount, taxRateCount] = await Promise.all([
     prisma.business.findUnique({ where: { id: businessId }, select: { id: true, name: true, country: true, currency: true, defaultLanguage: true } }),
     prisma.warehouse.count({ where: { businessId } }),
@@ -26,7 +28,7 @@ export async function getCapabilityStatus(businessId: string) {
       email: { state: "available", mode: "mailto-or-provider", providerConfigured: Boolean(process.env.EMAIL_API_KEY) },
       sms: { state: "configured", providerConfigured: Boolean(process.env.SMS_API_KEY) },
       loyalty: { state: loyaltyCount > 0 ? "active" : "ready", programCount: loyaltyCount },
-      gift_cards: { state: "schema-required" },
+      gift_cards: { state: "settings-backed" },
       multi_warehouse: { state: "active", warehouseCount },
       offline_sync: { state: "frontend-ready", serverIdempotencyRequired: true },
       audit_logs: { state: "active", eventCount: auditCount },
@@ -34,7 +36,13 @@ export async function getCapabilityStatus(businessId: string) {
       multi_company: { state: "company-context-required" },
       tax_engine: { state: taxRateCount > 0 ? "active" : "ready", taxRateCount },
       currency_lock: { state: currencyCount > 0 ? "active" : "ready", currencyCount },
-      scheduled_backups: { state: "provider-required", providerConfigured: Boolean(process.env.BACKUP_STORAGE_URL) },
+      scheduled_backups: {
+        state: backupProvider.configured ? "ready" : "provider-required",
+        providerConfigured: backupProvider.configured,
+        provider: backupProvider.provider,
+        storageConfigured: backupProvider.storageConfigured,
+        encryptionConfigured: backupProvider.encryptionConfigured,
+      },
       advanced_analytics: { state: "available" },
       dashboard_builder: { state: "settings-backed" },
       developer_api: { state: "contract-ready" },
