@@ -19,6 +19,7 @@ jobs:
           node --check demo-static/js/auth-redirect.js
           node --check demo-static/js/saas-router.js
           node --check demo-static/js/session-handoff.js
+          node --check demo-static/js/platform-addons.js
           node --check demo-static/api/industry-asset.js
           node --check tests/authenticated-production.e2e.mjs
           node --check scripts/certify-all-industry-code.mjs
@@ -26,6 +27,8 @@ jobs:
         run: node tests/main-saas-router.test.cjs
       - name: Industry asset gateway suite
         run: node tests/industry-asset-gateway.test.cjs
+      - name: Shared platform add-ons suite
+        run: node tests/platform-addons.test.cjs
       - name: All-industry branch code certification
         run: node scripts/certify-all-industry-code.mjs
       - name: Upload code-certification report
