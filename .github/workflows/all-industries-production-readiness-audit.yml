@@ -1,0 +1,106 @@
+name: All Industries Production Readiness Audit
+
+on:
+  push:
+    branches: [ops/all-industries-production-readiness-audit]
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/audit-all-industries-readiness.mjs"
+      - ".github/workflows/all-industries-production-readiness-audit.yml"
+      - "deployment/AXTOR-ALL-INDUSTRIES-COMPLETION-MASTER-PROMPT-2026-07-29.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout audit tooling
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Checkout all permanent frontend branches without deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-worktrees
+          while IFS='|' read -r industry ref; do
+            echo "AUDIT FETCH $industry from $ref"
+            git fetch --depth=1 origin "$ref"
+            git worktree add --detach "audit-worktrees/$industry" FETCH_HEAD
+          done <<'BRANCHES'
+          retail|frontend-retail
+          grocery|frontend-grocery
+          pharmacy|frontend-pharmacy
+          gym|frontend-gym
+          school|frontend-school
+          clinic|frontend-clinic
+          restaurant|frontend-restaurant
+          hardware|frontend-hardware
+          paint|frontend-paint
+          furniture|frontend-furniture
+          workshop|frontend-workshop
+          wholesale|frontend-wholesale
+          manufacturing|fix/manufacturing/dedicated-frontend-v1
+          BRANCHES
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run strict frontend readiness audit
+        run: node scripts/audit-all-industries-readiness.mjs
+
+      - name: Upload frontend audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: axtor-all-industries-readiness-audit
+          path: |
+            all-industries-readiness-report.json
+            all-industries-readiness-report.md
+          if-no-files-found: error
+          retention-days: 30
+
+  final-backend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout final Manufacturing backend candidate
+        uses: actions/checkout@v4
+        with:
+          ref: fix/manufacturing/release-e-backend
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Clean install
+        run: npm ci
+
+      - name: Prisma validation and client generation
+        run: |
+          npx prisma validate
+          npx prisma generate
+
+      - name: TypeScript production build
+        run: npm run build
+
+      - name: Backend tests
+        run: npm test -- --runInBand
+
+      - name: Verify compiled server entry
+        shell: bash
+        run: |
+          test -f dist/server.js
+          node --check dist/server.js
+          echo "PASS: final shared backend candidate builds without deployment"
