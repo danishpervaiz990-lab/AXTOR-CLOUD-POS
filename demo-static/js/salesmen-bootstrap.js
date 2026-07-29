@@ -34,5 +34,24 @@
     if (created) window.dispatchEvent(new CustomEvent("axtor:salesmen-migrated"));
   }
 
+  function loadRetailReporting() {
+    if (!document.getElementById("sales-overview") || window.AxtorRetailReporting || document.querySelector('script[data-axtor-retail-reporting="1"]')) return;
+    var script = document.createElement("script");
+    script.src = "js/retail-reporting-backend.js?v=20260730-retail-report-sync1";
+    script.async = false;
+    script.dataset.axtorRetailReporting = "1";
+    script.onerror = function () {
+      var root = document.getElementById("sales-overview");
+      if (!root || document.getElementById("salesOverviewLiveStatus")) return;
+      var status = document.createElement("div");
+      status.id = "salesOverviewLiveStatus";
+      status.className = "small text-danger mb-2";
+      status.textContent = "Live sales reporting module failed to load. Please refresh the page.";
+      root.prepend(status);
+    };
+    document.head.appendChild(script);
+  }
+
   migrate().catch(function (error) { console.warn("Axtor legacy salesman migration skipped:", error?.message || error); });
+  loadRetailReporting();
 })();
