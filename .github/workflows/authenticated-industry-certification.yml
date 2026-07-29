@@ -1,6 +1,12 @@
 name: Authenticated Industry Certification
 
 on:
+  push:
+    branches: [ops/authenticated-production-certification-2026-07-29]
+    paths:
+      - "scripts/certify-authenticated-industry-sessions.mjs"
+      - "deployment/authenticated-e2e-accounts.example.json"
+      - ".github/workflows/authenticated-industry-certification.yml"
   pull_request:
     branches: [main]
     paths:
@@ -35,12 +41,12 @@ jobs:
           node -e "const value=JSON.parse(require('fs').readFileSync('deployment/authenticated-e2e-accounts.example.json','utf8')); if(!Array.isArray(value)||!value.length) process.exit(1); console.log('Authenticated E2E example valid')"
 
   certify:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/ops/authenticated-production-certification-2026-07-29'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      AXTOR_PUBLIC_ORIGIN: ${{ inputs.public_origin || 'https://axtorpos.vercel.app' }}
-      AXTOR_BACKEND_ORIGIN: ${{ inputs.backend_origin || 'https://axtor-cloud-pos-production.up.railway.app' }}
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
       AXTOR_E2E_ACCOUNTS_JSON: ${{ secrets.AXTOR_E2E_ACCOUNTS_JSON }}
       AXTOR_E2E_TIMEOUT_MS: "20000"
     steps:
