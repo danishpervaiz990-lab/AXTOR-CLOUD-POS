@@ -47,15 +47,17 @@ try {
       await page.locator('#businessSlug').fill(runtime.ids.businessSlug || report.environment.businessSlug);
       await page.locator('#loginEmail').fill(user.email);
       await page.locator('#loginPassword').fill(user.password);
-      await Promise.all([
-        page.locator('#loginButton').click(),
-        page.waitForFunction(() => Boolean(localStorage.getItem('axtorAuthToken')), null, { timeout: 30000 }),
-      ]);
-      const session = await page.evaluate(() => ({
-        token: localStorage.getItem('axtorAuthToken') || '',
-        user: JSON.parse(localStorage.getItem('currentUser') || '{}'),
-        business: JSON.parse(localStorage.getItem('axtorBusiness') || '{}'),
-      }));
+      await page.locator('#loginButton').click();
+      await page.waitForFunction(() => Boolean(localStorage.getItem('axtorAuthToken')), null, { timeout: 30000 });
+      await page.waitForTimeout(750);
+      const storage = await context.storageState();
+      const originState = storage.origins.find((entry) => entry.origin === runtime.publicOrigin);
+      const values = Object.fromEntries((originState?.localStorage || []).map((entry) => [entry.name, entry.value]));
+      const session = {
+        token: values.axtorAuthToken || '',
+        user: JSON.parse(values.currentUser || '{}'),
+        business: JSON.parse(values.axtorBusiness || '{}'),
+      };
       loginOk = Boolean(session.token) && String(session.business?.slug || '').toLowerCase() === String(runtime.ids.businessSlug || report.environment.businessSlug).toLowerCase();
       roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === String(user.role).toLowerCase());
 
