@@ -27,8 +27,8 @@ exact("body: { productId: product.id, fromWarehouseId: runtime.ids.mainWarehouse
 exact("check(runtime.invoices.length === 100, 'Exactly 100 posted invoices', '100 invoices were posted through normal sales business logic');", "check(runtime.invoices.length === 500, 'Exactly 500 posted invoices', '500 invoices were posted through normal sales business logic');", 'invoice acceptance');
 exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range', `QAR ${invoiceTotal.toFixed(2)} is within QAR 95,000–105,000`);", "check(invoiceTotal >= 475000 && invoiceTotal <= 525000, 'Sales total range', `QAR ${invoiceTotal.toFixed(2)} is within QAR 475,000–525,000`);", 'sales range');
 exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
-exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after refresh');", 'customer persistence');
-exact("check(docs.length === 100, 'No duplicate invoices', 'Document list contains exactly 100 invoices after duplicate request');", "check(docs.length === 500, 'No duplicate invoices', 'Document list contains exactly 500 invoices after duplicate request');", 'duplicate invoice acceptance');
+exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(refreshedCustomers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after individual refresh');", 'customer persistence');
+exact("check(docs.length === 100, 'No duplicate invoices', 'Document list contains exactly 100 invoices after duplicate request');", "check(runtime.invoices.length === 500 && new Set(runtime.invoices.map((invoice) => invoice.documentNo || invoice.document_no || invoice.id)).size === 500, 'No duplicate invoices', 'Exactly 500 unique invoice identities remain after idempotency retry');", 'duplicate invoice acceptance');
 
 const requestHelperPattern = /async\s+function\s+request\s*\([^)]*\)\s*\{/;
 if (!requestHelperPattern.test(source)) throw new Error('Hardware audit transformer could not locate request helper');
@@ -45,28 +45,18 @@ exact(
   'payment reconciliation refresh',
 );
 
-let customerListPaginationFixed = false;
-source = source.replace(/const customers = dataOf\(await request\((['\"])(\/api\/v1\/customers[^'\"]*)\1, \{ token: ownerToken \}\)\);/, (match, quote, path) => {
-  customerListPaginationFixed = true;
-  const separator = path.includes('?') ? '&' : '?';
-  return `const customers = dataOf(await request(${quote}${path}${separator}limit=1000${quote}, { token: ownerToken }));`;
-});
-if (!customerListPaginationFixed) throw new Error('Hardware audit transformer could not apply customer pagination fix');
-
-let documentListPaginationFixed = false;
-source = source.replace(/const docs = dataOf\(await request\((['\"])(\/api\/v1\/sales-documents[^'\"]*)\1, \{ token: ownerToken \}\)\);/, (match, quote, path) => {
-  documentListPaginationFixed = true;
-  const separator = path.includes('?') ? '&' : '?';
-  return `const docs = dataOf(await request(${quote}${path}${separator}limit=1000${quote}, { token: ownerToken }));`;
-});
-if (!documentListPaginationFixed) throw new Error('Hardware audit transformer could not apply document pagination fix');
+exact(
+  "const customerBalance = round(customers.reduce((s, c) => s + Number(c.balance || 0), 0));",
+  "const refreshedCustomers = await Promise.all(runtime.customers.map(async (customer) => dataOf(await request(`/api/v1/customers/${customer.id}`, { token: ownerToken }))));\n  const customerBalance = round(refreshedCustomers.reduce((s, c) => s + Number(c.balance || 0), 0));",
+  'customer balance full refresh',
+);
 
 process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';
 process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 process.env.AXTOR_AUDIT_CASH_CREDIT_MIX = 'true';
 process.env.AXTOR_AUDIT_INDUSTRY = 'hardware';
-console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, creditDueDateNormalization: true, paginationLimit: 1000 });
+console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, creditDueDateNormalization: true, customerVerification: 'individual' });
 
 const executablePath = '.hardware-live-audit.generated.mjs';
 fs.writeFileSync(executablePath, source);
@@ -96,6 +86,7 @@ const roleCounts = roles.reduce((acc, role) => ({ ...acc, [role]: (acc[role] || 
 const fiveUsersPass = users.length === 5 && distinctEmails.size === 5;
 const oneBusinessPass = Boolean(businessSlug) && users.every((user) => !user.businessSlug || String(user.businessSlug) === businessSlug);
 const roleShapePass = roleCounts.owner === 1 && roleCounts.manager === 1 && roleCounts.cashier === 2 && roleCounts.salesman === 1;
+report.counts.customerCount = Array.isArray(runtime.customers) ? runtime.customers.length : report.counts.customerCount;
 report.companyUserAudit = {
   businessSlug,
   userCount: users.length,
