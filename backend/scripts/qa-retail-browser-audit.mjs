@@ -28,6 +28,14 @@ async function waitForSynchronizedStatus(page, selector) {
   }
 }
 
+async function waitForPlatformSettled(page) {
+  await page.waitForFunction(() => {
+    const context = window.AxtorPlatform?.getContext?.();
+    return Boolean(context?.plan?.code && context?.features);
+  }, null, { timeout: 45000 });
+  await page.waitForTimeout(1800);
+}
+
 async function readRetailReportingState(page, mode) {
   return page.evaluate((view) => {
     const text = (selector) => String(document.querySelector(selector)?.textContent || '').trim();
@@ -35,10 +43,22 @@ async function readRetailReportingState(page, mode) {
       const canvas = document.querySelector(selector);
       return Boolean(canvas && window.Chart && typeof window.Chart.getChart === 'function' && window.Chart.getChart(canvas));
     };
+    const platformContext = window.AxtorPlatform?.getContext?.() || null;
     const planBlock = document.querySelector('.axtor-plan-block');
-    const planBlockVisible = Boolean(planBlock && getComputedStyle(planBlock).display !== 'none' && planBlock.getBoundingClientRect().width > 0 && planBlock.getBoundingClientRect().height > 0);
+    const planBlockVisible = Boolean(planBlock && getComputedStyle(planBlock).display !== 'none' && getComputedStyle(planBlock).visibility !== 'hidden' && planBlock.getBoundingClientRect().width > 0 && planBlock.getBoundingClientRect().height > 0);
+    const reportFeatures = Object.entries(platformContext?.features || {})
+      .filter(([key, value]) => key.startsWith('reports') && value?.enabled !== false)
+      .map(([key]) => key)
+      .sort();
+    const common = {
+      planCode: String(platformContext?.plan?.code || ''),
+      reportFeatures,
+      planBlockVisible,
+      planBlockText: planBlockVisible ? String(planBlock?.innerText || '').trim() : '',
+    };
     if (view === 'sales') {
       return {
+        ...common,
         gross: text('#salesOverviewGross'),
         paid: text('#salesOverviewPaid'),
         outstanding: text('#salesOverviewCredit'),
@@ -47,11 +67,11 @@ async function readRetailReportingState(page, mode) {
         paymentChart: chartReady('#paymentMixChart'),
         topProductRows: document.querySelectorAll('#salesOverviewTopProductsBody tr').length,
         liveStatus: text('#salesOverviewLiveStatus'),
-        planBlockVisible,
       };
     }
     const reconciliation = Array.from(document.querySelectorAll('#retailReconciliationBody tr')).map((row) => row.innerText.trim());
     return {
+      ...common,
       gross: text('#reportGrossSales'),
       paid: text('#reportPaidInvoices'),
       outstanding: text('#reportOutstanding'),
@@ -61,7 +81,6 @@ async function readRetailReportingState(page, mode) {
       topProductRows: document.querySelectorAll('#retailTopProductsBody tr').length,
       reconciliation,
       liveStatus: text('#retailReportingStatus'),
-      planBlockVisible,
     };
   }, mode);
 }
@@ -122,17 +141,20 @@ try {
       if (user.key === 'owner') {
         await page.goto(`${runtime.publicOrigin}/apps/retail/sales.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
         await waitForSynchronizedStatus(page, '#salesOverviewLiveStatus');
+        await waitForPlatformSettled(page);
         salesReporting = await readRetailReportingState(page, 'sales');
         await page.screenshot({ path: `${evidenceDir}/owner-sales-overview-synchronized.png`, fullPage: true });
 
         await page.goto(`${runtime.publicOrigin}/apps/retail/reports.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
         await waitForSynchronizedStatus(page, '#retailReportingStatus');
+        await waitForPlatformSettled(page);
         reportsReporting = await readRetailReportingState(page, 'reports');
         await page.screenshot({ path: `${evidenceDir}/owner-retail-reports-synchronized.png`, fullPage: true });
 
         const meaningfulSales = [salesReporting.gross, salesReporting.paid, salesReporting.outstanding, salesReporting.returns]
           .every((value) => value && !/loading|unavailable/i.test(value));
         const reconciledRowsPass = reportsReporting.reconciliation.length >= 4 && reportsReporting.reconciliation.every((row) => /PASS/i.test(row));
+        const reportEntitlementPresent = reportsReporting.reportFeatures.some((feature) => feature === 'reports.*' || feature === 'reports.daily_sales');
         salesReportsSync = meaningfulSales
           && salesReporting.gross === reportsReporting.gross
           && salesReporting.paid === reportsReporting.paid
@@ -146,6 +168,7 @@ try {
           && reportsReporting.topProductRows > 0
           && !salesReporting.planBlockVisible
           && !reportsReporting.planBlockVisible
+          && reportEntitlementPresent
           && reconciledRowsPass;
       }
     } catch (error) {
@@ -187,8 +210,8 @@ report.acceptance['Five-login browser test'] = { result: allPass ? 'PASS' : 'FAI
 report.acceptance['Sales Overview and Reports UI reconciliation'] = {
   result: reportingPass ? 'PASS' : 'FAIL',
   detail: reportingPass
-    ? 'Gross sales, paid invoices, outstanding credit and returns match; Monthly Sales, Payment Mix, Top Products and reconciliation rendered from the same live summary without a plan-block overlay'
-    : 'Sales Overview and Reports did not fully reconcile, a required chart/table failed to render, or an incorrect plan-block overlay remained visible',
+    ? 'Gross sales, paid invoices, outstanding credit and returns match; Monthly Sales, Payment Mix, Top Products and reconciliation rendered from the same live summary with a valid report entitlement and no plan-block overlay'
+    : 'Sales Overview and Reports did not fully reconcile, a required chart/table failed to render, report entitlement was absent, or an incorrect plan-block overlay remained visible',
 };
 for (const row of report.users) {
   const browserRow = results.find((item) => item.user === row.user);
