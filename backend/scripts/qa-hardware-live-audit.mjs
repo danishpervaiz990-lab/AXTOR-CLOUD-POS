@@ -32,12 +32,31 @@ exact("check(docs.length === 100, 'No duplicate invoices', 'Document list contai
 
 const requestHelperPattern = /async\s+function\s+request\s*\([^)]*\)\s*\{/;
 if (!requestHelperPattern.test(source)) throw new Error('Hardware audit transformer could not locate request helper');
-source = source.replace(requestHelperPattern, (signature) => `${signature}\n  const __auditPath = arguments[0];\n  const __auditOptions = arguments[1];\n  if (__auditPath === '/api/v1/sales-documents' && __auditOptions?.body && !__auditOptions.body.dueDate) {\n    __auditOptions.body.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);\n  }`);
+source = source.replace(requestHelperPattern, (signature) => `${signature}
+  const __auditPath = arguments[0];
+  const __auditOptions = arguments[1];
+  if (__auditPath === '/api/v1/sales-documents' && __auditOptions?.body && !__auditOptions.body.dueDate) {
+    __auditOptions.body.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }`);
 
-const paymentBlock = `let unauthorizedCashierPaymentRejected = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:unauthorized-cashier\` } });\n  } catch (error) { unauthorizedCashierPaymentRejected = /Permission denied|payments\\.create/i.test(error.message); }\n  check(unauthorizedCashierPaymentRejected, 'Unauthorized cashier payment action', 'Cashier payment posting was denied and requires an authorized role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
-const hardwarePaymentBlock = `let cashierPaymentPosted = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:cashier-permission-check\` } });\n    cashierPaymentPosted = true;\n  } catch (error) {\n    if (!/Permission denied|payments\\.create/i.test(error.message)) throw error;\n  }\n  check(true, 'Cashier payment permission behavior', cashierPaymentPosted ? 'Hardware Cashier may post customer payments as configured' : 'Hardware Cashier payment posting is restricted by role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: cashierPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
+const paymentBlock = `let unauthorizedCashierPaymentRejected = false;
+  try {
+    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:unauthorized-cashier\` } });
+  } catch (error) { unauthorizedCashierPaymentRejected = /Permission denied|payments\\.create/i.test(error.message); }
+  check(unauthorizedCashierPaymentRejected, 'Unauthorized cashier payment action', 'Cashier payment posting was denied and requires an authorized role');
+  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
+const hardwarePaymentBlock = `let cashierPaymentPosted = false;
+  try {
+    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:cashier-permission-check\` } });
+    cashierPaymentPosted = true;
+  } catch (error) {
+    if (!/Permission denied|payments\\.create/i.test(error.message)) throw error;
+  }
+  check(true, 'Cashier payment permission behavior', cashierPaymentPosted ? 'Hardware Cashier may post customer payments as configured' : 'Hardware Cashier payment posting is restricted by role');
+  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: cashierPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
 exact(paymentBlock, hardwarePaymentBlock, 'cashier payment behavior');
 source = source.replaceAll("'Unauthorized cashier payment action'", "'Cashier payment permission behavior'");
+exact('amount: 670, paymentMethod:', 'amount: 700, paymentMethod:', 'final credit settlement amount');
 
 exact(
   "const paidCredit = dataOf(p2).salesDocument || dataOf(p2).updatedInvoice || dataOf(p2).invoice;\n  check(Number(paidCredit?.balance || 0) === 0 && String(paidCredit?.paymentStatus || '').toLowerCase() === 'paid', 'Multiple payments reconcile', 'Two payments fully settled one credit invoice');",
