@@ -29,13 +29,9 @@ exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range
 exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
 exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after refresh');", 'customer persistence');
 
-// Inject a valid due date at the stable sales-document API request boundary.
-let dueDateInsertions = 0;
-source = source.replace(/(request\('\/api\/v1\/sales-documents',\s*\{[\s\S]*?body:\s*\{)/g, (match) => {
-  dueDateInsertions += 1;
-  return `${match} dueDate: paymentMethod === 'credit' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : undefined,`;
-});
-if (dueDateInsertions < 1) throw new Error('Hardware audit transformer could not locate sales-document request bodies');
+const requestHelperPattern = /async function request\(path, options = \{\}\) \{/;
+if (!requestHelperPattern.test(source)) throw new Error('Hardware audit transformer could not locate request helper');
+source = source.replace(requestHelperPattern, `async function request(path, options = {}) {\n  if (path === '/api/v1/sales-documents' && options?.body?.paymentMethod === 'credit' && !options.body.dueDate) {\n    options.body.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);\n  }`);
 
 const paymentBlock = `let unauthorizedCashierPaymentRejected = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:unauthorized-cashier\` } });\n  } catch (error) { unauthorizedCashierPaymentRejected = /Permission denied|payments\\.create/i.test(error.message); }\n  check(unauthorizedCashierPaymentRejected, 'Unauthorized cashier payment action', 'Cashier payment posting was denied and requires an authorized role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
 const hardwarePaymentBlock = `let cashierPaymentPosted = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:cashier-permission-check\` } });\n    cashierPaymentPosted = true;\n  } catch (error) {\n    if (!/Permission denied|payments\\.create/i.test(error.message)) throw error;\n  }\n  check(true, 'Cashier payment permission behavior', cashierPaymentPosted ? 'Hardware Cashier may post customer payments as configured' : 'Hardware Cashier payment posting is restricted by role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: cashierPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
@@ -47,7 +43,7 @@ process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 process.env.AXTOR_AUDIT_CASH_CREDIT_MIX = 'true';
 process.env.AXTOR_AUDIT_INDUSTRY = 'hardware';
-console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, dueDateInsertions });
+console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, creditDueDateNormalization: true });
 
 const executablePath = '.hardware-live-audit.generated.mjs';
 fs.writeFileSync(executablePath, source);
