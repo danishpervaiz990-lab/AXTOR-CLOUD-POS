@@ -29,6 +29,14 @@ exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range
 exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
 exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after refresh');", 'customer persistence');
 
+const creditDueDate = "new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)";
+let dueDateInsertions = 0;
+source = source.replace(/(\n\s*paymentMethod,\n)(\s*)(paidAmount,)/g, (match, paymentLine, indent, paidLine) => {
+  dueDateInsertions += 1;
+  return `${paymentLine}${indent}dueDate: paymentMethod === 'credit' ? ${creditDueDate} : undefined,\n${indent}${paidLine}`;
+});
+if (dueDateInsertions < 1) throw new Error('Hardware audit transformer could not add credit invoice due dates');
+
 const paymentBlock = `let unauthorizedCashierPaymentRejected = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:unauthorized-cashier\` } });\n  } catch (error) { unauthorizedCashierPaymentRejected = /Permission denied|payments\\.create/i.test(error.message); }\n  check(unauthorizedCashierPaymentRejected, 'Unauthorized cashier payment action', 'Cashier payment posting was denied and requires an authorized role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
 const hardwarePaymentBlock = `let cashierPaymentPosted = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:cashier-permission-check\` } });\n    cashierPaymentPosted = true;\n  } catch (error) {\n    if (!/Permission denied|payments\\.create/i.test(error.message)) throw error;\n  }\n  check(true, 'Cashier payment permission behavior', cashierPaymentPosted ? 'Hardware Cashier may post customer payments as configured' : 'Hardware Cashier payment posting is restricted by role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: cashierPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
 exact(paymentBlock, hardwarePaymentBlock, 'cashier payment behavior');
@@ -39,7 +47,7 @@ process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 process.env.AXTOR_AUDIT_CASH_CREDIT_MIX = 'true';
 process.env.AXTOR_AUDIT_INDUSTRY = 'hardware';
-console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5 });
+console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, dueDateInsertions });
 
 const executablePath = '.hardware-live-audit.generated.mjs';
 fs.writeFileSync(executablePath, source);
@@ -61,10 +69,10 @@ if (!fs.existsSync(runtimePath) || !fs.existsSync(reportPath)) {
 }
 const runtime = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
 const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-const users = Array.isArray(runtime.users) ? runtime.users : [];
-const distinctEmails = new Set(users.map((user) => String(user.email || '').toLowerCase()));
+const users = Array.isArray(runtime.users) ? runtime.users : Array.isArray(report.users) ? report.users : [];
+const distinctEmails = new Set(users.map((user) => String(user.email || user.username || '').toLowerCase()).filter(Boolean));
 const businessSlug = String(runtime.ids?.businessSlug || report.environment?.businessSlug || '').trim();
-const roles = users.map((user) => String(user.role || '').toLowerCase());
+const roles = users.map((user) => String(user.role || '').toLowerCase().replace('hardware ', ''));
 const roleCounts = roles.reduce((acc, role) => ({ ...acc, [role]: (acc[role] || 0) + 1 }), {});
 const fiveUsersPass = users.length === 5 && distinctEmails.size === 5;
 const oneBusinessPass = Boolean(businessSlug) && users.every((user) => !user.businessSlug || String(user.businessSlug) === businessSlug);
