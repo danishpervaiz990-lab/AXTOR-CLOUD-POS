@@ -15,7 +15,7 @@ const pages = [
   ['prescriptions', '/apps/pharmacy/pharmacy-prescriptions.html', ['Prescriptions']],
   ['expiry', '/apps/pharmacy/pharmacy-expiry-alerts.html', ['Expiry']],
   ['suppliers', '/apps/pharmacy/pharmacy-suppliers.html', ['Suppliers']],
-  ['billing', '/apps/pharmacy/pharmacy-billing.html', ['Pharmacy', 'Invoice']],
+  ['billing', '/apps/pharmacy/pharmacy-billing.html', []],
   ['reports', '/apps/pharmacy/pharmacy-reports.html', ['Reports']],
 ];
 
@@ -63,14 +63,28 @@ try {
 
       for (const [key, route, required] of pages) {
         await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await page.waitForFunction((terms) => {
-          const body = String(document.body?.innerText || '').toLowerCase();
-          const loading = /loading pharmacy|loading…|saving…/i.test(body);
-          return !loading && terms.every((term) => body.includes(String(term).toLowerCase()));
-        }, required, { timeout: 45000 }).catch(() => null);
-        await page.waitForTimeout(500);
-        const body = await page.locator('body').innerText().catch(() => '');
-        const ok = required.every((term) => body.toLowerCase().includes(term.toLowerCase())) && !/page not found|404/i.test(body);
+        let ok = false;
+        if (key === 'billing') {
+          await page.waitForFunction(() => {
+            const heading = String(document.querySelector('.rx-hero h2')?.textContent || '').trim();
+            const rows = document.querySelectorAll('#pharmacyContent .rx-table tbody tr').length;
+            return /pharmacy billing/i.test(heading) && rows > 0;
+          }, null, { timeout: 45000 }).catch(() => null);
+          const state = await page.evaluate(() => ({
+            heading: String(document.querySelector('.rx-hero h2')?.textContent || '').trim(),
+            rows: document.querySelectorAll('#pharmacyContent .rx-table tbody tr').length,
+            errorVisible: !document.querySelector('#pharmacyError')?.hidden,
+          }));
+          ok = /pharmacy billing/i.test(state.heading) && state.rows > 0 && !state.errorVisible;
+        } else {
+          await page.waitForFunction((terms) => {
+            const body = String(document.body?.innerText || '').toLowerCase();
+            const loading = /loading pharmacy|loading…|saving…/i.test(body);
+            return !loading && terms.every((term) => body.includes(String(term).toLowerCase()));
+          }, required, { timeout: 45000 }).catch(() => null);
+          const body = await page.locator('body').innerText().catch(() => '');
+          ok = required.every((term) => body.toLowerCase().includes(term.toLowerCase())) && !/page not found|404/i.test(body);
+        }
         pageResults.push({ key, route, ok, finalUrl: page.url() });
         if (user.key === 'owner') await page.screenshot({ path: `${evidenceDir}/owner-${key}.png`, fullPage: true });
       }
