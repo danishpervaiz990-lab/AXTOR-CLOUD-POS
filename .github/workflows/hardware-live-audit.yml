@@ -1,0 +1,86 @@
+name: Hardware Live Production Audit
+
+on:
+  pull_request:
+    branches: [backend]
+    types: [opened, reopened, synchronize]
+    paths:
+      - "backend/scripts/qa-hardware-live-audit.mjs"
+      - "backend/scripts/qa-hardware-branding-audit.mjs"
+      - "backend/scripts/qa-hardware-browser-audit.mjs"
+      - "backend/scripts/qa-retail-live-audit.payload.*"
+      - "backend/scripts/retail-audit-recipient-cert.pem"
+      - ".github/workflows/hardware-live-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  hardware-live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_AUDIT_INDUSTRY: hardware
+      AXTOR_AUDIT_PRODUCT_COUNT: "100"
+      AXTOR_AUDIT_CUSTOMER_COUNT: "200"
+      AXTOR_AUDIT_INVOICE_COUNT: "500"
+      AXTOR_AUDIT_CASH_CREDIT_MIX: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Run Hardware transaction and reports audit
+        continue-on-error: true
+        run: node backend/scripts/qa-hardware-live-audit.mjs
+
+      - name: Register dummy company and persist invoice logo
+        if: hashFiles('hardware-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-hardware-branding-audit.mjs
+
+      - name: Install browser runtime
+        if: hashFiles('hardware-live-audit-runtime.json') != ''
+        run: |
+          mkdir -p /tmp/axtor-playwright
+          npm init -y --prefix /tmp/axtor-playwright >/dev/null
+          npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
+          /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Test five users, settings and Hardware pages through Vercel
+        if: hashFiles('hardware-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-hardware-browser-audit.mjs
+
+      - name: Encrypt Hardware credentials
+        if: hashFiles('hardware-live-audit-credentials.json') != ''
+        run: |
+          openssl cms -encrypt -binary -aes-256-cbc \
+            -in hardware-live-audit-credentials.json \
+            -out hardware-live-audit-credentials.p7m \
+            -outform DER \
+            backend/scripts/retail-audit-recipient-cert.pem
+          test -s hardware-live-audit-credentials.p7m
+          shred -u hardware-live-audit-credentials.json hardware-live-audit-runtime.json
+
+      - name: Upload encrypted Hardware audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardware-live-audit-${{ github.run_id }}
+          path: |
+            hardware-live-audit-report.json
+            hardware-live-audit-credentials.p7m
+            hardware-live-audit-cleanup.sql
+            hardware-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce Hardware launch-readiness result
+        if: always()
+        run: |
+          test -s hardware-live-audit-report.json
+          node -e "const r=require('./hardware-live-audit-report.json'); console.log('Hardware audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
