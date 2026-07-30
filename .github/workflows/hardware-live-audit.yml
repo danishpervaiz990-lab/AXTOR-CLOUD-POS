@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-hardware-live-audit.mjs"
+      - "backend/scripts/qa-hardware-payment-finalizer.mjs"
       - "backend/scripts/qa-hardware-branding-audit.mjs"
       - "backend/scripts/qa-hardware-browser-audit.mjs"
       - "backend/scripts/qa-retail-live-audit.payload.*"
@@ -36,6 +37,11 @@ jobs:
       - name: Run Hardware transaction and reports audit
         continue-on-error: true
         run: node backend/scripts/qa-hardware-live-audit.mjs
+
+      - name: Settle any remaining audited credit balance
+        if: hashFiles('hardware-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-hardware-payment-finalizer.mjs
 
       - name: Register dummy company and persist invoice logo
         if: hashFiles('hardware-live-audit-runtime.json') != ''
