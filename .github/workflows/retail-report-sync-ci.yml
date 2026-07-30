@@ -4,7 +4,9 @@ on:
   pull_request:
     branches: [frontend-retail]
   push:
-    branches: [fix/retail-report-sync-v2-20260730]
+    branches:
+      - fix/retail-report-sync-v2-20260730
+      - fix/report-plan-hierarchy-frontend-20260730
 
 permissions:
   contents: read
@@ -24,5 +26,8 @@ jobs:
           node --check demo-static/js/retail-reporting-backend.js
           node --check demo-static/js/salesmen-bootstrap.js
           node --check demo-static/js/reports-backend.js
+          node --check demo-static/js/report-plan-hierarchy.js
       - name: Run Retail reporting contract tests
-        run: node --test tests/retail-reporting-sync-v2.test.cjs
+        run: |
+          node --test tests/retail-reporting-sync-v2.test.cjs
+          node --test tests/report-plan-hierarchy.test.cjs

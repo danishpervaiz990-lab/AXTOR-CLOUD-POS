@@ -51,6 +51,6 @@ test("Detailed Reports defaults use Qatar dates even in a UTC browser", () => {
 });
 
 test("new reporting release URLs bypass cached pre-fix scripts", () => {
-  assert.equal(reportHtml.includes("20260730-retail-report-qatar3"), true);
+  assert.equal(reportHtml.includes("20260730-report-hierarchy1"), true);
   assert.equal(salesBootstrap.includes("20260730-retail-report-qatar3"), true);
 });
