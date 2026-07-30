@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [frontend-grocery]
   push:
-    branches: [frontend-grocery, fix/grocery/dedicated-frontend-v1]
+    branches: [frontend-grocery, fix/grocery/dedicated-frontend-v1, fix/grocery/reports-dashboard-reconciliation-20260730]
 permissions:
   contents: read
 jobs:
@@ -16,6 +16,7 @@ jobs:
           node-version: 24
       - run: node --check demo-static/js/axtor-api.js
       - run: node --check demo-static/js/grocery-app.js
+      - run: node --check demo-static/js/grocery-report-sync.js
       - run: node tests/grocery-frontend.test.cjs
       - run: |
           if grep -R "industry.html?module=" demo-static/grocery-*.html; then exit 1; fi
