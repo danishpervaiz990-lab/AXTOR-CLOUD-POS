@@ -15,7 +15,7 @@ const pages = [
   ['prescriptions', '/apps/pharmacy/pharmacy-prescriptions.html', ['Prescriptions']],
   ['expiry', '/apps/pharmacy/pharmacy-expiry-alerts.html', ['Expiry']],
   ['suppliers', '/apps/pharmacy/pharmacy-suppliers.html', ['Suppliers']],
-  ['billing', '/apps/pharmacy/pharmacy-billing.html', ['Billing']],
+  ['billing', '/apps/pharmacy/pharmacy-billing.html', ['Pharmacy', 'Invoice']],
   ['reports', '/apps/pharmacy/pharmacy-reports.html', ['Reports']],
 ];
 
@@ -63,7 +63,12 @@ try {
 
       for (const [key, route, required] of pages) {
         await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await page.waitForTimeout(1800);
+        await page.waitForFunction((terms) => {
+          const body = String(document.body?.innerText || '').toLowerCase();
+          const loading = /loading pharmacy|loading…|saving…/i.test(body);
+          return !loading && terms.every((term) => body.includes(String(term).toLowerCase()));
+        }, required, { timeout: 45000 }).catch(() => null);
+        await page.waitForTimeout(500);
         const body = await page.locator('body').innerText().catch(() => '');
         const ok = required.every((term) => body.toLowerCase().includes(term.toLowerCase())) && !/page not found|404/i.test(body);
         pageResults.push({ key, route, ok, finalUrl: page.url() });
