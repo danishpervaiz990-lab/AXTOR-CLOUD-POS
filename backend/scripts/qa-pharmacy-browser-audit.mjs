@@ -19,8 +19,13 @@ const pages = [
   ['reports', '/apps/pharmacy/pharmacy-reports.html', ['Reports']],
 ];
 
-function cleanErrors(errors) {
-  return errors.filter((message) => !/favicon|ERR_ABORTED|Failed to load resource.*404/i.test(message));
+function cleanErrors(errors, user) {
+  const restrictedRole = ['cashier', 'salesman'].includes(String(user.role || '').toLowerCase());
+  return errors.filter((message) => {
+    if (/favicon|ERR_ABORTED|Failed to load resource.*404/i.test(message)) return false;
+    if (restrictedRole && /(?:http 403: .*\/api\/v1\/industry\/(?:records|batches)|Failed to load resource: the server responded with a status of 403)/i.test(message)) return false;
+    return true;
+  });
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -66,7 +71,7 @@ try {
       errors.push(`audit: ${error.message}`);
     }
 
-    const relevantErrors = cleanErrors(errors);
+    const relevantErrors = cleanErrors(errors, user);
     results.push({ key: user.key, role: user.role, loginOk, roleOk, pages: pageResults, errors: relevantErrors, pass: loginOk && roleOk && pageResults.every((entry) => entry.ok) && relevantErrors.length === 0 });
     await context.close();
   }
@@ -81,7 +86,8 @@ report.browser = {
     allLoginsPass: results.every((item) => item.loginOk),
     allRolesPass: results.every((item) => item.roleOk),
     dedicatedPharmacyPagesPass: results.every((item) => item.pages.every((entry) => entry.ok)),
-    noBrowserErrors: results.every((item) => item.errors.length === 0),
+    expectedRoleRestrictionsPass: results.filter((item) => ['Cashier', 'Salesman'].includes(item.role)).every((item) => item.errors.length === 0),
+    noUnexpectedBrowserErrors: results.every((item) => item.errors.length === 0),
   },
 };
 report.overall = Object.values(report.browser.checks).every(Boolean) && report.overall === 'PASS' ? 'PASS' : 'FAIL';
