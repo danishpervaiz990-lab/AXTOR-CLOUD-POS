@@ -38,6 +38,11 @@ const hardwarePaymentBlock = `let cashierPaymentPosted = false;\n  try {\n    aw
 exact(paymentBlock, hardwarePaymentBlock, 'cashier payment behavior');
 source = source.replaceAll("'Unauthorized cashier payment action'", "'Cashier payment permission behavior'");
 
+for (const label of ['Multiple payments reconcile', 'Customer balances reconcile', 'No duplicate invoices', 'Customer persistence']) {
+  const index = source.indexOf(`'${label}'`);
+  console.log(`ASSERTION SOURCE ${label}:`, index >= 0 ? source.slice(Math.max(0, index - 500), index + 700) : 'NOT FOUND');
+}
+
 process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';
 process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
