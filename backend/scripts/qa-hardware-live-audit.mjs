@@ -29,11 +29,12 @@ exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range
 exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
 exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after refresh');", 'customer persistence');
 
-const creditDueDate = "new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)";
+// The invoice payload exposes paidAmount as a shorthand field. Add a due date beside it;
+// the backend ignores it for cash/card invoices and requires it for credit invoices.
 let dueDateInsertions = 0;
-source = source.replace(/(\n\s*paymentMethod,\n)(\s*)(paidAmount,)/g, (match, paymentLine, indent, paidLine) => {
+source = source.replace(/(\n\s*)(paidAmount,)/g, (match, indent, paidLine) => {
   dueDateInsertions += 1;
-  return `${paymentLine}${indent}dueDate: paymentMethod === 'credit' ? ${creditDueDate} : undefined,\n${indent}${paidLine}`;
+  return `${indent}dueDate: paymentMethod === 'credit' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : undefined,${indent}${paidLine}`;
 });
 if (dueDateInsertions < 1) throw new Error('Hardware audit transformer could not add credit invoice due dates');
 
