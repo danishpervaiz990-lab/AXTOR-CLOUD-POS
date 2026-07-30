@@ -18,7 +18,7 @@ exact("check(runtime.products.length === 50, 'Exactly 50 products created', '50 
 exact('for (let index = 1; index <= 25; index += 1)', 'for (let index = 1; index <= 200; index += 1)', 'customer loop');
 exact("check(runtime.customers.length === 25, 'Exactly 25 customers created', '25 active QA customers created through customer API')", "check(runtime.customers.length === 200, 'Exactly 200 customers created', '200 active QA contractor/retail customers created through customer API')", 'customer acceptance');
 exact("...Array.from({ length: 10 }, () => 'owner'),\n    ...Array.from({ length: 10 }, () => 'manager'),\n    ...Array.from({ length: 30 }, () => 'cashier1'),\n    ...Array.from({ length: 30 }, () => 'cashier2'),\n    ...Array.from({ length: 20 }, () => 'van'),", "...Array.from({ length: 50 }, () => 'owner'),\n    ...Array.from({ length: 50 }, () => 'manager'),\n    ...Array.from({ length: 150 }, () => 'cashier1'),\n    ...Array.from({ length: 150 }, () => 'cashier2'),\n    ...Array.from({ length: 100 }, () => 'van'),", '500-invoice role mix');
-exact('const invoiceTotals = Array.from({ length: 100 }, (_, index) => 900 + ((index * 37) % 201));', 'const invoiceTotals = Array.from({ length: 500 }, (_, index) => 900 + ((index * 37) % 201));', 'invoice totals');
+// The proven payload already contains a 500-entry invoiceTotals array. Do not transform it again.
 exact('for (let index = 0; index < 100; index += 1)', 'for (let index = 0; index < 500; index += 1)', 'invoice loop');
 exact("if (index >= 60 && index < 70) paymentMethod = 'card';\n    if (index >= 70 && index < 85) { paymentMethod = 'credit'; paidAmount = 0; }\n    if (index >= 85 && index < 95) { paymentMethod = 'cash'; paidAmount = 500; }", "if (index >= 300 && index < 350) paymentMethod = 'card';\n    if (index >= 350 && index < 425) { paymentMethod = 'credit'; paidAmount = 0; }\n    if (index >= 425 && index < 475) { paymentMethod = 'cash'; paidAmount = 500; }", 'payment mix');
 exact('const creditInvoice = runtime.invoices[70];', 'const creditInvoice = runtime.invoices[350];', 'credit invoice');
@@ -39,5 +39,37 @@ process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 process.env.AXTOR_AUDIT_CASH_CREDIT_MIX = 'true';
 process.env.AXTOR_AUDIT_INDUSTRY = 'hardware';
-console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500 });
+console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5 });
 await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+
+// Fail closed unless the generated runtime represents one disposable business with exactly five distinct users.
+const runtimePath = 'hardware-live-audit-runtime.json';
+const reportPath = 'hardware-live-audit-report.json';
+if (!fs.existsSync(runtimePath) || !fs.existsSync(reportPath)) {
+  throw new Error('Hardware audit did not create runtime and report evidence');
+}
+const runtime = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+const users = Array.isArray(runtime.users) ? runtime.users : [];
+const distinctEmails = new Set(users.map((user) => String(user.email || '').toLowerCase()));
+const businessSlug = String(runtime.ids?.businessSlug || report.environment?.businessSlug || '').trim();
+const roles = users.map((user) => String(user.role || '').toLowerCase());
+const requiredRoles = ['owner', 'manager', 'cashier', 'cashier', 'salesman'];
+const roleCounts = roles.reduce((acc, role) => ({ ...acc, [role]: (acc[role] || 0) + 1 }), {});
+const fiveUsersPass = users.length === 5 && distinctEmails.size === 5;
+const oneBusinessPass = Boolean(businessSlug) && users.every((user) => !user.businessSlug || String(user.businessSlug) === businessSlug);
+const roleShapePass = roleCounts.owner === 1 && roleCounts.manager === 1 && roleCounts.cashier === 2 && roleCounts.salesman === 1;
+report.companyUserAudit = {
+  businessSlug,
+  userCount: users.length,
+  distinctEmailCount: distinctEmails.size,
+  roles,
+  checks: {
+    exactlyFiveCompanyUsers: fiveUsersPass,
+    oneDisposableBusiness: oneBusinessPass,
+    expectedRoleShape: roleShapePass,
+  },
+};
+report.overall = report.overall === 'PASS' && fiveUsersPass && oneBusinessPass && roleShapePass ? 'PASS' : 'FAIL';
+fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+if (report.overall !== 'PASS') process.exitCode = 1;
