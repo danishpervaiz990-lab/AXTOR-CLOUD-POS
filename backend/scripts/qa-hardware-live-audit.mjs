@@ -41,7 +41,7 @@ source = source.replaceAll("'Unauthorized cashier payment action'", "'Cashier pa
 
 exact(
   "const paidCredit = dataOf(p2).salesDocument || dataOf(p2).updatedInvoice || dataOf(p2).invoice;\n  check(Number(paidCredit?.balance || 0) === 0 && String(paidCredit?.paymentStatus || '').toLowerCase() === 'paid', 'Multiple payments reconcile', 'Two payments fully settled one credit invoice');",
-  "const paidCredit = dataOf(await request(`/api/v1/sales-documents/${creditInvoice.id}`, { token: ownerToken }));\n  check(Number(paidCredit?.balance || 0) === 0 && String(paidCredit?.paymentStatus || '').toLowerCase() === 'paid', 'Multiple payments reconcile', 'Payment ledger and refreshed credit invoice both confirm full settlement');",
+  "const paidCreditPayload = dataOf(await request(`/api/v1/sales-documents/${creditInvoice.id}`, { token: ownerToken }));\n  const paidCredit = paidCreditPayload.salesDocument || paidCreditPayload.updatedInvoice || paidCreditPayload.document || paidCreditPayload.invoice || paidCreditPayload;\n  check(Number(paidCredit?.balance || 0) === 0 && String(paidCredit?.paymentStatus || '').toLowerCase() === 'paid', 'Multiple payments reconcile', 'Payment ledger and normalized refreshed credit invoice both confirm full settlement');",
   'payment reconciliation refresh',
 );
 
