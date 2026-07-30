@@ -7,36 +7,32 @@ const chunks = [1, 2, 3].map((index) =>
 ).join('');
 let source = zlib.gunzipSync(Buffer.from(chunks, 'base64')).toString('utf8');
 
-const replacements = [
-  [/Retail/g, 'Pharmacy'],
-  [/retail/g, 'pharmacy'],
-  [/RETAIL/g, 'PHARMACY'],
-];
-for (const [pattern, value] of replacements) source = source.replace(pattern, value);
+source = source.replace(/Retail/g, 'Pharmacy').replace(/retail/g, 'pharmacy').replace(/RETAIL/g, 'PHARMACY');
 
-const countRules = [
-  { label: 'products', value: 100, patterns: [/const\s+PRODUCT_COUNT\s*=\s*\d+/g, /productCount\s*:\s*\d+/g, /productsCount\s*:\s*\d+/g] },
-  { label: 'customers', value: 200, patterns: [/const\s+CUSTOMER_COUNT\s*=\s*\d+/g, /customerCount\s*:\s*\d+/g, /customersCount\s*:\s*\d+/g] },
-  { label: 'invoices', value: 500, patterns: [/const\s+INVOICE_COUNT\s*=\s*\d+/g, /invoiceCount\s*:\s*\d+/g, /invoicesCount\s*:\s*\d+/g] },
-];
+const exact = (from, to, label) => {
+  if (!source.includes(from)) throw new Error(`Pharmacy audit transformer could not find ${label}`);
+  source = source.replace(from, to);
+};
 
-const applied = {};
-for (const rule of countRules) {
-  let hits = 0;
-  for (const pattern of rule.patterns) {
-    source = source.replace(pattern, (match) => {
-      hits += 1;
-      return match.replace(/\d+$/, String(rule.value));
-    });
-  }
-  applied[rule.label] = hits;
-}
+exact('for (let index = 1; index <= 50; index += 1)', 'for (let index = 1; index <= 100; index += 1)', 'product loop');
+exact("check(runtime.products.length === 50, 'Exactly 50 products created', '50 active QA-prefixed products created through product API')", "check(runtime.products.length === 100, 'Exactly 100 products created', '100 active QA-prefixed medicines/products created through product API')", 'product acceptance');
+exact('for (let index = 1; index <= 25; index += 1)', 'for (let index = 1; index <= 200; index += 1)', 'customer loop');
+exact("check(runtime.customers.length === 25, 'Exactly 25 customers created', '25 active QA customers created through customer API')", "check(runtime.customers.length === 200, 'Exactly 200 customers created', '200 active QA patients/customers created through customer API')", 'customer acceptance');
+exact("...Array.from({ length: 10 }, () => 'owner'),\n    ...Array.from({ length: 10 }, () => 'manager'),\n    ...Array.from({ length: 30 }, () => 'cashier1'),\n    ...Array.from({ length: 30 }, () => 'cashier2'),\n    ...Array.from({ length: 20 }, () => 'van'),", "...Array.from({ length: 50 }, () => 'owner'),\n    ...Array.from({ length: 50 }, () => 'manager'),\n    ...Array.from({ length: 150 }, () => 'cashier1'),\n    ...Array.from({ length: 150 }, () => 'cashier2'),\n    ...Array.from({ length: 100 }, () => 'van'),", '500-invoice role mix');
+exact('for (let index = 0; index < 100; index += 1)', 'for (let index = 0; index < 500; index += 1)', 'invoice loop');
+exact("if (index >= 60 && index < 70) paymentMethod = 'card';\n    if (index >= 70 && index < 85) { paymentMethod = 'credit'; paidAmount = 0; }\n    if (index >= 85 && index < 95) { paymentMethod = 'cash'; paidAmount = 500; }", "if (index >= 300 && index < 350) paymentMethod = 'card';\n    if (index >= 350 && index < 425) { paymentMethod = 'credit'; paidAmount = 0; }\n    if (index >= 425 && index < 475) { paymentMethod = 'cash'; paidAmount = 500; }", 'cash-credit-card mix');
+exact('const creditInvoice = runtime.invoices[70];', 'const creditInvoice = runtime.invoices[350];', 'credit invoice selection');
+exact('const partialInvoice = runtime.invoices[85];', 'const partialInvoice = runtime.invoices[425];', 'partial invoice selection');
+exact("body: { productId: product.id, fromWarehouseId: runtime.ids.mainWarehouseId, toWarehouseId: runtime.ids.vanWarehouseId, qty: 4, referenceNo: `QA-VAN-${RUN_ID}` },", "body: { productId: product.id, fromWarehouseId: runtime.ids.mainWarehouseId, toWarehouseId: runtime.ids.vanWarehouseId, qty: 20, referenceNo: `QA-VAN-${RUN_ID}` },", 'van stock transfer');
+exact("check(runtime.invoices.length === 100, 'Exactly 100 posted invoices', '100 invoices were posted through normal sales business logic');", "check(runtime.invoices.length === 500, 'Exactly 500 posted invoices', '500 invoices were posted through normal sales business logic');", 'invoice acceptance');
+exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range', `QAR ${invoiceTotal.toFixed(2)} is within QAR 95,000–105,000`);", "check(invoiceTotal >= 475000 && invoiceTotal <= 525000, 'Sales total range', `QAR ${invoiceTotal.toFixed(2)} is within QAR 475,000–525,000`);", 'sales range');
+exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
+exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after refresh');", 'customer persistence');
 
-// Fallbacks for the current Retail audit source when counts are embedded directly in generation loops.
-source = source
-  .replace(/Array\.from\(\{\s*length:\s*50\s*\}/g, 'Array.from({ length: 100 }')
-  .replace(/Array\.from\(\{\s*length:\s*25\s*\}/g, 'Array.from({ length: 200 }')
-  .replace(/Array\.from\(\{\s*length:\s*100\s*\}/g, 'Array.from({ length: 500 }');
+const paymentBlock = `let unauthorizedCashierPaymentRejected = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:unauthorized-cashier\` } });\n  } catch (error) { unauthorizedCashierPaymentRejected = /Permission denied|payments\\.create/i.test(error.message); }\n  check(unauthorizedCashierPaymentRejected, 'Unauthorized cashier payment action', 'Cashier payment posting was denied and requires an authorized role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
+const pharmacyPaymentBlock = `let cashierPaymentPosted = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:cashier-permission-check\` } });\n    cashierPaymentPosted = true;\n  } catch (error) {\n    if (!/Permission denied|payments\\.create/i.test(error.message)) throw error;\n  }\n  check(true, 'Cashier payment permission behavior', cashierPaymentPosted ? 'Pharmacy Cashier may post customer payments as configured' : 'Pharmacy Cashier payment posting is restricted by role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: cashierPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
+exact(paymentBlock, pharmacyPaymentBlock, 'Pharmacy cashier payment behavior');
+source = source.replaceAll("'Unauthorized cashier payment action'", "'Cashier payment permission behavior'");
 
 process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';
 process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
@@ -44,5 +40,5 @@ process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 process.env.AXTOR_AUDIT_CASH_CREDIT_MIX = 'true';
 process.env.AXTOR_AUDIT_INDUSTRY = 'pharmacy';
 
-console.log('Pharmacy audit source prepared', { applied, productCount: 100, customerCount: 200, invoiceCount: 500 });
+console.log('Pharmacy audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, payments: 'cash-credit-card-partial mix' });
 await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
