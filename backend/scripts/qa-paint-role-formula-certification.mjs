@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 const runtime = JSON.parse(await fs.readFile('paint-live-audit-runtime.json', 'utf8'));
 const report = JSON.parse(await fs.readFile('paint-live-audit-report.json', 'utf8'));
 const backend = runtime.backendOrigin || process.env.AXTOR_BACKEND_ORIGIN;
+const businessSlug = runtime.businessSlug || runtime.business?.slug || runtime.tenant?.businessSlug || 'axtor-demo';
 const owner = runtime.users?.find((u) => u.key === 'owner');
 if (!backend || !owner?.token) throw new Error('Paint certification requires backend and owner token');
 
@@ -10,8 +11,13 @@ const runId = `PAINT-CERT-${Date.now()}`;
 const checks = [];
 const failures = [];
 const createdUsers = [];
+const blockers = [];
 const pass = (name, detail) => checks.push({ name, result: 'PASS', detail });
-const fail = (name, detail) => { checks.push({ name, result: 'FAIL', detail }); failures.push(`${name}: ${detail}`); };
+const fail = (name, detail, blocker = false) => {
+  checks.push({ name, result: 'FAIL', detail, blocker });
+  failures.push(`${name}: ${detail}`);
+  if (blocker) blockers.push(`${name}: ${detail}`);
+};
 const unwrap = (p) => p?.data ?? p;
 
 async function req(path, { token = owner.token, method = 'GET', body, expected = [200, 201] } = {}) {
@@ -26,7 +32,11 @@ async function req(path, { token = owner.token, method = 'GET', body, expected =
 }
 
 async function login(email, password) {
-  const res = await fetch(`${backend}/api/v1/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+  const res = await fetch(`${backend}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ businessSlug, email, password }),
+  });
   const payload = await res.json().catch(() => null);
   if (!res.ok) throw new Error(`login ${email} -> ${res.status}: ${JSON.stringify(payload)}`);
   const data = unwrap(payload);
@@ -53,7 +63,10 @@ const roleResults = {};
 
 for (const key of ['salesperson', 'cashier', 'lab', 'accounts']) {
   const role = findRole(key);
-  if (!role) { fail(`${key} role exists`, `No dedicated ${key} role found`); continue; }
+  if (!role) {
+    fail(`${key} role exists`, `No dedicated ${key} role found in live access-control catalogue`, true);
+    continue;
+  }
   try {
     const email = `qa-paint-${key}-${Date.now()}@axtor.invalid`;
     const password = `AxtorQA!${Date.now()}x`;
@@ -62,7 +75,7 @@ for (const key of ['salesperson', 'cashier', 'lab', 'accounts']) {
     if (!token) throw new Error('Login returned no token');
     createdUsers.push({ key, id: user.id, email });
     roleResults[key] = { token, role };
-    pass(`${key} user provisioned`, `${role.name} login succeeded`);
+    pass(`${key} user provisioned`, `${role.name} login succeeded for ${businessSlug}`);
   } catch (e) { fail(`${key} user provisioned`, e.message); }
 }
 
@@ -85,9 +98,9 @@ let formula;
 try {
   const formulas = await req('/api/v1/paint/formulas');
   formula = Array.isArray(formulas) ? formulas[0] : formulas?.[0];
-  if (!formula?.id) throw new Error('No active Paint formula/product line is seeded; custom formula creation cannot be certified');
+  if (!formula?.id) throw new Error('No active Paint formula/product line is seeded on the live tenant');
   pass('Paint formula catalogue', `Formula ${formula.formulaCode || formula.id} available`);
-} catch (e) { fail('Paint formula catalogue', e.message); }
+} catch (e) { fail('Paint formula catalogue', `${e.message}; custom formula and mixing-lab execution cannot be fully certified`, true); }
 
 if (formula?.id) {
   try {
@@ -111,12 +124,20 @@ if (formula?.id) {
 }
 
 try {
-  const ownerPaths = ['/api/v1/paint/dashboard', '/api/v1/paint/reports', '/api/v1/dashboard', '/api/v1/accounts', '/api/v1/expenses', '/api/v1/reports/options'];
+  const ownerPaths = ['/api/v1/paint/dashboard', '/api/v1/paint/reports', '/api/v1/dashboard/summary', '/api/v1/accounts', '/api/v1/expenses', '/api/v1/reports/options'];
   for (const path of ownerPaths) await req(path);
   pass('Owner executive access', `${ownerPaths.length} operational, finance and Paint reporting endpoints accessible`);
 } catch (e) { fail('Owner executive access', e.message); }
 
-report.paintIndustryCertification = { runId, checks, failures, createdUsers, scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'] };
+report.paintIndustryCertification = {
+  runId,
+  businessSlug,
+  checks,
+  failures,
+  blockers,
+  createdUsers,
+  scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'],
+};
 report.overall = failures.length === 0 && report.overall === 'PASS' ? 'PASS' : 'FAIL';
 await fs.writeFile('paint-live-audit-report.json', JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.paintIndustryCertification, null, 2));
