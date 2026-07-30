@@ -7,6 +7,7 @@ on:
     paths:
       - "backend/scripts/qa-paint-transform-runner.mjs"
       - "backend/scripts/qa-paint-units-audit.mjs"
+      - "backend/scripts/qa-paint-role-formula-certification.mjs"
       - "backend/scripts/qa-hardware-live-audit.mjs"
       - "backend/scripts/qa-hardware-payment-finalizer.mjs"
       - "backend/scripts/qa-hardware-branding-audit.mjs"
@@ -55,6 +56,11 @@ jobs:
         if: hashFiles('paint-live-audit-runtime.json') != ''
         continue-on-error: true
         run: node backend/scripts/qa-paint-transform-runner.mjs operations
+
+      - name: Certify Paint roles, custom formulas and mixing lab
+        if: hashFiles('paint-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-paint-role-formula-certification.mjs
 
       - name: Register Paint company and invoice branding
         if: hashFiles('paint-live-audit-runtime.json') != ''
