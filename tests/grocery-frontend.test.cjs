@@ -26,7 +26,7 @@ assert.match(app,/grocery_fefo_terminal/);
 assert.match(app,/inventoryBatchId/);
 assert.match(app,/grocery_waste/);
 assert.match(app,/grocery_recall/);
-assert.match(reporting,/\/api\/v1\/reports\/daily-sales/);
+assert.match(reporting,/reportPath\("daily-sales"/);
 assert.match(reporting,/sale-products/);
 assert.match(reporting,/profit-loss/);
 assert.match(reporting,/salesman-commission/);
