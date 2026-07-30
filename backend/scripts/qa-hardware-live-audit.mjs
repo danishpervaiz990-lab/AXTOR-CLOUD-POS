@@ -28,6 +28,7 @@ exact("check(runtime.invoices.length === 100, 'Exactly 100 posted invoices', '10
 exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range', `QAR ${invoiceTotal.toFixed(2)} is within QAR 95,000–105,000`);", "check(invoiceTotal >= 475000 && invoiceTotal <= 525000, 'Sales total range', `QAR ${invoiceTotal.toFixed(2)} is within QAR 475,000–525,000`);", 'sales range');
 exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
 exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after refresh');", 'customer persistence');
+exact("check(docs.length === 100, 'No duplicate invoices', 'Document list contains exactly 100 invoices after duplicate request');", "check(docs.length === 500, 'No duplicate invoices', 'Document list contains exactly 500 invoices after duplicate request');", 'duplicate invoice acceptance');
 
 const requestHelperPattern = /async\s+function\s+request\s*\([^)]*\)\s*\{/;
 if (!requestHelperPattern.test(source)) throw new Error('Hardware audit transformer could not locate request helper');
@@ -38,17 +39,34 @@ const hardwarePaymentBlock = `let cashierPaymentPosted = false;\n  try {\n    aw
 exact(paymentBlock, hardwarePaymentBlock, 'cashier payment behavior');
 source = source.replaceAll("'Unauthorized cashier payment action'", "'Cashier payment permission behavior'");
 
-for (const label of ['Multiple payments reconcile', 'Customer balances reconcile', 'No duplicate invoices', 'Customer persistence']) {
-  const index = source.indexOf(`'${label}'`);
-  console.log(`ASSERTION SOURCE ${label}:`, index >= 0 ? source.slice(Math.max(0, index - 500), index + 700) : 'NOT FOUND');
-}
+exact(
+  "const paidCredit = dataOf(p2).salesDocument || dataOf(p2).updatedInvoice || dataOf(p2).invoice;\n  check(Number(paidCredit?.balance || 0) === 0 && String(paidCredit?.paymentStatus || '').toLowerCase() === 'paid', 'Multiple payments reconcile', 'Two payments fully settled one credit invoice');",
+  "const paidCredit = dataOf(await request(`/api/v1/sales-documents/${creditInvoice.id}`, { token: ownerToken }));\n  check(Number(paidCredit?.balance || 0) === 0 && String(paidCredit?.paymentStatus || '').toLowerCase() === 'paid', 'Multiple payments reconcile', 'Payment ledger and refreshed credit invoice both confirm full settlement');",
+  'payment reconciliation refresh',
+);
+
+let customerListPaginationFixed = false;
+source = source.replace(/const customers = dataOf\(await request\((['\"])(\/api\/v1\/customers[^'\"]*)\1, \{ token: ownerToken \}\)\);/, (match, quote, path) => {
+  customerListPaginationFixed = true;
+  const separator = path.includes('?') ? '&' : '?';
+  return `const customers = dataOf(await request(${quote}${path}${separator}limit=1000${quote}, { token: ownerToken }));`;
+});
+if (!customerListPaginationFixed) throw new Error('Hardware audit transformer could not apply customer pagination fix');
+
+let documentListPaginationFixed = false;
+source = source.replace(/const docs = dataOf\(await request\((['\"])(\/api\/v1\/sales-documents[^'\"]*)\1, \{ token: ownerToken \}\)\);/, (match, quote, path) => {
+  documentListPaginationFixed = true;
+  const separator = path.includes('?') ? '&' : '?';
+  return `const docs = dataOf(await request(${quote}${path}${separator}limit=1000${quote}, { token: ownerToken }));`;
+});
+if (!documentListPaginationFixed) throw new Error('Hardware audit transformer could not apply document pagination fix');
 
 process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';
 process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 process.env.AXTOR_AUDIT_CASH_CREDIT_MIX = 'true';
 process.env.AXTOR_AUDIT_INDUSTRY = 'hardware';
-console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, creditDueDateNormalization: true });
+console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, creditDueDateNormalization: true, paginationLimit: 1000 });
 
 const executablePath = '.hardware-live-audit.generated.mjs';
 fs.writeFileSync(executablePath, source);
