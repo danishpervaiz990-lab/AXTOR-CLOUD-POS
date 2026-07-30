@@ -1,0 +1,111 @@
+name: Paint Live Production Audit
+
+on:
+  pull_request:
+    branches: [backend]
+    types: [opened, reopened, synchronize]
+    paths:
+      - "backend/scripts/qa-paint-transform-runner.mjs"
+      - "backend/scripts/qa-paint-units-audit.mjs"
+      - "backend/scripts/qa-hardware-live-audit.mjs"
+      - "backend/scripts/qa-hardware-payment-finalizer.mjs"
+      - "backend/scripts/qa-hardware-branding-audit.mjs"
+      - "backend/scripts/qa-hardware-browser-audit.mjs"
+      - "backend/scripts/qa-hardware-operations-audit.mjs"
+      - "backend/scripts/qa-retail-live-audit.payload.*"
+      - "backend/scripts/retail-audit-recipient-cert.pem"
+      - ".github/workflows/paint-live-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  paint-live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_AUDIT_INDUSTRY: paint
+      AXTOR_AUDIT_PRODUCT_COUNT: "100"
+      AXTOR_AUDIT_CUSTOMER_COUNT: "200"
+      AXTOR_AUDIT_INVOICE_COUNT: "500"
+      AXTOR_AUDIT_CASH_CREDIT_MIX: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Run Paint transaction and reports audit
+        continue-on-error: true
+        run: node backend/scripts/qa-paint-transform-runner.mjs live
+
+      - name: Settle any remaining audited credit balance
+        if: hashFiles('paint-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-paint-transform-runner.mjs payment
+
+      - name: Configure and verify Paint units
+        if: hashFiles('paint-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-paint-units-audit.mjs
+
+      - name: Run Paint warehouse, branches, staffing and operations audit
+        if: hashFiles('paint-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-paint-transform-runner.mjs operations
+
+      - name: Register Paint company and invoice branding
+        if: hashFiles('paint-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-paint-transform-runner.mjs branding
+
+      - name: Install browser runtime
+        if: hashFiles('paint-live-audit-runtime.json') != ''
+        run: |
+          mkdir -p /tmp/axtor-playwright
+          npm init -y --prefix /tmp/axtor-playwright >/dev/null
+          npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
+          /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Test five users, settings and Paint pages through Vercel
+        if: hashFiles('paint-live-audit-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-paint-transform-runner.mjs browser
+
+      - name: Protect and remove Paint credentials
+        if: hashFiles('paint-live-audit-credentials.json') != ''
+        run: |
+          if [ -s backend/scripts/retail-audit-recipient-cert.pem ]; then
+            openssl cms -encrypt -binary -aes-256-cbc \
+              -in paint-live-audit-credentials.json \
+              -out paint-live-audit-credentials.p7m \
+              -outform DER \
+              backend/scripts/retail-audit-recipient-cert.pem
+            test -s paint-live-audit-credentials.p7m
+          else
+            sha256sum paint-live-audit-credentials.json | cut -d' ' -f1 > paint-live-audit-credentials.sha256
+          fi
+          shred -u paint-live-audit-credentials.json
+          rm -f paint-live-audit-runtime.json
+
+      - name: Upload protected Paint audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paint-live-audit-${{ github.run_id }}
+          path: |
+            paint-live-audit-report.json
+            paint-live-audit-credentials.p7m
+            paint-live-audit-credentials.sha256
+            paint-live-audit-cleanup.sql
+            paint-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce Paint launch-readiness result
+        if: always()
+        run: |
+          test -s paint-live-audit-report.json
+          node -e "const r=require('./paint-live-audit-report.json'); console.log('Paint audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
