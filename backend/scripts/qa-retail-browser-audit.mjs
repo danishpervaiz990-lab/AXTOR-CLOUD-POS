@@ -53,6 +53,7 @@ async function readRetailReportingState(page, mode) {
     const common = {
       planCode: String(platformContext?.plan?.code || ''),
       reportFeatures,
+      dailyReportEntryAllowed: Boolean(window.AxtorPlatform?.hasFeature?.('reports.daily_sales')),
       planBlockVisible,
       planBlockText: planBlockVisible ? String(planBlock?.innerText || '').trim() : '',
     };
@@ -154,7 +155,8 @@ try {
         const meaningfulSales = [salesReporting.gross, salesReporting.paid, salesReporting.outstanding, salesReporting.returns]
           .every((value) => value && !/loading|unavailable/i.test(value));
         const reconciledRowsPass = reportsReporting.reconciliation.length >= 4 && reportsReporting.reconciliation.every((row) => /PASS/i.test(row));
-        const reportEntitlementPresent = reportsReporting.reportFeatures.some((feature) => feature === 'reports.*' || feature === 'reports.daily_sales');
+        const sourceReportTierPresent = reportsReporting.reportFeatures.some((feature) => ['reports.daily_sales', 'reports.standard', 'reports.advanced', 'reports.*'].includes(feature));
+        const reportEntitlementPresent = sourceReportTierPresent && reportsReporting.dailyReportEntryAllowed;
         salesReportsSync = meaningfulSales
           && salesReporting.gross === reportsReporting.gross
           && salesReporting.paid === reportsReporting.paid
@@ -210,8 +212,8 @@ report.acceptance['Five-login browser test'] = { result: allPass ? 'PASS' : 'FAI
 report.acceptance['Sales Overview and Reports UI reconciliation'] = {
   result: reportingPass ? 'PASS' : 'FAIL',
   detail: reportingPass
-    ? 'Gross sales, paid invoices, outstanding credit and returns match; Monthly Sales, Payment Mix, Top Products and reconciliation rendered from the same live summary with a valid report entitlement and no plan-block overlay'
-    : 'Sales Overview and Reports did not fully reconcile, a required chart/table failed to render, report entitlement was absent, or an incorrect plan-block overlay remained visible',
+    ? 'Gross sales, paid invoices, outstanding credit and returns match; Monthly Sales, Payment Mix, Top Products and reconciliation rendered from the same live summary with inherited paid-plan report access and no plan-block overlay'
+    : 'Sales Overview and Reports did not fully reconcile, a required chart/table failed to render, inherited report access was absent, or an incorrect plan-block overlay remained visible',
 };
 for (const row of report.users) {
   const browserRow = results.find((item) => item.user === row.user);
@@ -219,4 +221,4 @@ for (const row of report.users) {
 }
 if (!allPass || !reportingPass) report.overall = 'FAIL';
 await fs.writeFile(reportPath, JSON.stringify(report, null, 2));
-console.log(`Browser audit completed: ${allPass && reportingPass ? 'PASS' : 'FAIL'} for ${results.length} accounts; Sales/Reports sync and plan access ${reportingPass ? 'PASS' : 'FAIL'}.`);
+console.log(`Browser audit completed: ${allPass && reportingPass ? 'PASS' : 'FAIL'} for ${results.length} accounts; Sales/Reports sync and inherited plan access ${reportingPass ? 'PASS' : 'FAIL'}.`);
