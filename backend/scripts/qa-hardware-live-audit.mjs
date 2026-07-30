@@ -56,7 +56,9 @@ const hardwarePaymentBlock = `let cashierPaymentPosted = false;
   const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: cashierPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
 exact(paymentBlock, hardwarePaymentBlock, 'cashier payment behavior');
 source = source.replaceAll("'Unauthorized cashier payment action'", "'Cashier payment permission behavior'");
-exact('amount: 670, paymentMethod:', 'amount: 700, paymentMethod:', 'final credit settlement amount');
+const secondPaymentPattern = /(const p2\s*=\s*await request\([\s\S]*?salesDocumentId:\s*creditInvoice\.id,\s*amount:\s*)\d+(?:\.\d+)?([\s\S]*?idempotencyKey:\s*`\$\{RUN_ID\}:payment:2`[\s\S]*?\);)/;
+if (!secondPaymentPattern.test(source)) throw new Error('Hardware audit transformer could not locate second credit payment');
+source = source.replace(secondPaymentPattern, '$1700$2');
 
 exact(
   "const paidCredit = dataOf(p2).salesDocument || dataOf(p2).updatedInvoice || dataOf(p2).invoice;\n  check(Number(paidCredit?.balance || 0) === 0 && String(paidCredit?.paymentStatus || '').toLowerCase() === 'paid', 'Multiple payments reconcile', 'Two payments fully settled one credit invoice');",
