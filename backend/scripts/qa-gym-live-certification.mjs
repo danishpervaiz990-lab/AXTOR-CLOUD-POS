@@ -8,13 +8,14 @@ const failures = [];
 
 const unwrap = (value) => value?.data ?? value;
 async function request(path, { method = 'GET', token, body, expected = [200, 201] } = {}) {
+  const safePath = String(path).replace(/[^A-Za-z0-9._:-]/g, '_');
   const response = await fetch(`${backend}${path}`, {
     method,
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      'Idempotency-Key': `${runId}:${method}:${path}:${Math.random().toString(36).slice(2)}`,
+      'Idempotency-Key': `${runId}:${method}:${safePath}:${Math.random().toString(36).slice(2)}`,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
