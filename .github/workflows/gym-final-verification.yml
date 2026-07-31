@@ -1,0 +1,43 @@
+name: Gym Final Live Verification
+
+on:
+  pull_request:
+    branches: [backend]
+    types: [opened, reopened, synchronize]
+    paths:
+      - ".github/workflows/gym-final-verification.yml"
+      - "backend/scripts/qa-gym-live-certification.mjs"
+      - "backend/scripts/qa-gym-live-certification-v2.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  gym-final-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_GYM_DEMO_PASSWORD: AxtorGymDemo@2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - name: Seed and validate five permanent Gym businesses
+        run: node backend/scripts/qa-gym-live-certification-v2.mjs
+      - name: Upload final Gym evidence and credentials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gym-final-verification-${{ github.run_id }}
+          path: |
+            gym-live-certification-report.json
+            gym-demo-credentials.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce verified PASS
+        if: always()
+        run: |
+          test -s gym-live-certification-report.json
+          node -e "const r=require('./gym-live-certification-report.json'); console.log('Gym final verification:',r.overall,r.totals); if(r.overall!=='PASS') process.exit(1)"
