@@ -1,0 +1,34 @@
+name: Six Industry Owner Settings PR Verification
+
+on:
+  pull_request:
+    branches: [backend]
+
+permissions:
+  contents: read
+
+jobs:
+  live-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_INDUSTRY_DEMO_PASSWORD: AxtorIndustryDemo@2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - run: node backend/scripts/qa-six-industry-owner-settings-live.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: six-industry-owner-settings-pr-${{ github.run_id }}
+          path: |
+            six-industry-owner-settings-report.json
+            six-industry-login-credentials.json
+            six-industry-settings-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+      - if: always()
+        run: node -e "const r=require('./six-industry-owner-settings-report.json'); if(r.overall!=='PASS'||r.totals.industries!==6) process.exit(1)"
