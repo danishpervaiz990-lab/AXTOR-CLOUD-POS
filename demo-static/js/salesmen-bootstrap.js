@@ -52,6 +52,19 @@
     document.head.appendChild(script);
   }
 
+  function loadSavedInvoiceTemplatePrint() {
+    if (!document.getElementById("saved-invoices") || window.AxtorModernSavedInvoicePrint || document.querySelector('script[data-axtor-modern-saved-print="1"]')) return;
+    var script = document.createElement("script");
+    script.src = "js/retail-modern-a4-saved-print.js?v=20260731-modern-a4-all-saved-print-v2";
+    script.async = false;
+    script.dataset.axtorModernSavedPrint = "1";
+    script.onerror = function () {
+      console.error("Retail saved-invoice template print module failed to load.");
+    };
+    document.head.appendChild(script);
+  }
+
   migrate().catch(function (error) { console.warn("Axtor legacy salesman migration skipped:", error?.message || error); });
   loadRetailReporting();
+  loadSavedInvoiceTemplatePrint();
 })();

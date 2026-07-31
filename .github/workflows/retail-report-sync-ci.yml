@@ -8,6 +8,7 @@ on:
       - fix/retail-report-sync-v2-20260730
       - fix/report-plan-hierarchy-frontend-20260730
       - fix/retail-end-user-release-20260731
+      - fix/retail-modern-a4-all-saved-print-20260731
 
 permissions:
   contents: read
@@ -29,8 +30,10 @@ jobs:
           node --check demo-static/js/reports-backend.js
           node --check demo-static/js/report-plan-hierarchy.js
           node --check demo-static/js/retail-live-invoice-fixes.js
+          node --check demo-static/js/retail-modern-a4-saved-print.js
       - name: Run Retail reporting and end-user release contract tests
         run: |
           node --test tests/retail-reporting-sync-v2.test.cjs
           node --test tests/report-plan-hierarchy.test.cjs
           node --test tests/retail-end-user-release.test.cjs
+          node --test tests/retail-modern-a4-saved-print.test.cjs
