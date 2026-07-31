@@ -3,6 +3,7 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 import { requireIndustry } from "../middleware/industry-guard.middleware.js";
 import { requireAnyPermission } from "../middleware/permission.middleware.js";
 import * as c from "../controllers/release-c.controller.js";
+import { bootstrapPaintIndustry } from "../controllers/paint-bootstrap.controller.js";
 
 const permission = (...names: string[]) => requireAnyPermission(...names);
 
@@ -81,6 +82,7 @@ const paintStockWrite = permission("industry.paint.component_stock.manage", "inv
 const paintQualityWrite = permission("industry.paint.quality.manage", "industry.paint.mix_job.manage");
 const paintSettingsWrite = permission("industry.paint.settings.manage", "paint.settings.manage");
 paintRouter.get("/dashboard", c.paintDashboard);
+paintRouter.post("/bootstrap", paintSettingsWrite, bootstrapPaintIndustry);
 paintRouter.get("/brands", c.paintBrands);
 paintRouter.post("/brands", paintCatalogueWrite, c.paintBrandCreate);
 paintRouter.get("/colors", c.paintColors);
