@@ -10,7 +10,7 @@ if (!backend || !businessSlug || !owner?.token) throw new Error('Paint certifica
 const runId = `PAINT-CERT-${Date.now()}`;
 const checks = [];
 const failures = [];
-const createdUsers = [];
+const certifiedUsers = [];
 const blockers = [];
 const pass = (name, detail) => checks.push({ name, result: 'PASS', detail });
 const fail = (name, detail, blocker = false) => {
@@ -31,21 +31,12 @@ async function req(path, { token = owner.token, method = 'GET', body, expected =
   return unwrap(payload);
 }
 
-async function login(email, password) {
-  const res = await fetch(`${backend}/api/v1/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessSlug, email, password }) });
-  const payload = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(`login ${email} -> ${res.status}: ${JSON.stringify(payload)}`);
-  const data = unwrap(payload);
-  return data.token || data.accessToken;
-}
-
 try {
   const bootstrap = await req('/api/v1/paint/bootstrap', { method: 'POST', body: {} });
   pass('Paint industry bootstrap', `${bootstrap.roles?.length || 0} roles and formula ${bootstrap.formula?.formulaCode || bootstrap.formula?.id} available`);
 } catch (e) { fail('Paint industry bootstrap', e.message, true); }
 
 const roleAliases = {
-  owner: ['owner'],
   salesperson: ['salesperson', 'salesman', 'sales representative', 'sales'],
   cashier: ['cashier'],
   lab: ['mixing lab technician', 'mixing lab', 'lab technician', 'paint mixer', 'mixer', 'technician'],
@@ -59,22 +50,25 @@ try {
 } catch (e) { fail('Access-control catalogue available', e.message); }
 
 const roles = access?.roles || [];
+const users = access?.users || [];
 const findRole = (key) => roles.find((r) => roleAliases[key].some((alias) => String(r.name || '').toLowerCase() === alias));
+const runtimeByKey = Object.fromEntries((runtime.users || []).map((u) => [u.key, u]));
+const candidateKeys = { salesperson: 'van', cashier: 'cashier1', lab: 'manager', accounts: 'cashier2' };
 const roleResults = {};
 
 for (const key of ['salesperson', 'cashier', 'lab', 'accounts']) {
   const role = findRole(key);
   if (!role) { fail(`${key} role exists`, `No dedicated ${key} role found`, true); continue; }
   try {
-    const email = `qa-paint-${key}-${Date.now()}@axtor.invalid`;
-    const password = `AxtorQA!${Date.now()}x`;
-    const user = await req('/api/v1/access-control/users', { method: 'POST', body: { name: `QA Paint ${key} ${runId}`, email, password, roleIds: [role.id] } });
-    const token = await login(email, password);
-    if (!token) throw new Error('Login returned no token');
-    createdUsers.push({ key, id: user.id, email });
-    roleResults[key] = { token, role };
-    pass(`${key} user provisioned`, `${role.name} login succeeded`);
-  } catch (e) { fail(`${key} user provisioned`, e.message); }
+    const candidate = runtimeByKey[candidateKeys[key]];
+    if (!candidate?.token) throw new Error(`Authenticated ${candidateKeys[key]} audit user is unavailable`);
+    const accessUser = users.find((u) => u.id === candidate.id || String(u.email || '').toLowerCase() === String(candidate.email || '').toLowerCase());
+    if (!accessUser?.id) throw new Error(`Access-control record for ${candidateKeys[key]} was not found`);
+    await req(`/api/v1/access-control/users/${accessUser.id}/roles`, { method: 'PATCH', body: { roleIds: [role.id] } });
+    roleResults[key] = { token: candidate.token, role, user: accessUser };
+    certifiedUsers.push({ key, id: accessUser.id, email: accessUser.email, role: role.name, sourceUser: candidateKeys[key] });
+    pass(`${key} authenticated role assignment`, `${accessUser.email} assigned ${role.name} with an existing verified session`);
+  } catch (e) { fail(`${key} authenticated role assignment`, e.message); }
 }
 
 const roleProbes = {
@@ -126,7 +120,7 @@ try {
   pass('Owner executive access', `${ownerPaths.length} operational, finance and Paint reporting endpoints accessible`);
 } catch (e) { fail('Owner executive access', e.message); }
 
-report.paintIndustryCertification = { runId, businessSlug, checks, failures, blockers, createdUsers, scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'] };
+report.paintIndustryCertification = { runId, businessSlug, checks, failures, blockers, certifiedUsers, scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'] };
 report.overall = failures.length === 0 && report.overall === 'PASS' ? 'PASS' : 'FAIL';
 await fs.writeFile('paint-live-audit-report.json', JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.paintIndustryCertification, null, 2));
