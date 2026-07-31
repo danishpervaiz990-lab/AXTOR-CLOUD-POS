@@ -1,3 +1,4 @@
+// Final Paint production certification: tenant-aware role login evidence.
 import fs from 'node:fs/promises';
 
 const runtime = JSON.parse(await fs.readFile('paint-live-audit-runtime.json', 'utf8'));
