@@ -36,9 +36,18 @@
     if (profile && profile.paperSize === "58MM") return "thermal-58";
     if (profile && profile.paperSize === "80MM") return "thermal-80";
     var type = String(documentData.documentType || "invoice").toLowerCase();
-    if (type === "quotation") return "quotation";
+    if (type === "quotation") {
+      var quotationSettings = window.AxtorInvoice && window.AxtorInvoice.getInvoice ? window.AxtorInvoice.getInvoice() : {};
+      return quotationSettings.defaultQuotationTemplate || "quotation";
+    }
     if (type === "delivery_note") return "delivery-invoice";
-    return "modern-a4";
+    if (window.AxtorInvoice && typeof window.AxtorInvoice.selectedTemplate === "function") {
+      var selected = window.AxtorInvoice.selectedTemplate(documentData.customerName || documentData.customer || "");
+      if (selected && !String(selected).toLowerCase().startsWith("thermal-")) return selected;
+    }
+    var invoiceSettings = window.AxtorInvoice && window.AxtorInvoice.getInvoice ? window.AxtorInvoice.getInvoice() : {};
+    var configured = invoiceSettings.defaultInvoiceTemplate || "modern-a4";
+    return String(configured).toLowerCase().startsWith("thermal-") ? "modern-a4" : configured;
   }
 
   function pickProfile(requested, documentData) {
