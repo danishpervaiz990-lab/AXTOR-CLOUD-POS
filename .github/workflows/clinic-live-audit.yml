@@ -49,8 +49,23 @@ jobs:
         continue-on-error: true
         run: node backend/scripts/qa-clinic-live-audit.mjs
 
+      - name: Read Clinic audit preflight
+        id: preflight
+        if: always()
+        run: |
+          test -s clinic-live-audit-report.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const report = require('./clinic-live-audit-report.json');
+          const configured = report?.configuration?.businessSlug === true && report?.configuration?.fiveUsersConfigured === true;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `configured=${configured}\n`);
+          console.log(configured
+            ? 'Clinic credentials are configured; browser certification will run.'
+            : 'Clinic credentials are not configured; expensive browser steps are skipped and the strict gate remains FAIL.');
+          NODE
+
       - name: Install browser runtime
-        if: hashFiles('clinic-live-audit-runtime.json') != ''
+        if: steps.preflight.outputs.configured == 'true' && hashFiles('clinic-live-audit-runtime.json') != ''
         run: |
           mkdir -p /tmp/axtor-playwright
           npm init -y --prefix /tmp/axtor-playwright >/dev/null
@@ -58,14 +73,13 @@ jobs:
           /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
 
       - name: Test five roles through live Clinic frontend
-        if: hashFiles('clinic-live-audit-runtime.json') != ''
+        if: steps.preflight.outputs.configured == 'true' && hashFiles('clinic-live-audit-runtime.json') != ''
         continue-on-error: true
         run: node backend/scripts/qa-clinic-browser-audit.mjs
 
       - name: Encrypt Clinic credentials
-        if: hashFiles('clinic-live-audit-credentials.json') != ''
+        if: steps.preflight.outputs.configured == 'true' && hashFiles('clinic-live-audit-credentials.json') != '' && hashFiles('backend/scripts/retail-audit-recipient-cert.pem') != ''
         run: |
-          test -s backend/scripts/retail-audit-recipient-cert.pem
           openssl cms -encrypt -binary -aes-256-cbc \
             -in clinic-live-audit-credentials.json \
             -out clinic-live-audit-credentials.p7m \
@@ -73,6 +87,10 @@ jobs:
             backend/scripts/retail-audit-recipient-cert.pem
           test -s clinic-live-audit-credentials.p7m
           shred -u clinic-live-audit-credentials.json clinic-live-audit-runtime.json
+
+      - name: Remove plaintext Clinic runtime on blocked runs
+        if: always() && hashFiles('clinic-live-audit-credentials.json') != ''
+        run: shred -u clinic-live-audit-credentials.json clinic-live-audit-runtime.json
 
       - name: Upload Clinic audit evidence
         if: always()
@@ -91,4 +109,13 @@ jobs:
         if: always()
         run: |
           test -s clinic-live-audit-report.json
-          node -e "const r=require('./clinic-live-audit-report.json'); console.log('Clinic audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
+          node - <<'NODE'
+          const fs = require('fs');
+          const report = require('./clinic-live-audit-report.json');
+          console.log('Clinic audit result:', report.overall);
+          if (report.overall === 'PASS' && !fs.existsSync('clinic-live-audit-credentials.p7m')) {
+            console.error('Clinic audit cannot PASS without an encrypted credential artifact.');
+            process.exit(1);
+          }
+          if (report.overall !== 'PASS') process.exit(1);
+          NODE
