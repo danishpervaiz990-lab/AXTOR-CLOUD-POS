@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "shared": {
+    "owner.business": {"profile": true, "logo": true, "address": true, "taxIdentity": true, "timezone": "Asia/Qatar", "currency": "QAR"},
+    "owner.branches": {"multiBranch": true, "workingHours": true, "holidays": true, "warehouses": true},
+    "owner.terminals": {"counterManagement": true, "cashierAssignment": true, "cashDrawer": true, "barcodeScanner": true, "defaultPrinter": true},
+    "owner.finance": {"fiscalYear": true, "expenseCategories": true, "paymentMethods": true, "bankAccounts": true, "vat": true, "creditLimits": true},
+    "owner.printing": {"a4": true, "thermal80mm": true, "thermal58mm": true, "qrCode": true, "invoicePrefix": true, "terms": true},
+    "owner.users": {"roles": ["owner", "manager", "cashier", "accountant", "storekeeper"], "customPermissions": true, "approvalLimits": true},
+    "owner.notifications": {"email": true, "sms": true, "whatsapp": true, "lowStock": true, "overdue": true, "dailySummary": true},
+    "owner.security": {"twoFactor": true, "sessionTimeout": true, "deviceManagement": true, "loginHistory": true, "auditLog": true},
+    "owner.backup": {"automaticBackup": true, "restore": true, "export": true},
+    "owner.integrations": {"paymentGateway": true, "email": true, "sms": true, "whatsapp": true, "accountingExport": true},
+    "owner.saas": {"subscription": true, "billingHistory": true, "usage": true, "addons": true, "featureToggles": true},
+    "owner.ai": {"businessInsights": true, "revenueForecast": true, "stockSuggestions": true, "anomalyAlerts": true}
+  },
+  "industries": {
+    "retail": {
+      "industry.retail": {"variants": true, "brands": true, "units": true, "barcode": true, "promotions": true, "customerLoyalty": true, "returnsPolicy": true, "salesmanTargets": true}
+    },
+    "grocery": {
+      "industry.grocery": {"weightedItems": true, "scaleBarcode": true, "batchTracking": true, "expiryAlertsDays": [30, 15, 7], "freshProduce": true, "supplierReturns": true, "fastCheckout": true}
+    },
+    "pharmacy": {
+      "industry.pharmacy": {"batchTracking": true, "expiryAlertsDays": [90, 60, 30, 15, 7], "prescriptionRequired": true, "controlledMedicine": true, "genericSubstitution": true, "dosage": true, "manufacturer": true, "pharmacistApproval": true}
+    },
+    "hardware": {
+      "industry.hardware": {"unitsAndConversions": true, "serialTracking": true, "projectQuotations": true, "contractorPricing": true, "bulkPricing": true, "deliveryScheduling": true, "warranty": true}
+    },
+    "paint": {
+      "industry.paint": {"colorCodes": true, "mixingFormulas": true, "tintingMachine": true, "basePaintStock": true, "batchTracking": true, "surfaceCoverage": true, "systemCoats": true, "shadeHistory": true}
+    },
+    "gym": {
+      "industry.gym": {"membershipPlans": true, "admissionFee": true, "freezePolicy": true, "renewalRules": true, "expiryAlertsDays": [30, 15, 7], "trainers": true, "trainerCommission": true, "classes": true, "capacity": true, "waitingList": true, "attendance": true, "equipmentMaintenance": true}
+    }
+  }
+}
