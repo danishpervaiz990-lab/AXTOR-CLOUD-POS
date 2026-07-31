@@ -1,63 +1,35 @@
-/* Axtor POS Cloud — optional Retro POS style switcher.
-   Keeps existing data-theme light/dark/blue/minimal behavior untouched. */
-(function(){
-  'use strict';
-  const STORAGE_KEY = 'axtorThemeStyle';
-  const RETRO_VALUE = 'retro-pos';
-  const DEFAULT_VALUE = 'default';
-
-  function readStyle(){
-    try{
-      return localStorage.getItem(STORAGE_KEY) === RETRO_VALUE ? RETRO_VALUE : DEFAULT_VALUE;
-    }catch(e){
-      return DEFAULT_VALUE;
-    }
-  }
-
-  function persistStyle(style){
-    const normalized = style === RETRO_VALUE ? RETRO_VALUE : DEFAULT_VALUE;
-    try{ localStorage.setItem(STORAGE_KEY, normalized); }catch(e){}
-    applyStyle(normalized);
-  }
-
-  function applyStyle(style){
-    const enabled = style === RETRO_VALUE;
-    document.documentElement.classList.toggle('theme-retro-pos', enabled);
-    if(document.body) document.body.classList.toggle('theme-retro-pos', enabled);
-    document.querySelectorAll('[data-theme-style-choice]').forEach(function(el){
-      const active = (el.getAttribute('data-theme-style-choice') === (enabled ? RETRO_VALUE : DEFAULT_VALUE));
-      el.classList.toggle('active', active);
-      el.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
-    document.querySelectorAll('[data-theme-style-select]').forEach(function(el){
-      el.value = enabled ? RETRO_VALUE : DEFAULT_VALUE;
-    });
-  }
-
-  function initControls(){
-    applyStyle(readStyle());
-    document.querySelectorAll('[data-theme-style-choice]').forEach(function(btn){
-      btn.setAttribute('type', btn.getAttribute('type') || 'button');
-      btn.addEventListener('click', function(){
-        persistStyle(btn.getAttribute('data-theme-style-choice'));
-      });
-    });
-    document.querySelectorAll('[data-theme-style-select]').forEach(function(select){
-      select.addEventListener('change', function(){ persistStyle(select.value); });
-    });
-  }
-
-  applyStyle(readStyle());
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', initControls);
-  }else{
-    initControls();
-  }
-
-  window.AxtorThemeSwitcher = {
-    key: STORAGE_KEY,
-    getStyle: readStyle,
-    setStyle: persistStyle,
-    applyStyle: applyStyle
-  };
+/* Axtor Retail shared UX fixes: theme, full sidebar, saved print size and purchase search. */
+(function(){'use strict';
+const STYLE_KEY='axtorThemeStyle',PRINT_KEY='axtorInvoiceOutputProfile',INV_KEY='invoiceSettings';
+const NAV=[['retail-dashboard.html','bi-speedometer2','Dashboard'],['terminal.html','bi-upc-scan','POS Terminal'],['sales.html','bi-cart-check','Sales & Returns'],['shifts.html','bi-clock-history','Shifts / Closing'],['customer.html','bi-people','Customers'],['salesmen.html','bi-person-badge','Sales Team'],['products.html','bi-box-seam','Products'],['inventory.html','bi-boxes','Inventory'],['barcode-labels.html','bi-upc','Barcode Labels'],['purchase.html','bi-bag-plus','Purchases'],['suppliers.html','bi-truck','Suppliers'],['branches.html','bi-building','Branches'],['promotions.html','bi-percent','Promotions'],['loyalty.html','bi-gem','Loyalty'],['approvals.html','bi-shield-check','Approvals'],['reports.html','bi-graph-up-arrow','Reports'],['accounts.html','bi-bank','Accounts'],['expenses.html','bi-wallet2','Expenses'],['notifications.html','bi-bell','Notifications'],['invoice-designer.html','bi-file-earmark-richtext','Invoice Designer'],['setup.html','bi-magic','Setup Wizard'],['settings.html','bi-gear','Settings']];
+const P={products:[],items:[],busy:false};
+function style(){try{return localStorage.getItem(STYLE_KEY)==='retro-pos'?'retro-pos':'default'}catch(e){return'default'}}
+function apply(v){const on=v==='retro-pos';document.documentElement.classList.toggle('theme-retro-pos',on);document.body&&document.body.classList.toggle('theme-retro-pos',on);document.querySelectorAll('[data-theme-style-choice]').forEach(x=>{const a=x.dataset.themeStyleChoice===(on?'retro-pos':'default');x.classList.toggle('active',a);x.setAttribute('aria-pressed',a?'true':'false')});document.querySelectorAll('[data-theme-style-select]').forEach(x=>x.value=on?'retro-pos':'default')}
+function setStyle(v){v=v==='retro-pos'?'retro-pos':'default';try{localStorage.setItem(STYLE_KEY,v)}catch(e){}apply(v)}
+function page(){const p=(location.pathname.split('/').pop()||'retail-dashboard.html').toLowerCase();return p==='index.html'?'retail-dashboard.html':p}
+function sidebar(){const n=document.querySelector('.nav-menu');if(!n)return;const p=page();n.innerHTML=NAV.map(x=>'<a class="nav-linkx'+(x[0]===p?' active':'')+'" href="'+x[0]+'"><i class="bi '+x[1]+'"></i><span>'+x[2]+'</span></a>').join('');const b=document.querySelector('.sidebar .brand');if(b)b.href='retail-dashboard.html';const s=document.querySelector('.sidebar .brand span');if(s)s.textContent='General Retail POS / ERP'}
+function polish(){if(document.getElementById('axtorRetailPolish'))return;const s=document.createElement('style');s.id='axtorRetailPolish';s.textContent='body.axtor-retail-polish .cardx{position:relative;overflow:hidden;transition:.18s transform,.18s box-shadow,.18s border-color}body.axtor-retail-polish .cardx:hover{transform:translateY(-2px);box-shadow:0 18px 42px rgba(13,74,57,.10);border-color:rgba(15,159,120,.28)}body.axtor-retail-polish .cardx-title{display:flex;align-items:center;gap:.65rem}.axtor-card-icon{display:inline-grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:11px;background:rgba(15,159,120,.11);color:#0f8b6c;border:1px solid rgba(15,159,120,.18)}.purchase-search-wrap{margin-bottom:.55rem}.purchase-product-status{display:flex;align-items:center;gap:.35rem;margin-top:.4rem;color:#0f8b6c;font-size:.78rem;font-weight:700}.purchase-product-status.error{color:#b42318}.purchase-item-meta{display:block;color:#64756e;font-size:.75rem}.axtor-print-note{display:flex;gap:.45rem;margin-top:.45rem;color:#64756e;font-size:.8rem}@media(max-width:1199px){.nav-menu{max-height:calc(100vh - 170px);overflow:auto}}';document.head.appendChild(s);document.body&&document.body.classList.add('axtor-retail-polish');document.querySelectorAll('.cardx-title').forEach(t=>{if(t.querySelector('.axtor-card-icon'))return;const i=document.createElement('span');i.className='axtor-card-icon';const z=t.textContent.toLowerCase();const c=/purchase|supplier/.test(z)?'bi-bag-check':/sale|invoice|terminal/.test(z)?'bi-cart-check':/product|stock|inventory/.test(z)?'bi-box-seam':/customer|loyalty/.test(z)?'bi-people':/report|trend|profit/.test(z)?'bi-graph-up-arrow':/account|payment|expense/.test(z)?'bi-wallet2':'bi-grid-1x2';i.innerHTML='<i class="bi '+c+'"></i>';t.insertBefore(i,t.firstChild)})}
+function inv(){try{return JSON.parse(localStorage.getItem(INV_KEY)||'{}')||{}}catch(e){return{}}}
+function saveInv(v){try{localStorage.setItem(INV_KEY,JSON.stringify(v))}catch(e){}}
+function profile(v){v=String(v||'').toLowerCase();return v.includes('58')?'thermal-58':v.includes('80')?'thermal-80':'a4'}
+function getProfile(){try{return profile(localStorage.getItem(PRINT_KEY)||inv().defaultPrintSize||'A4')}catch(e){return'a4'}}
+function label(p){return p==='thermal-58'?'Thermal 58mm':p==='thermal-80'?'Thermal 80mm':'A4'}
+function setProfile(v){const p=profile(v),o=inv();try{localStorage.setItem(PRINT_KEY,p)}catch(e){}o.defaultPrintSize=label(p);if(p!=='a4')o.defaultReceiptTemplate=p;saveInv(o);document.querySelectorAll('[data-axtor-print-profile]').forEach(x=>x.value=p);return p}
+function template(id){const p=getProfile();if(p!=='a4')return p;id=String(id||'');if(!id||id.startsWith('thermal-')){const x=String(inv().defaultInvoiceTemplate||'modern-a4');return x.startsWith('thermal-')?'modern-a4':x}return id}
+function printControl(){const x=document.querySelector('[data-invoice-setting="defaultPrintSize"]');if(x){if(![...x.options].some(o=>/58/.test(o.value+o.textContent)))x.add(new Option('Thermal 58mm','Thermal 58mm'));x.value=label(getProfile());x.dataset.axtorPrintProfile='';if(!x.dataset.axtorBound){x.dataset.axtorBound='1';x.addEventListener('change',()=>setProfile(x.value))}if(!x.parentElement.querySelector('.axtor-print-note'))x.insertAdjacentHTML('afterend','<div class="axtor-print-note"><i class="bi bi-check2-circle"></i><span>Saved once and used automatically for invoice and terminal printing.</span></div>')}}
+function printHooks(){if(!window.__axtorOpenWrapped){const open=window.open.bind(window);window.open=function(url){let u=url;try{if(typeof url==='string'&&url.includes('invoice-view.html')){const q=new URL(url,location.href);if(q.searchParams.get('print')==='1'||q.searchParams.has('profile')){const p=getProfile();q.searchParams.set('profile',p==='a4'?template('modern-a4'):p);u=q.href}}}catch(e){}const a=[...arguments];a[0]=u;return open.apply(window,a)};window.__axtorOpenWrapped=1}let n=0,t=setInterval(()=>{n++;const a=window.AxtorInvoice;if(a&&typeof a.print==='function'&&!a.__axtorProfile){const p=a.print.bind(a),v=typeof a.preview==='function'?a.preview.bind(a):null;a.print=(id,o)=>p(template(id),o||{});if(v)a.preview=(id,o)=>v(template(id),o||{});a.__axtorProfile=1;clearInterval(t)}if(n>60)clearInterval(t)},100)}
+function rows(v,d=0){if(d>5||v==null)return[];if(Array.isArray(v))return v;if(typeof v!=='object')return[];for(const k of['items','products','rows','results','records','data'])if(k in v){const r=rows(v[k],d+1);if(r.length||Array.isArray(v[k]))return r}return[]}
+function sku(x){return x.sku||x.code||x.itemCode||x.productCode||''}function name(x){return x.name||x.productName||x.itemName||'Item'}function barcode(x){return x.barcode||x.qrCode||''}function cost(x){const n=Number(x.costPrice??x.cost??x.purchasePrice??x.lastPurchaseCost??0);return Number.isFinite(n)?n:0}function plabel(x){return[sku(x),name(x),barcode(x)].filter(Boolean).join(' — ')}
+function toast(m,e){if(window.AxtorPage&&AxtorPage.toast)return AxtorPage.toast(m,e?'error':'success');if(window.showToast)return showToast(m,e?'error':'success');console[e?'error':'log'](m)}
+function pstatus(m,e){const x=document.getElementById('purchaseProductStatus');if(x){x.classList.toggle('error',!!e);x.innerHTML='<i class="bi '+(e?'bi-exclamation-triangle':'bi-database-check')+'"></i><span>'+m+'</span>'}}
+function psearch(){const s=document.getElementById('purchaseProduct');if(!s||document.getElementById('purchaseProductSearch'))return;const w=document.createElement('div');w.className='purchase-search-wrap';w.innerHTML='<div class="input-group"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control" id="purchaseProductSearch" list="purchaseProductSuggestions" placeholder="Search saved item by name, SKU or barcode"><datalist id="purchaseProductSuggestions"></datalist></div><div class="purchase-product-status" id="purchaseProductStatus"><i class="bi bi-arrow-repeat"></i><span>Loading saved items…</span></div>';s.parentElement.insertBefore(w,s);const q=w.querySelector('input');q.addEventListener('input',()=>{const z=q.value.trim().toLowerCase(),p=P.products.find(x=>[sku(x),name(x),barcode(x),x.id].some(y=>String(y||'').toLowerCase()===z))||P.products.find(x=>plabel(x).toLowerCase().includes(z));if(p){s.value=String(p.id);const c=document.getElementById('purchaseCost');if(c)c.value=cost(p).toFixed(2)}});s.addEventListener('change',()=>{const p=P.products.find(x=>String(x.id)===String(s.value));if(p){q.value=plabel(p);const c=document.getElementById('purchaseCost');if(c)c.value=cost(p).toFixed(2)}})}
+function pfill(){const s=document.getElementById('purchaseProduct'),d=document.getElementById('purchaseProductSuggestions');if(!s||!P.products.length)return;const cur=s.value;s.innerHTML='<option value="">Select saved product</option>'+P.products.map(x=>'<option value="'+String(x.id).replace(/"/g,'&quot;')+'">'+plabel(x).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</option>').join('');if(P.products.some(x=>String(x.id)===String(cur)))s.value=cur;if(d)d.innerHTML=P.products.map(x=>'<option value="'+plabel(x).replace(/"/g,'&quot;')+'"></option>').join('');pstatus(P.products.length+' saved items available',0)}
+async function pload(){if(P.busy||!document.getElementById('purchaseProduct'))return;P.busy=1;psearch();try{if(!window.AxtorAPI)throw Error('Product API is not ready');P.products=rows(await AxtorAPI.apiGet('/api/v1/products?limit=1000')).filter(x=>x&&x.id);if(!P.products.length)throw Error('No saved products returned for this Retail business');pfill();setTimeout(pfill,400);setTimeout(pfill,1200)}catch(e){console.error(e);pstatus(e.message,1);toast(e.message,1)}finally{P.busy=0}}
+function prender(){const b=document.getElementById('purchaseItemsBody');if(!b)return;const h=b.closest('table')?.querySelector('thead tr');if(h)h.innerHTML='<th>Product</th><th>Qty</th><th>Cost</th><th>Total</th><th></th>';b.innerHTML=P.items.length?P.items.map((x,i)=>'<tr><td><strong>'+name(x)+'</strong><span class="purchase-item-meta">'+(x.sku||'No SKU')+'</span></td><td>'+x.qty+'</td><td>'+x.cost.toFixed(2)+'</td><td>'+(x.qty*x.cost).toFixed(2)+'</td><td><button class="btn btn-sm btn-outline-danger" data-retail-purchase-remove="'+i+'"><i class="bi bi-trash"></i></button></td></tr>').join(''):'<tr><td colspan="5" class="text-center text-muted py-4">Search and add a saved product.</td></tr>'}
+function pselected(){const s=document.getElementById('purchaseProduct'),q=document.getElementById('purchaseProductSearch')?.value.trim().toLowerCase()||'';return P.products.find(x=>String(x.id)===String(s?.value))||P.products.find(x=>plabel(x).toLowerCase()===q)||P.products.find(x=>plabel(x).toLowerCase().includes(q))}
+function padd(){const p=pselected(),q=Number(document.getElementById('purchaseQty')?.value||0),c0=Number(document.getElementById('purchaseCost')?.value||0);if(!p||q<=0)return toast('Select a saved product and valid quantity',1);const c=c0>0?c0:cost(p),e=P.items.find(x=>String(x.productId)===String(p.id)&&x.cost===c);if(e)e.qty+=q;else P.items.push({productId:p.id,sku:sku(p),name:name(p),qty:q,cost:c});prender();const z=document.getElementById('purchaseProductSearch');if(z)z.value='';const s=document.getElementById('purchaseProduct');if(s)s.value='';toast('Product added to purchase')}
+async function psave(b){if(!P.items.length)return toast('Add at least one saved product',1);const s=document.getElementById('purchaseSupplier');if(!s?.value)return toast('Select a supplier',1);const old=b.innerHTML;b.disabled=1;b.innerHTML='Saving purchase…';try{await AxtorAPI.apiPost('/api/v1/purchases',{supplierId:s.value,purchaseNo:document.getElementById('purchaseNo')?.value||'',purchaseDate:document.getElementById('purchaseDate')?.value||'',items:P.items,status:'DRAFT'});P.items=[];prender();toast('Purchase saved successfully')}catch(e){toast(e.message||'Purchase save failed',1)}finally{b.disabled=0;b.innerHTML=old}}
+function purchase(){if(!document.getElementById('purchaseProduct'))return;prender();pload();document.addEventListener('click',e=>{const a=e.target.closest('#addPurchaseItemBtn');if(a){e.preventDefault();e.stopImmediatePropagation();return padd()}const r=e.target.closest('[data-retail-purchase-remove]');if(r){e.preventDefault();e.stopImmediatePropagation();P.items.splice(Number(r.dataset.retailPurchaseRemove),1);return prender()}const s=e.target.closest('#new-purchase [data-demo-action="Purchase saved"]');if(s){e.preventDefault();e.stopImmediatePropagation();psave(s)}},true)}
+function init(){apply(style());document.querySelectorAll('[data-theme-style-choice]').forEach(b=>b.addEventListener('click',()=>setStyle(b.dataset.themeStyleChoice)));document.querySelectorAll('[data-theme-style-select]').forEach(s=>s.addEventListener('change',()=>setStyle(s.value)));polish();sidebar();printControl();printHooks();purchase();setTimeout(()=>{sidebar();polish();printControl()},300);setTimeout(()=>{sidebar();polish();printControl()},1200)}
+apply(style());document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();window.AxtorThemeSwitcher={key:STYLE_KEY,getStyle:style,setStyle:setStyle,applyStyle:apply,getPrintProfile:getProfile,setPrintProfile:setProfile,syncRetailSidebar:sidebar};
 })();
