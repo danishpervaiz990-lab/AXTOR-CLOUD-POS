@@ -1,3 +1,4 @@
+// Paint role certification: authenticated disposable-tenant role isolation.
 import fs from 'node:fs/promises';
 
 const runtime = JSON.parse(await fs.readFile('paint-live-audit-runtime.json', 'utf8'));
