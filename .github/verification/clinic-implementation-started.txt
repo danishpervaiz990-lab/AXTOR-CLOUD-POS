@@ -1,0 +1,1 @@
+Clinic implementation started from the dedicated frontend baseline on 2026-07-31. Apply shared owner settings persistence and live certification patterns without weakening production gates.
