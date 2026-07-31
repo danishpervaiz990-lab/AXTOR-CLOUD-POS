@@ -3,9 +3,9 @@ import fs from 'node:fs/promises';
 const runtime = JSON.parse(await fs.readFile('paint-live-audit-runtime.json', 'utf8'));
 const report = JSON.parse(await fs.readFile('paint-live-audit-report.json', 'utf8'));
 const backend = runtime.backendOrigin || process.env.AXTOR_BACKEND_ORIGIN;
-const businessSlug = runtime.businessSlug || runtime.business?.slug || runtime.tenant?.businessSlug || 'axtor-demo';
+const businessSlug = runtime.ids?.businessSlug || runtime.businessSlug || runtime.business?.slug || runtime.tenant?.businessSlug || report.environment?.businessSlug;
 const owner = runtime.users?.find((u) => u.key === 'owner');
-if (!backend || !owner?.token) throw new Error('Paint certification requires backend and owner token');
+if (!backend || !businessSlug || !owner?.token) throw new Error('Paint certification requires backend, tenant slug and owner token');
 
 const runId = `PAINT-CERT-${Date.now()}`;
 const checks = [];
@@ -126,7 +126,7 @@ try {
   pass('Owner executive access', `${ownerPaths.length} operational, finance and Paint reporting endpoints accessible`);
 } catch (e) { fail('Owner executive access', e.message); }
 
-report.paintIndustryCertification = { runId, checks, failures, blockers, createdUsers, scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'] };
+report.paintIndustryCertification = { runId, businessSlug, checks, failures, blockers, createdUsers, scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'] };
 report.overall = failures.length === 0 && report.overall === 'PASS' ? 'PASS' : 'FAIL';
 await fs.writeFile('paint-live-audit-report.json', JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.paintIndustryCertification, null, 2));
