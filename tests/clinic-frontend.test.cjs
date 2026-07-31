@@ -35,8 +35,13 @@ for (const file of expected) {
 const redirect = fs.readFileSync(path.join(root, 'clinic.html'), 'utf8');
 assert.ok(redirect.includes('clinic-dashboard.html'), 'Clinic entry route must open the dedicated dashboard');
 
+const settingsHtml = fs.readFileSync(path.join(root, 'clinic-settings.html'), 'utf8');
+assert.ok(settingsHtml.includes('Tenant identity, permissions, reminders and release controls'), 'Clinic settings page must identify production control scope');
+assert.ok(settingsHtml.includes('20260731-clinic-settings-v1'), 'Clinic settings assets must use the current cache-busting release');
+
 const js = fs.readFileSync(path.join(root, 'js', 'clinic-app.js'), 'utf8');
 const requiredEndpoints = [
+  '/api/v1/commercial/context','/api/v1/auth/me',
   '/api/v1/clinic/dashboard','/api/v1/clinic/patients','/api/v1/clinic/practitioners',
   '/api/v1/clinic/appointments','/api/v1/clinic/queue','/api/v1/clinic/encounters',
   '/api/v1/clinic/services','/api/v1/clinic/service-requests','/api/v1/clinic/medication-requests',
@@ -44,13 +49,26 @@ const requiredEndpoints = [
   '/api/v1/clinic/payments','/api/v1/clinic/reports/filtered','/api/v1/clinic/notification-rules'
 ];
 for (const endpoint of requiredEndpoints) assert.ok(js.includes(endpoint), `Clinic runtime missing API integration: ${endpoint}`);
+
+const requiredPermissionContracts = [
+  'industry.clinic.patient.create','industry.clinic.appointment.create','industry.clinic.queue.create',
+  'industry.clinic.encounter.create','industry.clinic.medication_request.create',
+  'clinic.billing.create','clinic.payments.create','industry.clinic.settings.manage'
+];
+for (const permission of requiredPermissionContracts) assert.ok(js.includes(permission), `Clinic runtime missing permission contract: ${permission}`);
+
+const workflowMarkers = [
+  'Idempotency-Key','canSettingsWrite','Read-only access.','Notification rule saved',
+  'This dedicated frontend is restricted to authenticated Clinic tenants.',
+  'Cash','Credit','partial','follow-up','consent','appointment','encounter'
+];
+for (const marker of workflowMarkers) assert.ok(js.toLowerCase().includes(marker.toLowerCase()), `Clinic runtime missing workflow marker: ${marker}`);
+
 assert.ok(!js.includes('/api/v1/industry/records'), 'Clinic runtime must not use generic IndustryRecord APIs');
 assert.ok(!js.includes('industry.html?module='), 'Clinic runtime must not route primary workflows to generic workspace');
-assert.ok(js.includes('Idempotency-Key'), 'Clinic billing must send idempotency keys');
-assert.ok(js.includes('This dedicated frontend is restricted to authenticated Clinic tenants.'), 'Clinic tenant guard missing');
 
 const api = fs.readFileSync(path.join(root, 'js', 'axtor-api.js'), 'utf8');
 assert.ok(api.includes('requestOptions'), 'shared API client custom request options missing');
 assert.ok(api.includes('settings.headers'), 'shared API client custom headers missing');
 
-console.log(`PASS: ${expected.length} purpose-built Clinic pages; dedicated Clinic APIs, tenant guard, idempotency, references and placeholder scans passed.`);
+console.log(`PASS: ${expected.length} purpose-built Clinic pages; dedicated APIs, role gates, settings controls, tenant guard, idempotency, references and workflow contracts passed.`);
