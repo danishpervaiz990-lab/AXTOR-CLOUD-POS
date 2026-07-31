@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [frontend-grocery]
   push:
-    branches: [frontend-grocery, fix/grocery/dedicated-frontend-v1, fix/grocery/reports-dashboard-reconciliation-20260730]
+    branches: [frontend-grocery, frontend-grocery-readiness-work]
 permissions:
   contents: read
 jobs:
@@ -17,7 +17,10 @@ jobs:
       - run: node --check demo-static/js/axtor-api.js
       - run: node --check demo-static/js/grocery-app.js
       - run: node --check demo-static/js/grocery-report-sync.js
+      - run: node --check demo-static/js/grocery-production-readiness.js
       - run: node tests/grocery-frontend.test.cjs
       - run: |
           if grep -R "industry.html?module=" demo-static/grocery-*.html; then exit 1; fi
+      - run: |
+          if grep -R -E "Demo business|Demo owner|Sample Product|Customer Ready Mode" demo-static/grocery-*.html demo-static/js/grocery-*.js; then exit 1; fi
       - run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
