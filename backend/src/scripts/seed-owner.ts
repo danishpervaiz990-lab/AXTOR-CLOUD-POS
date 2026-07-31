@@ -27,7 +27,7 @@ function hashPassword(password: string): string {
 }
 
 async function main(): Promise<void> {
-  const businessName = process.env.SEED_BUSINESS_NAME?.trim() || 'Axtor Demo Business';
+  const businessName = process.env.SEED_BUSINESS_NAME?.trim() || 'Axtor Business';
   const businessSlug = slugify(process.env.SEED_BUSINESS_SLUG || businessName);
   const ownerName = process.env.SEED_OWNER_NAME?.trim() || 'Owner';
   const ownerEmail = requiredEnv('SEED_OWNER_EMAIL').toLowerCase();
