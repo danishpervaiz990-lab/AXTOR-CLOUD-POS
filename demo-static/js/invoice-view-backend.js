@@ -25,6 +25,13 @@
     return {};
   }
 
+  function virtualProfile(code, documentData) {
+    var type = String(documentData && documentData.documentType || "invoice").toLowerCase();
+    if (code === "thermal-58") return { code: code, name: "58 mm Thermal Receipt", documentType: "receipt", paperSize: "58MM", widthMm: 58, heightMm: null, marginTopMm: 2, marginRightMm: 2, marginBottomMm: 2, marginLeftMm: 2, fontScale: .88, copies: ["Original"], config: {} };
+    if (code === "thermal-80") return { code: code, name: "80 mm Thermal Receipt", documentType: "receipt", paperSize: "80MM", widthMm: 80, heightMm: null, marginTopMm: 2, marginRightMm: 2, marginBottomMm: 2, marginLeftMm: 2, fontScale: 1, copies: ["Original"], config: {} };
+    return { code: "a4", name: "A4 Document", documentType: type, paperSize: "A4", widthMm: 210, heightMm: 297, marginTopMm: 8, marginRightMm: 8, marginBottomMm: 8, marginLeftMm: 8, fontScale: 1, copies: ["Original"], config: {} };
+  }
+
   function profileTemplate(profile, documentData) {
     if (profile && profile.paperSize === "58MM") return "thermal-58";
     if (profile && profile.paperSize === "80MM") return "thermal-80";
@@ -35,30 +42,20 @@
   }
 
   function pickProfile(requested, documentData) {
+    var normalized = String(requested || "").toLowerCase();
+    if (normalized === "thermal-58" || normalized.includes("58mm")) {
+      return profiles.find(function (row) { return row.paperSize === "58MM" || row.code === "thermal-58"; }) || virtualProfile("thermal-58", documentData);
+    }
+    if (normalized === "thermal-80" || normalized.includes("80mm")) {
+      return profiles.find(function (row) { return row.paperSize === "80MM" || row.code === "thermal-80"; }) || virtualProfile("thermal-80", documentData);
+    }
     if (requested) {
       var exact = profiles.find(function (row) { return row.code === requested || row.id === requested; });
       if (exact) return exact;
     }
     var type = String(documentData.documentType || "invoice").toLowerCase();
-    var receipt = requested && requested.indexOf("thermal") === 0;
-    var matching = profiles.filter(function (row) {
-      return receipt ? row.documentType === "receipt" : row.documentType === type;
-    });
-    return matching.find(function (row) { return row.isDefault; }) || matching[0] || {
-      code: receipt ? "thermal-80" : "a4-" + type,
-      name: receipt ? "80 mm Thermal Receipt" : "A4 Document",
-      documentType: receipt ? "receipt" : type,
-      paperSize: receipt ? "80MM" : "A4",
-      widthMm: receipt ? 80 : 210,
-      heightMm: receipt ? null : 297,
-      marginTopMm: receipt ? 2 : 8,
-      marginRightMm: receipt ? 2 : 8,
-      marginBottomMm: receipt ? 2 : 8,
-      marginLeftMm: receipt ? 2 : 8,
-      fontScale: 1,
-      copies: ["Original"],
-      config: {},
-    };
+    var matching = profiles.filter(function (row) { return row.documentType === type && row.paperSize === "A4"; });
+    return matching.find(function (row) { return row.isDefault; }) || matching[0] || virtualProfile("a4", documentData);
   }
 
   function applyPrintProfile(profile) {
@@ -71,12 +68,7 @@
     var width = Number(profile.widthMm || (profile.paperSize === "58MM" ? 58 : profile.paperSize === "80MM" ? 80 : 210));
     var height = profile.heightMm ? Number(profile.heightMm) : null;
     var pageSize = thermal ? width + "mm auto" : width + "mm " + (height || 297) + "mm";
-    var margins = [
-      Number(profile.marginTopMm || 0),
-      Number(profile.marginRightMm || 0),
-      Number(profile.marginBottomMm || 0),
-      Number(profile.marginLeftMm || 0)
-    ].join("mm ") + "mm";
+    var margins = [Number(profile.marginTopMm || 0), Number(profile.marginRightMm || 0), Number(profile.marginBottomMm || 0), Number(profile.marginLeftMm || 0)].join("mm ") + "mm";
     style.textContent = "@page{size:" + pageSize + ";margin:" + margins + "}"
       + "@media print{html,body{width:" + (thermal ? width + "mm" : "auto") + ";margin:0!important;padding:0!important;background:#fff!important}"
       + ".page{max-width:none!important;margin:0!important;padding:0!important}.invoice-sheet{font-size:calc(13px * " + Number(profile.fontScale || 1) + ")!important;"
@@ -94,15 +86,17 @@
     select.className = "form-select no-print";
     select.style.maxWidth = "230px";
     select.setAttribute("aria-label", "Print profile");
-    var relevant = profiles.filter(function (row) {
-      return row.documentType === String(documentData.documentType || "invoice").toLowerCase() || row.documentType === "receipt";
+    var type = String(documentData.documentType || "invoice").toLowerCase();
+    var relevant = profiles.filter(function (row) { return row.documentType === type || row.documentType === "receipt"; });
+    [virtualProfile("a4", documentData), virtualProfile("thermal-80", documentData), virtualProfile("thermal-58", documentData)].forEach(function (fallback) {
+      if (!relevant.some(function (row) { return row.code === fallback.code || row.paperSize === fallback.paperSize; })) relevant.push(fallback);
     });
-    if (!relevant.length) relevant = [activeProfile];
+    if (activeProfile && !relevant.some(function (row) { return row.code === activeProfile.code; })) relevant.unshift(activeProfile);
     select.innerHTML = relevant.map(function (row) {
-      return '<option value="' + U.esc(row.code) + '"' + (row.code === activeProfile.code ? " selected" : "") + ">" + U.esc(row.name) + "</option>";
+      return '<option value="' + U.esc(row.code) + '"' + (row.code === activeProfile.code ? " selected" : "") + '>' + U.esc(row.name) + '</option>';
     }).join("");
     select.addEventListener("change", function () {
-      var selected = profiles.find(function (row) { return row.code === select.value; }) || activeProfile;
+      var selected = relevant.find(function (row) { return row.code === select.value; }) || activeProfile;
       renderDocument(documentData, selected);
       var url = new URL(location.href);
       url.searchParams.set("profile", selected.code);
@@ -137,7 +131,7 @@
       total: documentData.total,
       returned: documentData.returnedAmount,
       refunded: documentData.refundedAmount,
-      items: documentData.items || [],
+      items: documentData.items || documentData.lines || documentData.documentItems || [],
     });
   }
 
@@ -147,9 +141,7 @@
     context = context || window.AxtorInvoiceContext || {};
     applyPrintProfile(profile);
     var template = profileTemplate(profile, documentData);
-    root.innerHTML = window.AxtorInvoice
-      ? window.AxtorInvoice.render(template, { data: normalizedData(documentData, context) })
-      : '<div class="alert alert-danger">Invoice engine not loaded.</div>';
+    root.innerHTML = window.AxtorInvoice ? window.AxtorInvoice.render(template, { data: normalizedData(documentData, context) }) : '<div class="alert alert-danger">Invoice engine not loaded.</div>';
     document.title = documentData.documentNo + " · Axtor POS Cloud";
   }
 
@@ -160,7 +152,8 @@
     try {
       if (!id && number) {
         var rows = unwrap(await U.api().apiGet("/api/v1/sales-documents?q=" + encodeURIComponent(number) + "&limit=20")) || [];
-        var match = rows.find(function (row) { return row.documentNo === number; }) || rows[0];
+        var list = Array.isArray(rows) ? rows : rows.items || rows.documents || [];
+        var match = list.find(function (row) { return row.documentNo === number; }) || list[0];
         id = match && match.id;
       }
       if (!id) throw new Error("Document id or document number is required");
@@ -183,17 +176,13 @@
         currencySymbol: (business.currency || "QAR") + " ",
       });
       if (window.AxtorInvoice && window.AxtorInvoice.setCloudConfig) {
-        window.AxtorInvoice.setCloudConfig({
-          company: company,
-          invoice: settings["invoice.settings"] || {},
-          designer: settings["invoice.designer"] || {},
-        });
+        window.AxtorInvoice.setCloudConfig({ company: company, invoice: settings["invoice.settings"] || {}, designer: settings["invoice.designer"] || {} });
       }
       activeProfile = pickProfile(params.get("profile"), activeDocument);
       renderDocument(activeDocument, activeProfile, context);
       renderProfileSelector(activeDocument);
       var box = U.q("#invoiceViewStatus"); if (box) box.classList.add("d-none");
-      if (params.get("print") === "1") setTimeout(function () { window.print(); }, 350);
+      if (params.get("print") === "1") setTimeout(function () { window.print(); }, 500);
     } catch (error) {
       status(error.message || "Unable to load document", "danger");
     }
