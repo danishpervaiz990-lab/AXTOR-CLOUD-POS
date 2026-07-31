@@ -1,0 +1,44 @@
+name: Six Industry Owner Settings Live Certification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [backend]
+    paths:
+      - "backend/config/owner-industry-settings.json"
+      - "backend/scripts/qa-six-industry-owner-settings-live.mjs"
+      - ".github/workflows/six-industry-owner-settings-live.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  certify-six-industries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_INDUSTRY_DEMO_PASSWORD: AxtorIndustryDemo@2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - name: Register, configure and live-test six industries
+        run: node backend/scripts/qa-six-industry-owner-settings-live.mjs
+      - name: Upload settings, financial and credential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: six-industry-owner-settings-${{ github.run_id }}
+          path: |
+            six-industry-owner-settings-report.json
+            six-industry-login-credentials.json
+            six-industry-settings-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce complete live PASS
+        if: always()
+        run: |
+          test -s six-industry-owner-settings-report.json
+          node -e "const r=require('./six-industry-owner-settings-report.json'); console.log(r.overall,r.totals); if(r.overall!=='PASS'||r.totals.industries!==6) process.exit(1)"
