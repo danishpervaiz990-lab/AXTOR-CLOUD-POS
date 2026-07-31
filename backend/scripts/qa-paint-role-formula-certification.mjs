@@ -32,23 +32,24 @@ async function req(path, { token = owner.token, method = 'GET', body, expected =
 }
 
 async function login(email, password) {
-  const res = await fetch(`${backend}/api/v1/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ businessSlug, email, password }),
-  });
+  const res = await fetch(`${backend}/api/v1/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessSlug, email, password }) });
   const payload = await res.json().catch(() => null);
   if (!res.ok) throw new Error(`login ${email} -> ${res.status}: ${JSON.stringify(payload)}`);
   const data = unwrap(payload);
   return data.token || data.accessToken;
 }
 
+try {
+  const bootstrap = await req('/api/v1/paint/bootstrap', { method: 'POST', body: {} });
+  pass('Paint industry bootstrap', `${bootstrap.roles?.length || 0} roles and formula ${bootstrap.formula?.formulaCode || bootstrap.formula?.id} available`);
+} catch (e) { fail('Paint industry bootstrap', e.message, true); }
+
 const roleAliases = {
   owner: ['owner'],
   salesperson: ['salesperson', 'salesman', 'sales representative', 'sales'],
   cashier: ['cashier'],
-  lab: ['mixing lab', 'lab technician', 'paint mixer', 'mixer', 'technician'],
-  accounts: ['accountant', 'accounts', 'finance'],
+  lab: ['mixing lab technician', 'mixing lab', 'lab technician', 'paint mixer', 'mixer', 'technician'],
+  accounts: ['accounts', 'accountant', 'finance'],
 };
 
 let access;
@@ -63,10 +64,7 @@ const roleResults = {};
 
 for (const key of ['salesperson', 'cashier', 'lab', 'accounts']) {
   const role = findRole(key);
-  if (!role) {
-    fail(`${key} role exists`, `No dedicated ${key} role found in live access-control catalogue`, true);
-    continue;
-  }
+  if (!role) { fail(`${key} role exists`, `No dedicated ${key} role found`, true); continue; }
   try {
     const email = `qa-paint-${key}-${Date.now()}@axtor.invalid`;
     const password = `AxtorQA!${Date.now()}x`;
@@ -75,7 +73,7 @@ for (const key of ['salesperson', 'cashier', 'lab', 'accounts']) {
     if (!token) throw new Error('Login returned no token');
     createdUsers.push({ key, id: user.id, email });
     roleResults[key] = { token, role };
-    pass(`${key} user provisioned`, `${role.name} login succeeded for ${businessSlug}`);
+    pass(`${key} user provisioned`, `${role.name} login succeeded`);
   } catch (e) { fail(`${key} user provisioned`, e.message); }
 }
 
@@ -98,9 +96,9 @@ let formula;
 try {
   const formulas = await req('/api/v1/paint/formulas');
   formula = Array.isArray(formulas) ? formulas[0] : formulas?.[0];
-  if (!formula?.id) throw new Error('No active Paint formula/product line is seeded on the live tenant');
+  if (!formula?.id) throw new Error('No active Paint formula/product line is seeded; custom formula creation cannot be certified');
   pass('Paint formula catalogue', `Formula ${formula.formulaCode || formula.id} available`);
-} catch (e) { fail('Paint formula catalogue', `${e.message}; custom formula and mixing-lab execution cannot be fully certified`, true); }
+} catch (e) { fail('Paint formula catalogue', e.message, true); }
 
 if (formula?.id) {
   try {
@@ -112,7 +110,6 @@ if (formula?.id) {
     for (const c of components) await req('/api/v1/paint/component-stock', { method: 'PUT', body: { ...c, quantityOnHand: 500, averageCost: 8, minimumStock: 10 } });
     const revision = await req(`/api/v1/paint/formulas/${formula.id}/revisions`, { method: 'POST', body: { expectedRevision: Number(formula.currentRevision || 1), notes: `Custom customer shade ${runId}`, components } });
     pass('Custom formula revision', `Revision ${revision.revision} created with 3 tinters`);
-
     const job = await req('/api/v1/paint/mix-jobs', { method: 'POST', body: { formulaId: formula.id, quantity: 2, unit: 'ltr', sellingPrice: 180, customerReference: `CUSTOM-SHADE-${runId}`, vehicleProjectReference: 'QA color match', nonReturnableAccepted: true } });
     await req(`/api/v1/paint/mix-jobs/${job.id}/status`, { method: 'PATCH', body: { status: 'mixing' } });
     await req(`/api/v1/paint/mix-jobs/${job.id}/post-consumption`, { method: 'POST', body: {} });
@@ -129,15 +126,7 @@ try {
   pass('Owner executive access', `${ownerPaths.length} operational, finance and Paint reporting endpoints accessible`);
 } catch (e) { fail('Owner executive access', e.message); }
 
-report.paintIndustryCertification = {
-  runId,
-  businessSlug,
-  checks,
-  failures,
-  blockers,
-  createdUsers,
-  scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'],
-};
+report.paintIndustryCertification = { runId, checks, failures, blockers, createdUsers, scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'] };
 report.overall = failures.length === 0 && report.overall === 'PASS' ? 'PASS' : 'FAIL';
 await fs.writeFile('paint-live-audit-report.json', JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.paintIndustryCertification, null, 2));
