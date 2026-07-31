@@ -4,54 +4,81 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Axtor General Retail Dashboard</title>
-  <link rel="stylesheet" href="css/retail-app.css?v=20260730-report-sync1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/retail-app.css?v=20260731-retail-ui1">
 </head>
 <body>
   <div class="retail-shell">
     <aside class="retail-nav">
-      <div class="retail-brand">AXTOR · GENERAL RETAIL</div>
-      <a class="active" href="retail-dashboard.html">Dashboard</a>
-      <a href="terminal.html">POS Terminal</a>
-      <a href="sales.html">Sales & Returns</a>
-      <a href="customer.html">Customers</a>
-      <a href="products.html">Products</a>
-      <a href="inventory.html">Inventory</a>
-      <a href="purchase.html">Purchases</a>
-      <a href="suppliers.html">Suppliers</a>
-      <a href="shifts.html">Shifts</a>
-      <a href="salesmen.html">Sales Team</a>
-      <a href="promotions.html">Promotions</a>
-      <a href="loyalty.html">Loyalty</a>
-      <a href="reports.html">Reports</a>
-      <a href="accounts.html">Accounts</a>
-      <a href="expenses.html">Expenses</a>
-      <a href="settings.html">Settings</a>
+      <a class="retail-brand" href="retail-dashboard.html">
+        <span class="retail-brand-mark">A</span>
+        <span><strong>AXTOR POS</strong><small>General Retail</small></span>
+      </a>
+      <nav class="retail-nav-links" aria-label="Retail navigation">
+        <a class="active" href="retail-dashboard.html"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
+        <a href="terminal.html"><i class="bi bi-upc-scan"></i><span>POS Terminal</span></a>
+        <a href="sales.html"><i class="bi bi-cart-check"></i><span>Sales &amp; Returns</span></a>
+        <a href="shifts.html"><i class="bi bi-clock-history"></i><span>Shifts / Closing</span></a>
+        <a href="customer.html"><i class="bi bi-people"></i><span>Customers</span></a>
+        <a href="salesmen.html"><i class="bi bi-person-badge"></i><span>Sales Team</span></a>
+        <a href="products.html"><i class="bi bi-box-seam"></i><span>Products</span></a>
+        <a href="inventory.html"><i class="bi bi-boxes"></i><span>Inventory</span></a>
+        <a href="barcode-labels.html"><i class="bi bi-upc"></i><span>Barcode Labels</span></a>
+        <a href="purchase.html"><i class="bi bi-bag-plus"></i><span>Purchases</span></a>
+        <a href="suppliers.html"><i class="bi bi-truck"></i><span>Suppliers</span></a>
+        <a href="branches.html"><i class="bi bi-building"></i><span>Branches</span></a>
+        <a href="promotions.html"><i class="bi bi-percent"></i><span>Promotions</span></a>
+        <a href="loyalty.html"><i class="bi bi-gem"></i><span>Loyalty</span></a>
+        <a href="approvals.html"><i class="bi bi-shield-check"></i><span>Approvals</span></a>
+        <a href="reports.html"><i class="bi bi-graph-up-arrow"></i><span>Reports</span></a>
+        <a href="accounts.html"><i class="bi bi-bank"></i><span>Accounts</span></a>
+        <a href="expenses.html"><i class="bi bi-wallet2"></i><span>Expenses</span></a>
+        <a href="notifications.html"><i class="bi bi-bell"></i><span>Notifications</span></a>
+        <a href="invoice-designer.html"><i class="bi bi-file-earmark-richtext"></i><span>Invoice Designer</span></a>
+        <a href="setup.html"><i class="bi bi-magic"></i><span>Setup Wizard</span></a>
+        <a href="settings.html"><i class="bi bi-gear"></i><span>Settings</span></a>
+      </nav>
+      <div class="retail-nav-footer"><span></span>Retail cloud workspace</div>
     </aside>
 
     <main class="retail-main">
       <section class="retail-hero">
-        <div>
-          <h1>General Retail Dashboard</h1>
-          <p>Fast checkout, customer sales, stock, purchasing and financial control</p>
+        <div class="retail-hero-copy">
+          <span class="retail-eyebrow"><i class="bi bi-shop"></i> General Retail Command Center</span>
+          <h1>Everything your retail counter needs, in one view.</h1>
+          <p>Track checkout, purchasing, customers, stock and profit with live report-backed values.</p>
+          <div class="retail-hero-actions">
+            <a href="terminal.html"><i class="bi bi-lightning-charge-fill"></i> New Checkout</a>
+            <a class="secondary" href="purchase.html"><i class="bi bi-bag-plus"></i> New Purchase</a>
+          </div>
+        </div>
+        <div class="retail-hero-visual" aria-label="Retail operations illustration">
+          <div class="retail-visual-orbit orbit-one"><i class="bi bi-bag-check"></i></div>
+          <div class="retail-visual-orbit orbit-two"><i class="bi bi-boxes"></i></div>
+          <div class="retail-visual-orbit orbit-three"><i class="bi bi-upc-scan"></i></div>
+          <div class="retail-visual-main"><i class="bi bi-shop-window"></i><span>Retail</span><small>Sell · Stock · Grow</small></div>
         </div>
         <div class="retail-sync"><span class="retail-sync-dot"></span><span id="dashboardSyncText">Synchronizing with Reports…</span></div>
       </section>
 
       <div class="retail-kpis retail-kpis-expanded">
-        <div class="retail-kpi"><span>Today Sales</span><strong id="todaySales">—</strong><small>Daily Sales report</small></div>
-        <div class="retail-kpi"><span>Today Invoices</span><strong id="invoiceCount">—</strong><small>Invoice-only count</small></div>
-        <div class="retail-kpi"><span id="monthlySalesLabel">Monthly Sales</span><strong id="monthlySales">—</strong><small>Daily Sales report</small></div>
-        <div class="retail-kpi"><span>Monthly Gross Profit</span><strong id="monthlyGrossProfit">—</strong><small>Profit & Loss report</small></div>
-        <div class="retail-kpi"><span>Gross Margin</span><strong id="monthlyGrossMargin">—</strong><small>Gross profit ÷ net sales</small></div>
-        <div class="retail-kpi"><span>Products</span><strong id="productCount">—</strong><small>Active catalogue</small></div>
-        <div class="retail-kpi"><span>Customers</span><strong id="customerCount">—</strong><small>Active customers</small></div>
-        <div class="retail-kpi"><span>Outstanding Receivables</span><strong id="receivables">—</strong><small>All open invoice balances</small></div>
+        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-cash-stack"></i></div><div><span>Today Sales</span><strong id="todaySales">—</strong><small>Daily Sales report</small></div></div>
+        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-receipt-cutoff"></i></div><div><span>Today Invoices</span><strong id="invoiceCount">—</strong><small>Invoice-only count</small></div></div>
+        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-calendar2-check"></i></div><div><span id="monthlySalesLabel">Monthly Sales</span><strong id="monthlySales">—</strong><small>Daily Sales report</small></div></div>
+        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-graph-up-arrow"></i></div><div><span>Monthly Gross Profit</span><strong id="monthlyGrossProfit">—</strong><small>Profit &amp; Loss report</small></div></div>
+        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-percent"></i></div><div><span>Gross Margin</span><strong id="monthlyGrossMargin">—</strong><small>Gross profit ÷ net sales</small></div></div>
+        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-box-seam"></i></div><div><span>Products</span><strong id="productCount">—</strong><small>Active catalogue</small></div></div>
+        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-people"></i></div><div><span>Customers</span><strong id="customerCount">—</strong><small>Active customers</small></div></div>
+        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-credit-card-2-front"></i></div><div><span>Outstanding Receivables</span><strong id="receivables">—</strong><small>All open invoice balances</small></div></div>
       </div>
 
-      <section class="retail-panel">
+      <section class="retail-panel retail-panel-featured">
         <div class="retail-panel-head">
-          <div><h2>Top Products This Month</h2><p>Exactly the same rows and values used by Sales by Product report.</p></div>
-          <a class="retail-link-button" href="reports.html">Open Full Reports</a>
+          <div><span class="retail-section-icon"><i class="bi bi-trophy"></i></span><div><h2>Top Products This Month</h2><p>Exactly the same rows and values used by Sales by Product report.</p></div></div>
+          <a class="retail-link-button" href="reports.html"><i class="bi bi-arrow-up-right"></i> Open Full Reports</a>
         </div>
         <div class="retail-table-wrap">
           <table class="retail-table">
@@ -63,29 +90,32 @@
 
       <section class="retail-panel">
         <div class="retail-panel-head">
-          <div><h2>Retail Control</h2><p>Operational values that complement the financial reports.</p></div>
+          <div><span class="retail-section-icon"><i class="bi bi-sliders"></i></span><div><h2>Retail Control</h2><p>Operational values that complement the financial reports.</p></div></div>
         </div>
         <div class="retail-control-grid">
-          <div><span>Low-stock items</span><strong id="lowStock">—</strong></div>
-          <div><span>Report period</span><strong id="reportPeriod">—</strong></div>
-          <div><span>Top-product rows</span><strong id="topProductCount">—</strong></div>
+          <div><i class="bi bi-exclamation-triangle"></i><span>Low-stock items</span><strong id="lowStock">—</strong></div>
+          <div><i class="bi bi-calendar-range"></i><span>Report period</span><strong id="reportPeriod">—</strong></div>
+          <div><i class="bi bi-list-ol"></i><span>Top-product rows</span><strong id="topProductCount">—</strong></div>
         </div>
-        <div class="retail-note">Monthly Sales, Monthly Gross Profit, Gross Margin and Top Products are loaded directly from the same report endpoints used by the Reports page. They cannot use a separate formula or include quotations and delivery notes.</div>
+        <div class="retail-note"><i class="bi bi-info-circle"></i><span>Monthly Sales, Monthly Gross Profit, Gross Margin and Top Products are loaded directly from the same report endpoints used by the Reports page.</span></div>
         <div id="retailStatus" class="retail-status" role="status" aria-live="polite"></div>
       </section>
 
       <section class="retail-panel">
+        <div class="retail-panel-head">
+          <div><span class="retail-section-icon"><i class="bi bi-grid-1x2"></i></span><div><h2>Quick Actions</h2><p>Move directly to the most-used Retail operations.</p></div></div>
+        </div>
         <div class="retail-actions">
-          <a class="retail-action" href="terminal.html"><strong>New Checkout</strong><span>Open the retail POS terminal</span></a>
-          <a class="retail-action" href="sales.html"><strong>Sales Register</strong><span>Invoices, returns and payments</span></a>
-          <a class="retail-action" href="products.html"><strong>Product Catalogue</strong><span>SKU, barcode and pricing</span></a>
-          <a class="retail-action" href="reports.html"><strong>Financial Reports</strong><span>Amounts, percentages and exports</span></a>
+          <a class="retail-action" href="terminal.html"><i class="bi bi-upc-scan"></i><div><strong>New Checkout</strong><span>Open the retail POS terminal</span></div><b>→</b></a>
+          <a class="retail-action" href="sales.html"><i class="bi bi-receipt"></i><div><strong>Sales Register</strong><span>Invoices, returns and payments</span></div><b>→</b></a>
+          <a class="retail-action" href="products.html"><i class="bi bi-box-seam"></i><div><strong>Product Catalogue</strong><span>SKU, barcode and pricing</span></div><b>→</b></a>
+          <a class="retail-action" href="reports.html"><i class="bi bi-bar-chart-line"></i><div><strong>Financial Reports</strong><span>Amounts, percentages and exports</span></div><b>→</b></a>
         </div>
       </section>
     </main>
   </div>
 
-  <script src="js/axtor-api.js?v=20260730-report-sync1"></script>
+  <script src="js/axtor-api.js?v=20260731-retail-ui1"></script>
   <script src="js/retail-app.js?v=20260730-report-sync1"></script>
 </body>
 </html>
