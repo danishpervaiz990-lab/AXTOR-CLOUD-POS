@@ -6,7 +6,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-gym-live-certification.mjs"
-      - "backend/scripts/qa-gym-live-transform-runner.mjs"
+      - "backend/scripts/qa-gym-live-certification-v2.mjs"
       - ".github/workflows/gym-live-certification.yml"
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: "22.x"
       - name: Seed and certify five live Gym businesses
-        run: node backend/scripts/qa-gym-live-transform-runner.mjs
+        run: node backend/scripts/qa-gym-live-certification-v2.mjs
       - name: Upload Gym report and permanent demo credentials
         if: always()
         uses: actions/upload-artifact@v4
