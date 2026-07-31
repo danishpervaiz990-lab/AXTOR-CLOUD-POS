@@ -1,4 +1,4 @@
-// Final Paint production certification: tenant-aware role login evidence.
+// Final Paint production certification: tenant-aware role login and first-password-change evidence.
 import fs from 'node:fs/promises';
 
 const runtime = JSON.parse(await fs.readFile('paint-live-audit-runtime.json', 'utf8'));
@@ -36,8 +36,7 @@ async function login(email, password) {
   const res = await fetch(`${backend}/api/v1/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessSlug, email, password }) });
   const payload = await res.json().catch(() => null);
   if (!res.ok) throw new Error(`login ${email} -> ${res.status}: ${JSON.stringify(payload)}`);
-  const data = unwrap(payload);
-  return data.token || data.accessToken;
+  return unwrap(payload);
 }
 
 try {
@@ -67,14 +66,20 @@ for (const key of ['salesperson', 'cashier', 'lab', 'accounts']) {
   const role = findRole(key);
   if (!role) { fail(`${key} role exists`, `No dedicated ${key} role found`, true); continue; }
   try {
-    const email = `qa-paint-${key}-${Date.now()}@axtor.invalid`;
-    const password = `AxtorQA!${Date.now()}x`;
+    const stamp = Date.now();
+    const email = `qa-paint-${key}-${stamp}@axtor.invalid`;
+    const password = `AxtorQA!${stamp}x`;
+    const newPassword = `AxtorReady!${stamp}z`;
     const user = await req('/api/v1/access-control/users', { method: 'POST', body: { name: `QA Paint ${key} ${runId}`, email, password, roleIds: [role.id] } });
-    const token = await login(email, password);
+    const session = await login(email, password);
+    const token = session.token || session.accessToken;
     if (!token) throw new Error('Login returned no token');
-    createdUsers.push({ key, id: user.id, email });
+    if (session.user?.mustChangePassword !== false) {
+      await req('/api/v1/auth/change-password', { token, method: 'POST', body: { currentPassword: password, newPassword } });
+    }
+    createdUsers.push({ key, id: user.id, email, firstPasswordChangeCompleted: true });
     roleResults[key] = { token, role };
-    pass(`${key} user provisioned`, `${role.name} login succeeded`);
+    pass(`${key} user provisioned`, `${role.name} login and mandatory password change succeeded`);
   } catch (e) { fail(`${key} user provisioned`, e.message); }
 }
 
@@ -127,7 +132,7 @@ try {
   pass('Owner executive access', `${ownerPaths.length} operational, finance and Paint reporting endpoints accessible`);
 } catch (e) { fail('Owner executive access', e.message); }
 
-report.paintIndustryCertification = { runId, businessSlug, checks, failures, blockers, createdUsers, scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery'] };
+report.paintIndustryCertification = { runId, businessSlug, checks, failures, blockers, createdUsers, scope: ['salesperson', 'cashier', 'mixing_lab', 'accounts', 'owner', 'custom_formulas', 'formula_revisions', 'component_consumption', 'quality_control', 'label', 'delivery', 'mandatory_password_change'] };
 report.overall = failures.length === 0 && report.overall === 'PASS' ? 'PASS' : 'FAIL';
 await fs.writeFile('paint-live-audit-report.json', JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.paintIndustryCertification, null, 2));
