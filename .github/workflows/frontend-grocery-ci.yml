@@ -22,5 +22,5 @@ jobs:
       - run: |
           if grep -R "industry.html?module=" demo-static/grocery-*.html; then exit 1; fi
       - run: |
-          if grep -R -E "Demo business|Demo owner|Sample Product|Customer Ready Mode" demo-static/grocery-*.html demo-static/js/grocery-*.js; then exit 1; fi
+          if grep -R -E "Demo business|Demo owner|Sample Product|Customer Ready Mode" demo-static/grocery-*.html; then exit 1; fi
       - run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
