@@ -18,6 +18,8 @@ jobs:
         run: |
           node --check demo-static/js/axtor-api.js
           node --check demo-static/js/hardware-app.js
+          node --check demo-static/js/hardware-print-settings-backend.js
+          node --check demo-static/js/hardware-document-router.js
       - name: Hardware release suite
         run: node tests/hardware-frontend.test.cjs
       - name: Reject generic industry routes
