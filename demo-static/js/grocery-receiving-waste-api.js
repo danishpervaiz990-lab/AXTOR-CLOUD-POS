@@ -19,7 +19,7 @@
   }
 
   window.GroceryReceivingWasteAPI = {
-    receive: function(payload, key) { return post("/api/v1/grocery/receiving", payload, key); },
-    waste: function(payload, key) { return post("/api/v1/grocery/waste", payload, key); }
+    receive: function(payload, key) { return post("/api/v1/industry/grocery/receiving", payload, key); },
+    waste: function(payload, key) { return post("/api/v1/industry/grocery/waste", payload, key); }
   };
 })();
