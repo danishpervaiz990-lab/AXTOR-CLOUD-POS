@@ -9,6 +9,7 @@ const reports=fs.readFileSync(path.join(root,'reports.html'),'utf8');
 const reportsApp=fs.readFileSync(path.join(root,'js/reports-backend.js'),'utf8');
 const terminal=fs.readFileSync(path.join(root,'terminal.html'),'utf8');
 const terminalGuard=fs.readFileSync(path.join(root,'js/retail-terminal-regression.js'),'utf8');
+const transactionGuard=fs.readFileSync(path.join(root,'js/retail-terminal-transaction-guard.js'),'utf8');
 const bootstrap=fs.readFileSync(path.join(root,'js/salesmen-bootstrap.js'),'utf8');
 
 assert.match(index,/retail-dashboard\.html/);
@@ -49,11 +50,19 @@ assert.match(terminal,/id="terminalCustomer"/);
 assert.match(terminal,/id="saleSmId"/);
 assert.match(terminal,/salesmen-bootstrap\.js/);
 assert.match(bootstrap,/retail-terminal-regression\.js/);
+assert.match(bootstrap,/retail-terminal-transaction-guard\.js/);
 assert.match(terminalGuard,/\/api\/v1\/customers\?limit=500/);
 assert.match(terminalGuard,/\/api\/v1\/salesmen\?month=/);
 assert.match(terminalGuard,/Walk-in Customer/);
 assert.match(terminalGuard,/Select Salesman \(optional\)/);
 assert.match(terminalGuard,/Promise\.allSettled/);
 assert.match(terminalGuard,/axtor:salesmen-migrated/);
+assert.match(transactionGuard,/cannot exceed the invoice total/);
+assert.match(transactionGuard,/Credit amount must equal the remaining invoice balance/);
+assert.match(transactionGuard,/already being posted/);
+assert.match(transactionGuard,/retryKeys/);
+assert.match(transactionGuard,/idempotencyKey/);
+assert.match(transactionGuard,/stableFingerprint/);
+assert.match(transactionGuard,/stopImmediatePropagation/);
 
-console.log('PASS: isolated General Retail frontend, accessible reports, dashboard reconciliation and tenant-backed terminal selectors');
+console.log('PASS: isolated General Retail frontend, reports, tenant-backed selectors and guarded terminal payment posting');
