@@ -7,6 +7,8 @@ on:
       - "demo-static/gym*.html"
       - "demo-static/css/gym-app.css"
       - "demo-static/js/gym-app.js"
+      - "demo-static/js/gym-print-settings-backend.js"
+      - "demo-static/js/gym-document-routing.js"
       - "demo-static/js/axtor-api.js"
       - "tests/gym-frontend.test.cjs"
       - ".github/workflows/frontend-gym-ci.yml"
@@ -16,6 +18,8 @@ on:
       - "demo-static/gym*.html"
       - "demo-static/css/gym-app.css"
       - "demo-static/js/gym-app.js"
+      - "demo-static/js/gym-print-settings-backend.js"
+      - "demo-static/js/gym-document-routing.js"
       - "demo-static/js/axtor-api.js"
       - "tests/gym-frontend.test.cjs"
       - ".github/workflows/frontend-gym-ci.yml"
@@ -35,5 +39,7 @@ jobs:
         run: |
           node --check demo-static/js/axtor-api.js
           node --check demo-static/js/gym-app.js
+          node --check demo-static/js/gym-print-settings-backend.js
+          node --check demo-static/js/gym-document-routing.js
       - name: Gym release suite
         run: node tests/gym-frontend.test.cjs
