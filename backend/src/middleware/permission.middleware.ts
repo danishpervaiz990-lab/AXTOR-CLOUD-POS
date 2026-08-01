@@ -8,7 +8,7 @@ export function requireAnyPermission(...permissions: string[]) {
     const businessId = req.tenant?.businessId;
     const userId = req.tenant?.userId;
     if (!businessId || !userId) {
-      res.status(401).json({ ok: false, error: { message: "Authenticated user is required" } });
+      res.status(401).json({ ok: false, error: { code: "USER_CONTEXT_REQUIRED", message: "Authenticated user is required" } });
       return;
     }
     try {
@@ -18,6 +18,7 @@ export function requireAnyPermission(...permissions: string[]) {
         res.status(403).json({
           ok: false,
           error: {
+            code: "PERMISSION_DENIED",
             message: "Permission denied",
             details: { anyOf: required },
           },
@@ -25,8 +26,9 @@ export function requireAnyPermission(...permissions: string[]) {
         return;
       }
       next();
-    } catch {
-      res.status(403).json({ ok: false, error: { message: "Permission check failed" } });
+    } catch (error) {
+      console.error("Permission check failed:", error);
+      res.status(403).json({ ok: false, error: { code: "PERMISSION_DENIED", message: "Permission check failed" } });
     }
   };
 }
