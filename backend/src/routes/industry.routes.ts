@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import * as controller from "../controllers/industry.controller.js";
+import groceryRouter from "./grocery.routes.js";
 
 const router = Router();
 router.use(requireAuth);
+router.use("/grocery", groceryRouter);
 router.get("/registry", controller.registry);
 router.get("/summary", controller.summary);
 router.get("/records", controller.listRecords);
