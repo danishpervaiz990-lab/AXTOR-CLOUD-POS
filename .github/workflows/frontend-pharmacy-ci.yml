@@ -7,6 +7,8 @@ on:
       - "demo-static/pharmacy*.html"
       - "demo-static/css/pharmacy-app.css"
       - "demo-static/js/pharmacy-app.js"
+      - "demo-static/js/pharmacy-print-settings-backend.js"
+      - "demo-static/js/pharmacy-document-routing.js"
       - "demo-static/js/axtor-api.js"
       - "tests/pharmacy-frontend.test.cjs"
       - ".github/workflows/frontend-pharmacy-ci.yml"
@@ -16,6 +18,8 @@ on:
       - "demo-static/pharmacy*.html"
       - "demo-static/css/pharmacy-app.css"
       - "demo-static/js/pharmacy-app.js"
+      - "demo-static/js/pharmacy-print-settings-backend.js"
+      - "demo-static/js/pharmacy-document-routing.js"
       - "demo-static/js/axtor-api.js"
       - "tests/pharmacy-frontend.test.cjs"
       - ".github/workflows/frontend-pharmacy-ci.yml"
@@ -35,5 +39,7 @@ jobs:
         run: |
           node --check demo-static/js/axtor-api.js
           node --check demo-static/js/pharmacy-app.js
+          node --check demo-static/js/pharmacy-print-settings-backend.js
+          node --check demo-static/js/pharmacy-document-routing.js
       - name: Pharmacy release suite
         run: node tests/pharmacy-frontend.test.cjs
