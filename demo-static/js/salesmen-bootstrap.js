@@ -34,13 +34,19 @@
     if (created) window.dispatchEvent(new CustomEvent("axtor:salesmen-migrated"));
   }
 
-  function loadRetailReporting() {
-    if (!document.getElementById("sales-overview") || window.AxtorRetailReporting || document.querySelector('script[data-axtor-retail-reporting="1"]')) return;
+  function loadScriptOnce(src, marker, onerror) {
+    if (document.querySelector('script[' + marker + '="1"]')) return;
     var script = document.createElement("script");
-    script.src = "js/retail-reporting-backend.js?v=20260730-retail-report-qatar3";
+    script.src = src;
     script.async = false;
-    script.dataset.axtorRetailReporting = "1";
-    script.onerror = function () {
+    script.setAttribute(marker, "1");
+    if (onerror) script.onerror = onerror;
+    document.head.appendChild(script);
+  }
+
+  function loadRetailReporting() {
+    if (!document.getElementById("sales-overview") || window.AxtorRetailReporting) return;
+    loadScriptOnce("js/retail-reporting-backend.js?v=20260730-retail-report-qatar3", "data-axtor-retail-reporting", function () {
       var root = document.getElementById("sales-overview");
       if (!root || document.getElementById("salesOverviewLiveStatus")) return;
       var status = document.createElement("div");
@@ -48,23 +54,25 @@
       status.className = "small text-danger mb-2";
       status.textContent = "Live sales reporting module failed to load. Please refresh the page.";
       root.prepend(status);
-    };
-    document.head.appendChild(script);
+    });
   }
 
   function loadSavedInvoiceTemplatePrint() {
-    if (!document.getElementById("saved-invoices") || window.AxtorModernSavedInvoicePrint || document.querySelector('script[data-axtor-modern-saved-print="1"]')) return;
-    var script = document.createElement("script");
-    script.src = "js/retail-modern-a4-saved-print.js?v=20260731-modern-a4-all-saved-print-v2";
-    script.async = false;
-    script.dataset.axtorModernSavedPrint = "1";
-    script.onerror = function () {
+    if (!document.getElementById("saved-invoices") || window.AxtorModernSavedInvoicePrint) return;
+    loadScriptOnce("js/retail-modern-a4-saved-print.js?v=20260731-modern-a4-all-saved-print-v2", "data-axtor-modern-saved-print", function () {
       console.error("Retail saved-invoice template print module failed to load.");
-    };
-    document.head.appendChild(script);
+    });
+  }
+
+  function loadRetailTerminalRegression() {
+    if (!document.getElementById("terminalCustomer") || window.AxtorRetailTerminalRegression) return;
+    loadScriptOnce("js/retail-terminal-regression.js?v=20260801-retail-wp3-v1", "data-axtor-retail-terminal-regression", function () {
+      console.error("Retail terminal regression guard failed to load.");
+    });
   }
 
   migrate().catch(function (error) { console.warn("Axtor legacy salesman migration skipped:", error?.message || error); });
   loadRetailReporting();
   loadSavedInvoiceTemplatePrint();
+  loadRetailTerminalRegression();
 })();
