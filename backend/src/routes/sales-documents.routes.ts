@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { requirePersistentIdempotency } from "../middleware/idempotency.middleware.js";
 import {
   createSalesDocument,
   getSalesDocumentById,
@@ -16,8 +17,8 @@ router.get("/context", getSalesDocumentContext);
 router.get("/number-preview", previewSalesDocumentNumber);
 router.get("/", listSalesDocuments);
 router.get("/:id", getSalesDocumentById);
-router.post("/", createSalesDocument);
-router.post("/:id/post", postSalesDocument);
+router.post("/", requirePersistentIdempotency("sales_document.create"), createSalesDocument);
+router.post("/:id/post", requirePersistentIdempotency("sales_document.post"), postSalesDocument);
 router.patch("/:id", updateSalesDocument);
 
 export const salesDocumentsRoutes = router;
