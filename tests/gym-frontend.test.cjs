@@ -12,7 +12,7 @@ assert.ok(!js.includes('industry.html?module='),'Gym runtime routes to generic w
 const settings=fs.readFileSync(path.join(root,'js','gym-print-settings-backend.js'),'utf8');
 assert.ok(settings.includes('/api/v1/settings'),'Gym print settings GET endpoint missing');
 assert.ok(settings.includes('/api/v1/settings/invoice.settings'),'Gym print settings PUT endpoint missing');
-for(const token of ['a4','thermal80','thermal58','memberNumber','membershipPlan','membershipPeriod','nextDueDate'])assert.ok(settings.includes(token),`Gym print settings missing ${token}`);
+for(const token of ['a4','thermal80','thermal58','showMemberNumber','showPlan','showMembershipPeriod','showNextDueDate'])assert.ok(settings.includes(token),`Gym print settings missing ${token}`);
 const routing=fs.readFileSync(path.join(root,'js','gym-document-routing.js'),'utf8');
 assert.ok(routing.includes('invoice-view.html'),'Gym shared invoice renderer missing');
 for(const token of ['membership','payment','renewal'])assert.ok(routing.includes(token),`Gym document routing missing ${token}`);
