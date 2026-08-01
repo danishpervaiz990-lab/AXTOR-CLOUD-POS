@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [frontend-grocery]
   push:
-    branches: [frontend-grocery, frontend-grocery-readiness-work]
+    branches: [frontend-grocery, frontend-grocery-readiness-work, work/grocery-wp2-document-routing]
 permissions:
   contents: read
 jobs:
@@ -20,6 +20,7 @@ jobs:
       - run: node --check demo-static/js/grocery-production-readiness.js
       - run: node --check demo-static/js/grocery-operations-pack.js
       - run: node --check demo-static/js/grocery-print-settings-backend.js
+      - run: node --check demo-static/js/grocery-document-routing.js
       - run: node tests/grocery-frontend.test.cjs
       - run: |
           if grep -R "industry.html?module=" demo-static/grocery-*.html; then exit 1; fi
