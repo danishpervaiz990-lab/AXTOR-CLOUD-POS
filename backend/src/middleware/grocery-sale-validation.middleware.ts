@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
 
-const SUPPORTED_UNITS = new Set([
+export const GROCERY_SUPPORTED_UNITS = new Set([
   "piece", "pieces", "pcs", "pc", "pack", "box", "tray", "dozen",
   "kg", "kilogram", "kilograms", "g", "gram", "grams",
   "l", "litre", "liter", "litres", "liters", "ml", "millilitre", "milliliter",
@@ -16,13 +16,24 @@ function number(value: unknown) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
-function isThreeDecimalQuantity(value: number) {
+export function isThreeDecimalQuantity(value: number) {
   return Math.abs(value * 1000 - Math.round(value * 1000)) < 0.000001;
 }
 
-function metadataFor(item: any) {
+export function groceryScaleMetadata(item: any) {
   const source = item?.scaleBarcode || item?.weightedBarcode || item?.barcodeMetadata || item?.metadata?.scaleBarcode;
   return source && typeof source === "object" && !Array.isArray(source) ? source : null;
+}
+
+export function validateScaleMetadata(scale: any, qty: number): string | null {
+  const rawBarcode = text(scale?.rawBarcode || scale?.barcode);
+  const mode = text(scale?.mode || scale?.type).toLowerCase();
+  const embeddedValue = number(scale?.weight ?? scale?.quantity ?? scale?.price);
+  if (!/^\d{8,14}$/.test(rawBarcode)) return "invalid scale barcode format";
+  if (!["weight", "price"].includes(mode)) return "scale barcode mode must be weight or price";
+  if (!(embeddedValue > 0)) return "scale barcode value must be positive";
+  if (mode === "weight" && Math.abs(embeddedValue - qty) > 0.001) return "scale barcode weight does not match sale quantity";
+  return null;
 }
 
 export async function validateGrocerySale(req: Request, res: Response, next: NextFunction) {
@@ -58,7 +69,7 @@ export async function validateGrocerySale(req: Request, res: Response, next: Nex
       }
 
       const unit = text(item.unit || product.unit).toLowerCase();
-      if (unit && !SUPPORTED_UNITS.has(unit)) {
+      if (unit && !GROCERY_SUPPORTED_UNITS.has(unit)) {
         return res.status(400).json({ ok: false, error: { message: `${product.name}: unsupported Grocery unit ${unit}` } });
       }
 
@@ -66,24 +77,11 @@ export async function validateGrocerySale(req: Request, res: Response, next: Nex
         ? product.customFields as Record<string, unknown>
         : {};
       const weighted = Boolean(fields.weighted || fields.isWeighted || fields.weightedItem);
-      const scale = metadataFor(item);
+      const scale = groceryScaleMetadata(item);
 
       if (scale) {
-        const rawBarcode = text(scale.rawBarcode || scale.barcode);
-        const mode = text(scale.mode || scale.type).toLowerCase();
-        const embeddedValue = number(scale.weight ?? scale.quantity ?? scale.price);
-        if (!/^\d{8,14}$/.test(rawBarcode)) {
-          return res.status(400).json({ ok: false, error: { message: `${product.name}: invalid scale barcode format` } });
-        }
-        if (!["weight", "price"].includes(mode)) {
-          return res.status(400).json({ ok: false, error: { message: `${product.name}: scale barcode mode must be weight or price` } });
-        }
-        if (!(embeddedValue > 0)) {
-          return res.status(400).json({ ok: false, error: { message: `${product.name}: scale barcode value must be positive` } });
-        }
-        if (mode === "weight" && Math.abs(embeddedValue - qty) > 0.001) {
-          return res.status(400).json({ ok: false, error: { message: `${product.name}: scale barcode weight does not match sale quantity` } });
-        }
+        const error = validateScaleMetadata(scale, qty);
+        if (error) return res.status(400).json({ ok: false, error: { message: `${product.name}: ${error}` } });
       } else if (weighted && Number.isInteger(qty) && !["kg", "kilogram", "kilograms", "g", "gram", "grams", "l", "litre", "liter", "litres", "liters", "ml", "millilitre", "milliliter"].includes(unit)) {
         return res.status(400).json({ ok: false, error: { message: `${product.name}: weighted item requires a measured unit or validated scale barcode metadata` } });
       }
