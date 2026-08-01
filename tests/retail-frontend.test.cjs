@@ -13,6 +13,8 @@ const transactionGuard=fs.readFileSync(path.join(root,'js/retail-terminal-transa
 const returnGuard=fs.readFileSync(path.join(root,'js/retail-return-reconciliation.js'),'utf8');
 const returnsBackend=fs.readFileSync(path.join(root,'js/returns-backend.js'),'utf8');
 const bootstrap=fs.readFileSync(path.join(root,'js/salesmen-bootstrap.js'),'utf8');
+const invoiceView=fs.readFileSync(path.join(root,'invoice-view.html'),'utf8');
+const invoiceViewBackend=fs.readFileSync(path.join(root,'js/invoice-view-backend.js'),'utf8');
 
 assert.match(index,/retail-dashboard\.html/);
 assert.match(dashboard,/GENERAL RETAIL/);
@@ -74,4 +76,17 @@ assert.match(returnGuard,/data-previous-return-note/);
 assert.match(returnsBackend,/Math\.min\(toNumber\(doc\.returnedAmount\),toNumber\(doc\.paidAmount\)\)-toNumber\(doc\.refundedAmount\)/);
 assert.match(returnsBackend,/state\.refundIdempotencyKey/);
 
-console.log('PASS: isolated General Retail frontend, reports, guarded terminal posting and cumulative return/refund reconciliation');
+assert.match(invoiceView,/thermal80:'thermal-80'/);
+assert.match(invoiceView,/thermal58:'thermal-58'/);
+assert.match(invoiceView,/Print-ready invoice, quotation, delivery note, return, refund, or receipt/);
+assert.match(invoiceView,/No document data was supplied/);
+assert.doesNotMatch(invoiceView,/demo invoice template/i);
+assert.match(invoiceViewBackend,/virtualProfile\("thermal-80"/);
+assert.match(invoiceViewBackend,/virtualProfile\("thermal-58"/);
+assert.match(invoiceViewBackend,/\/api\/v1\/sales-documents\//);
+assert.match(invoiceViewBackend,/counterName/);
+assert.match(invoiceViewBackend,/shiftReference/);
+assert.match(invoiceViewBackend,/cashier/);
+assert.match(invoiceViewBackend,/salesman/);
+
+console.log('PASS: isolated General Retail frontend, reports, guarded transaction flows and unified A4\/80mm\/58mm printing');
