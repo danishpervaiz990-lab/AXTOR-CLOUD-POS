@@ -25,6 +25,10 @@ test("middleware is tenant scoped, fingerprinted and fail closed", () => {
   assert.match(source, /IDEMPOTENCY_KEY_REUSED/);
   assert.match(source, /IDEMPOTENCY_IN_PROGRESS/);
   assert.match(source, /Idempotent-Replayed/);
-  assert.match(source, /idempotencyRecord\.create/);
-  assert.match(source, /status: "COMPLETED"/);
+  assert.match(source, /FROM "idempotency_records"/);
+  assert.match(source, /INSERT INTO "idempotency_records"/);
+  assert.match(source, /ON CONFLICT \("business_id", "user_id", "action", "idempotency_key"\) DO NOTHING/);
+  assert.match(source, /SET "status" = 'COMPLETED'/);
+  assert.match(source, /next\(error\)/);
+  assert.doesNotMatch(source, /idempotencyRecord\./);
 });
