@@ -18,6 +18,8 @@ jobs:
         run: |
           node --check demo-static/js/axtor-api.js
           node --check demo-static/js/paint-app.js
+          node --check demo-static/js/paint-print-settings-backend.js
+          node --check demo-static/js/paint-document-print-backend.js
       - name: Paint release suite
         run: node tests/paint-frontend.test.cjs
       - name: Reject generic industry routes
