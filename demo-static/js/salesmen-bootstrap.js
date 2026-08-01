@@ -71,8 +71,16 @@
     });
   }
 
+  function loadRetailTerminalTransactionGuard() {
+    if (!document.getElementById("completeTerminalSaleBtn")) return;
+    loadScriptOnce("js/retail-terminal-transaction-guard.js?v=20260801-retail-wp3-payments-v1", "data-axtor-retail-terminal-transaction-guard", function () {
+      console.error("Retail terminal transaction guard failed to load.");
+    });
+  }
+
   migrate().catch(function (error) { console.warn("Axtor legacy salesman migration skipped:", error?.message || error); });
   loadRetailReporting();
   loadSavedInvoiceTemplatePrint();
   loadRetailTerminalRegression();
+  loadRetailTerminalTransactionGuard();
 })();
