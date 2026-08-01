@@ -51,7 +51,7 @@ export async function validateGrocerySale(req: Request, res: Response, next: Nex
     const items = Array.isArray(body.items) ? body.items : [];
     if (!items.length) return next();
 
-    const productIds = [...new Set(items.map((item: any) => text(item.productId)).filter(Boolean))];
+    const productIds: string[] = [...new Set<string>(items.map((item: any) => text(item.productId)).filter((id: string) => Boolean(id)))];
     const products = await prisma.product.findMany({
       where: { businessId, id: { in: productIds }, active: true },
       select: { id: true, name: true, unit: true, customFields: true },
