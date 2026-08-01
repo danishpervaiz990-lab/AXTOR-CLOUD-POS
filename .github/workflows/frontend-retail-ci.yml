@@ -17,5 +17,7 @@ jobs:
       - run: node --check demo-static/js/axtor-api.js
       - run: node --check demo-static/js/retail-app.js
       - run: node --check demo-static/js/reports-backend.js
+      - run: node --check demo-static/js/salesmen-bootstrap.js
+      - run: node --check demo-static/js/retail-terminal-regression.js
       - run: node tests/retail-frontend.test.cjs
       - run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
