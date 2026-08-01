@@ -78,9 +78,17 @@
     });
   }
 
+  function loadRetailReturnReconciliation() {
+    if (!document.getElementById("axtorReturnsPanel") && !document.querySelector("[data-return-select-invoice]")) return;
+    loadScriptOnce("js/retail-return-reconciliation.js?v=20260801-retail-wp3-returns-v1", "data-axtor-retail-return-reconciliation", function () {
+      console.error("Retail return reconciliation guard failed to load.");
+    });
+  }
+
   migrate().catch(function (error) { console.warn("Axtor legacy salesman migration skipped:", error?.message || error); });
   loadRetailReporting();
   loadSavedInvoiceTemplatePrint();
   loadRetailTerminalRegression();
   loadRetailTerminalTransactionGuard();
+  loadRetailReturnReconciliation();
 })();

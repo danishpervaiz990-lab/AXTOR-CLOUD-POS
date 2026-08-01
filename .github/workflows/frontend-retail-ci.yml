@@ -20,5 +20,6 @@ jobs:
       - run: node --check demo-static/js/salesmen-bootstrap.js
       - run: node --check demo-static/js/retail-terminal-regression.js
       - run: node --check demo-static/js/retail-terminal-transaction-guard.js
+      - run: node --check demo-static/js/retail-return-reconciliation.js
       - run: node tests/retail-frontend.test.cjs
       - run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
