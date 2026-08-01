@@ -10,6 +10,8 @@ for (const file of pages) {
   assert.doesNotMatch(html, /industry\.html\?module=/);
 }
 const app = fs.readFileSync(path.join(root, 'js/hardware-app.js'), 'utf8');
+const printSettings = fs.readFileSync(path.join(root, 'js/hardware-print-settings-backend.js'), 'utf8');
+const documentRouter = fs.readFileSync(path.join(root, 'js/hardware-document-router.js'), 'utf8');
 assert.match(app, /\/api\/v1\/hardware/);
 assert.match(app, /\/api\/v1\/sales-documents/);
 assert.match(app, /Idempotency-Key/);
@@ -18,4 +20,21 @@ assert.match(app, /hardware_trade_terminal/);
 assert.match(app, /\/quotations/);
 assert.match(app, /\/deliveries/);
 assert.match(app, /\/rentals/);
-console.log(`PASS: ${pages.length} purpose-built Hardware pages`);
+assert.match(printSettings, /invoice\.settings/);
+assert.match(printSettings, /\/api\/v1\/settings/);
+assert.match(printSettings, /Thermal 80 mm|thermal-80/i);
+assert.match(printSettings, /Thermal 58 mm|thermal-58/i);
+assert.match(printSettings, /project|job/i);
+assert.match(printSettings, /LPO/i);
+assert.match(documentRouter, /invoice-view\.html/);
+assert.match(documentRouter, /project/);
+assert.match(documentRouter, /lpo/);
+assert.match(documentRouter, /deliveryStatus/);
+assert.match(documentRouter, /serialNumber/);
+assert.match(documentRouter, /warrantyUntil/);
+for (const file of ['hardware-settings.html','hardware-terminal.html','hardware-quotations.html','hardware-deliveries.html','hardware-warranties.html']) {
+  const html = fs.readFileSync(path.join(root, file), 'utf8');
+  assert.match(html, /hardware-print-settings-backend\.js/);
+  assert.match(html, /hardware-document-router\.js/);
+}
+console.log(`PASS: ${pages.length} purpose-built Hardware pages with tenant print settings and shared document routing`);
