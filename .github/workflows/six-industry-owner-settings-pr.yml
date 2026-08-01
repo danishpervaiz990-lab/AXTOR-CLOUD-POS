@@ -21,6 +21,10 @@ jobs:
           node-version: "22.x"
       - run: node backend/scripts/qa-six-industry-owner-settings-live.mjs
       - if: always()
+        name: Preserve failure evidence
+        run: |
+          node -e "const fs=require('fs'); const report='six-industry-owner-settings-report.json'; if(!fs.existsSync(report)){const r={runId:'SIX-INDUSTRY-SETTINGS-'+Date.now(),overall:'FAIL',totals:{industries:0,settingsProfiles:0,products:0,financialInvoices:0,financialExpenses:0},results:[],failures:[{industry:'infrastructure',message:'Live verification terminated before report creation. Check the preceding workflow log for the Railway/API failure.'}]}; fs.writeFileSync(report,JSON.stringify(r,null,2));} if(!fs.existsSync('six-industry-login-credentials.json'))fs.writeFileSync('six-industry-login-credentials.json',JSON.stringify({generatedAt:new Date().toISOString(),businesses:[]},null,2)); if(!fs.existsSync('six-industry-settings-evidence.json'))fs.writeFileSync('six-industry-settings-evidence.json',JSON.stringify({catalogVersion:null,shared:{},industries:{},certifiedBusinesses:[],status:'FAIL'},null,2));"
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: six-industry-owner-settings-pr-${{ github.run_id }}
