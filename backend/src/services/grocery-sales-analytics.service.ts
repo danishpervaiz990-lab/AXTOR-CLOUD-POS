@@ -22,12 +22,14 @@ function percentage(value: unknown, total: unknown) {
 }
 
 function range(query: any) {
-  const valid = (value: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(cleanString(value));
-  const fromText: string = valid(query?.from)
-    ? cleanString(query.from)
+  const valid = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const fromCandidate = String(cleanString(query?.from) || "");
+  const toCandidate = String(cleanString(query?.to) || "");
+  const fromText = valid(fromCandidate)
+    ? fromCandidate
     : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const toText: string = valid(query?.to)
-    ? cleanString(query.to)
+  const toText = valid(toCandidate)
+    ? toCandidate
     : new Date().toISOString().slice(0, 10);
   return {
     from: new Date(`${fromText}T00:00:00.000+03:00`),
