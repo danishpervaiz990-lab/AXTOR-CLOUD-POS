@@ -9,25 +9,40 @@ function readKey(req: Request): string | null {
 }
 
 export function requirePersistentIdempotency(action: string) {
-  return async function persistentIdempotency(req: Request, res: Response, next: NextFunction) {
+  return async function persistentIdempotency(req: Request, res: Response, next: NextFunction): Promise<void> {
     const businessId = req.tenant?.businessId;
     const userId = req.tenant?.userId;
     const key = readKey(req);
-    if (!businessId || !userId) return res.status(401).json({ ok: false, error: { message: "Authenticated tenant context is required" } });
-    if (!key) return res.status(400).json({ ok: false, error: { code: "IDEMPOTENCY_KEY_REQUIRED", message: "Idempotency-Key is required for this transaction" } });
-    if (key.length > 200) return res.status(400).json({ ok: false, error: { code: "IDEMPOTENCY_KEY_INVALID", message: "Idempotency-Key is too long" } });
+
+    if (!businessId || !userId) {
+      res.status(401).json({ ok: false, error: { message: "Authenticated tenant context is required" } });
+      return;
+    }
+    if (!key) {
+      res.status(400).json({ ok: false, error: { code: "IDEMPOTENCY_KEY_REQUIRED", message: "Idempotency-Key is required for this transaction" } });
+      return;
+    }
+    if (key.length > 200) {
+      res.status(400).json({ ok: false, error: { code: "IDEMPOTENCY_KEY_INVALID", message: "Idempotency-Key is too long" } });
+      return;
+    }
 
     const fingerprint = createRequestFingerprint({ method: req.method, path: req.baseUrl + req.path, body: req.body ?? null });
     const existing = await (prisma as any).idempotencyRecord.findUnique({
       where: { businessId_userId_action_idempotencyKey: { businessId, userId, action, idempotencyKey: key } },
     });
     if (existing) {
-      if (existing.requestFingerprint !== fingerprint) return res.status(409).json({ ok: false, error: { code: "IDEMPOTENCY_KEY_REUSED", message: "This Idempotency-Key was already used with a different request" } });
+      if (existing.requestFingerprint !== fingerprint) {
+        res.status(409).json({ ok: false, error: { code: "IDEMPOTENCY_KEY_REUSED", message: "This Idempotency-Key was already used with a different request" } });
+        return;
+      }
       if (existing.status === "COMPLETED" && existing.resultJson) {
         res.setHeader("Idempotent-Replayed", "true");
-        return res.status(200).json(existing.resultJson);
+        res.status(200).json(existing.resultJson);
+        return;
       }
-      return res.status(409).json({ ok: false, error: { code: "IDEMPOTENCY_IN_PROGRESS", message: "A matching transaction is already in progress" } });
+      res.status(409).json({ ok: false, error: { code: "IDEMPOTENCY_IN_PROGRESS", message: "A matching transaction is already in progress" } });
+      return;
     }
 
     try {
@@ -35,7 +50,8 @@ export function requirePersistentIdempotency(action: string) {
         data: { businessId, userId, action, idempotencyKey: key, requestFingerprint: fingerprint, status: "IN_PROGRESS" },
       });
     } catch {
-      return res.status(409).json({ ok: false, error: { code: "IDEMPOTENCY_IN_PROGRESS", message: "A matching transaction is already in progress" } });
+      res.status(409).json({ ok: false, error: { code: "IDEMPOTENCY_IN_PROGRESS", message: "A matching transaction is already in progress" } });
+      return;
     }
 
     const originalJson = res.json.bind(res);
