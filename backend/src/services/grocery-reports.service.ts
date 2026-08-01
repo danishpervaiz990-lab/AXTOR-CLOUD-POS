@@ -8,9 +8,10 @@ const GROCERY_REPORT_IDS = new Set([
 ]);
 
 function dateRange(query: any) {
-  const valid = (value: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(cleanString(value));
-  const fromText = valid(query?.from) ? cleanString(query.from) : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const toText = valid(query?.to) ? cleanString(query.to) : new Date().toISOString().slice(0, 10);
+  const dateText = (value: unknown): string => cleanString(value) || "";
+  const valid = (value: unknown): boolean => /^\d{4}-\d{2}-\d{2}$/.test(dateText(value));
+  const fromText = valid(query?.from) ? dateText(query?.from) : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const toText = valid(query?.to) ? dateText(query?.to) : new Date().toISOString().slice(0, 10);
   return {
     from: new Date(`${fromText}T00:00:00.000+03:00`),
     to: new Date(`${toText}T23:59:59.999+03:00`),
