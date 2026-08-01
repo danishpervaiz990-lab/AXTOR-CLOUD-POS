@@ -1,9 +1,16 @@
 <!DOCTYPE html>
-
 <html data-theme="light" lang="en">
 <head>
 <meta charset="utf-8"/><meta content="width=device-width, initial-scale=1" name="viewport"/>
 <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('axtorTheme') || 'light');if(localStorage.getItem('axtorThemeStyle')==='retro-pos'){document.documentElement.classList.add('theme-retro-pos');}}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+<script>
+(function(){
+  var url=new URL(window.location.href);
+  var raw=String(url.searchParams.get('profile')||'').toLowerCase();
+  var aliases={thermal80:'thermal-80','80mm':'thermal-80',thermal58:'thermal-58','58mm':'thermal-58',a4:'a4'};
+  if(aliases[raw]&&aliases[raw]!==raw){url.searchParams.set('profile',aliases[raw]);history.replaceState(null,'',url);}
+})();
+</script>
 <title>Document View · Axtor POS Cloud</title>
 <link href="assets/images/logo.svg" rel="icon" type="image/svg+xml"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap" rel="stylesheet"/>
@@ -17,7 +24,7 @@
 <body>
 <main class="page" style="max-width:1120px;margin:auto">
 <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3 no-print">
-<div><h2 class="fw-bold mb-1">Document View</h2><p class="text-muted mb-0">Print-friendly shareable sales invoice, quotation, or delivery note page.</p></div>
+<div><h2 class="fw-bold mb-1">Document View</h2><p class="text-muted mb-0">Print-ready invoice, quotation, delivery note, return, refund, or receipt.</p></div>
 <div class="d-flex gap-2"><a class="btn btn-soft" href="index.html"><i class="bi bi-arrow-left"></i> Dashboard</a><button class="btn btn-brand" id="invoiceViewPrintBtn"><i class="bi bi-printer"></i> Print</button></div>
 </div>
 <div class="alert alert-info no-print d-none" id="invoiceViewStatus"></div>
@@ -37,31 +44,20 @@
 <script src="js/retail-advanced.js?v=20260712-full-backend-v2"></script>
 <script src="js/invoice-templates.js?v=20260725-terminal-invoice-v6"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function(){
-      const root=document.getElementById('invoiceViewRoot');
-      const status=document.getElementById('invoiceViewStatus');
-      function decodePayload(){
-        const raw=new URLSearchParams(location.search).get('data');
-        if(!raw) return null;
-        try{return JSON.parse(decodeURIComponent(escape(atob(raw))));}catch(e){return null;}
-      }
-      const payload=decodePayload();
-      const query=new URLSearchParams(location.search);
-      const backendDocument=query.get('id') || query.get('documentNo') || query.get('no');
-      if(!payload && backendDocument){
-        root.innerHTML='<div class="cardx text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Loading document template...</div>';
-        return;
-      }
-      if(!payload){
-        status.classList.remove('d-none');
-        status.textContent='No invoice data found in the URL. Showing the selected demo invoice template.';
-      }
-      const template=(payload && payload.template) || (window.AxtorInvoice && AxtorInvoice.selectedTemplate()) || 'modern-a4';
-      const data=payload ? Object.assign({}, payload) : undefined;
-      if(data) delete data.template;
-      root.innerHTML=window.AxtorInvoice ? AxtorInvoice.render(template,{data}) : '<div class="alert alert-danger">Invoice engine not loaded.</div>';
-      document.getElementById('invoiceViewPrintBtn')?.addEventListener('click',()=>window.print());
-    });
-  </script>
+document.addEventListener('DOMContentLoaded',function(){
+  const root=document.getElementById('invoiceViewRoot');
+  const status=document.getElementById('invoiceViewStatus');
+  function decodePayload(){const raw=new URLSearchParams(location.search).get('data');if(!raw)return null;try{return JSON.parse(decodeURIComponent(escape(atob(raw))));}catch(e){return null;}}
+  const payload=decodePayload();
+  const query=new URLSearchParams(location.search);
+  const backendDocument=query.get('id')||query.get('documentNo')||query.get('no');
+  if(!payload&&backendDocument){root.innerHTML='<div class="cardx text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Loading document...</div>';return;}
+  if(!payload){status.classList.remove('d-none');status.classList.replace('alert-info','alert-warning');status.textContent='No document data was supplied. Return to the source transaction and open Print again.';root.innerHTML='';return;}
+  const template=payload.template||(window.AxtorInvoice&&AxtorInvoice.selectedTemplate())||'modern-a4';
+  const data=Object.assign({},payload);delete data.template;
+  root.innerHTML=window.AxtorInvoice?AxtorInvoice.render(template,{data}):'<div class="alert alert-danger">Invoice engine not loaded.</div>';
+  document.getElementById('invoiceViewPrintBtn')?.addEventListener('click',()=>window.print());
+});
+</script>
 <script src="js/backend-page-utils.js?v=20260712-full-backend-v2"></script><script src="js/invoice-view-backend.js?v=20260725-terminal-invoice-v6"></script></body>
 </html>
