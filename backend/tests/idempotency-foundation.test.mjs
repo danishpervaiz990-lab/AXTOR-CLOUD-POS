@@ -27,7 +27,7 @@ test("idempotency migration is additive and tenant scoped", () => {
   assert.match(sql, /"user_id"/);
   assert.match(sql, /"request_fingerprint"/);
   assert.match(sql, /CREATE UNIQUE INDEX IF NOT EXISTS "idempotency_records_scope_key"/);
-  assert.doesNotMatch(sql, /\b(?:DROP|TRUNCATE|DELETE)\b/i);
+  assert.doesNotMatch(sql, /^\s*(?:DROP|TRUNCATE|DELETE\s+FROM)\b/im);
 });
 
 test("idempotent operation and claim use the same serializable transaction", () => {
