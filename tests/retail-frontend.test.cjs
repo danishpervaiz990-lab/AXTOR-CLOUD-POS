@@ -10,6 +10,8 @@ const reportsApp=fs.readFileSync(path.join(root,'js/reports-backend.js'),'utf8')
 const terminal=fs.readFileSync(path.join(root,'terminal.html'),'utf8');
 const terminalGuard=fs.readFileSync(path.join(root,'js/retail-terminal-regression.js'),'utf8');
 const transactionGuard=fs.readFileSync(path.join(root,'js/retail-terminal-transaction-guard.js'),'utf8');
+const returnGuard=fs.readFileSync(path.join(root,'js/retail-return-reconciliation.js'),'utf8');
+const returnsBackend=fs.readFileSync(path.join(root,'js/returns-backend.js'),'utf8');
 const bootstrap=fs.readFileSync(path.join(root,'js/salesmen-bootstrap.js'),'utf8');
 
 assert.match(index,/retail-dashboard\.html/);
@@ -51,6 +53,7 @@ assert.match(terminal,/id="saleSmId"/);
 assert.match(terminal,/salesmen-bootstrap\.js/);
 assert.match(bootstrap,/retail-terminal-regression\.js/);
 assert.match(bootstrap,/retail-terminal-transaction-guard\.js/);
+assert.match(bootstrap,/retail-return-reconciliation\.js/);
 assert.match(terminalGuard,/\/api\/v1\/customers\?limit=500/);
 assert.match(terminalGuard,/\/api\/v1\/salesmen\?month=/);
 assert.match(terminalGuard,/Walk-in Customer/);
@@ -64,5 +67,11 @@ assert.match(transactionGuard,/retryKeys/);
 assert.match(transactionGuard,/idempotencyKey/);
 assert.match(transactionGuard,/stableFingerprint/);
 assert.match(transactionGuard,/stopImmediatePropagation/);
+assert.match(returnGuard,/previouslyReturnedQty/);
+assert.match(returnGuard,/returnedByLine/);
+assert.match(returnGuard,/Math\.max\(0, item\.__originalSoldQty - item\.previouslyReturnedQty\)/);
+assert.match(returnGuard,/data-previous-return-note/);
+assert.match(returnsBackend,/Math\.min\(toNumber\(doc\.returnedAmount\),toNumber\(doc\.paidAmount\)\)-toNumber\(doc\.refundedAmount\)/);
+assert.match(returnsBackend,/state\.refundIdempotencyKey/);
 
-console.log('PASS: isolated General Retail frontend, reports, tenant-backed selectors and guarded terminal payment posting');
+console.log('PASS: isolated General Retail frontend, reports, guarded terminal posting and cumulative return/refund reconciliation');
