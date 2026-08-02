@@ -31,27 +31,6 @@ jobs:
         with:
           node-version: "22.x"
 
-      - name: Align restored audit with current idempotency contract
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const file = 'backend/scripts/qa-pharmacy-live-audit.mjs';
-          let text = fs.readFileSync(file, 'utf8');
-          const marker = "process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';";
-          if (!text.includes(marker)) throw new Error('Pharmacy audit insertion marker not found');
-          const compatibility = String.raw`
-          let warehouseWriteIndex = 0;
-          source = source.replace(
-            /request\('\/api\/v1\/inventory\/warehouses',\s*\{\s*method:\s*'POST',/g,
-            (match) => match + " idempotencyKey: \`\${RUN_ID}:warehouse:" + (++warehouseWriteIndex) + "\`,",
-          );
-          `;
-          if (!text.includes('warehouseWriteIndex = 0')) {
-            text = text.replace(marker, compatibility + '\n' + marker);
-            fs.writeFileSync(file, text);
-          }
-          NODE
-
       - name: Run Pharmacy transaction and data audit
         id: transaction_audit
         continue-on-error: true
