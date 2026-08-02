@@ -77,7 +77,7 @@ jobs:
 
       - name: G-03 and G-04 purchases, returns, refunds and reconciliation
         id: extended_operations
-        if: steps.core_transactions.outcome == 'success'
+        if: always() && steps.core_transactions.conclusion == 'success'
         continue-on-error: true
         run: |
           test -f grocery-live-runtime.json
@@ -85,7 +85,7 @@ jobs:
 
       - name: G-05 authenticated reports and print evidence
         id: authenticated_browser
-        if: steps.core_transactions.outcome == 'success'
+        if: always() && steps.core_transactions.conclusion == 'success'
         continue-on-error: true
         run: |
           test -f grocery-live-runtime.json
