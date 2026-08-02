@@ -7,6 +7,9 @@ on:
     paths:
       - "backend/scripts/qa-grocery-live-preflight.mjs"
       - "backend/scripts/qa-grocery-browser-preflight.mjs"
+      - "backend/scripts/qa-grocery-full-live-audit.mjs"
+      - "backend/scripts/qa-grocery-extended-operations.mjs"
+      - "backend/scripts/qa-grocery-authenticated-browser-audit.mjs"
       - ".github/workflows/grocery-live-certification.yml"
       - "ops/GROCERY-LIVE-CERTIFICATION.md"
 
@@ -14,9 +17,9 @@ permissions:
   contents: read
 
 jobs:
-  grocery-live-preflight:
+  grocery-live-certification:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
       AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
       AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
@@ -26,7 +29,9 @@ jobs:
         with:
           node-version: "22.x"
 
-      - name: Run backend and route preflight
+      - name: G-01 backend and route preflight
+        id: preflight
+        continue-on-error: true
         run: node backend/scripts/qa-grocery-live-preflight.mjs
 
       - name: Install browser runtime
@@ -36,22 +41,67 @@ jobs:
           npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
           /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
 
-      - name: Run live browser preflight
+      - name: G-01 resilient public browser preflight
+        id: browser_preflight
+        continue-on-error: true
         run: node backend/scripts/qa-grocery-browser-preflight.mjs
 
-      - name: Upload preflight evidence
+      - name: G-02 and G-03 provision tenant, master data and 100 invoices
+        id: core_transactions
+        continue-on-error: true
+        run: node backend/scripts/qa-grocery-full-live-audit.mjs
+
+      - name: G-03 and G-04 purchases, returns, refunds and reconciliation
+        id: extended_operations
+        if: hashFiles('grocery-live-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-grocery-extended-operations.mjs
+
+      - name: G-05 authenticated reports and print evidence
+        id: authenticated_browser
+        if: hashFiles('grocery-live-runtime.json') != ''
+        continue-on-error: true
+        run: node backend/scripts/qa-grocery-authenticated-browser-audit.mjs
+
+      - name: Remove live credentials and session token
+        if: always()
+        run: |
+          if [ -f grocery-live-runtime.json ]; then shred -u grocery-live-runtime.json; fi
+
+      - name: Upload complete certification evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: grocery-live-preflight-${{ github.run_id }}
+          name: grocery-live-certification-${{ github.run_id }}
           path: |
             grocery-live-preflight-report.json
             grocery-browser-preflight-report.json
+            grocery-full-live-audit-report.json
+            grocery-extended-operations-report.json
+            grocery-authenticated-browser-report.json
             grocery-browser-evidence/
+            grocery-live-evidence/
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Enforce preflight result
+      - name: Enforce G-02 through G-05 certification result
         if: always()
         run: |
-          node -e "const fs=require('fs'); for (const file of ['grocery-live-preflight-report.json','grocery-browser-preflight-report.json']) { if (!fs.existsSync(file)) throw new Error(file+' missing'); const report=require('./'+file); console.log(file, report.overall); if(report.overall!=='PASS') process.exit(1); }"
+          node <<'NODE'
+          const fs=require('fs');
+          const required=[
+            ['grocery-live-preflight-report.json',['PASS']],
+            ['grocery-browser-preflight-report.json',['PASS']],
+            ['grocery-full-live-audit-report.json',['PASS_CORE_TRANSACTIONS']],
+            ['grocery-extended-operations-report.json',['PASS']],
+            ['grocery-authenticated-browser-report.json',['PASS']],
+          ];
+          let failed=false;
+          for(const [file,allowed] of required){
+            if(!fs.existsSync(file)){console.error(file,'MISSING');failed=true;continue;}
+            const report=JSON.parse(fs.readFileSync(file,'utf8'));
+            console.log(file,report.overall);
+            if(!allowed.includes(report.overall))failed=true;
+          }
+          if(failed)process.exit(1);
+          NODE
