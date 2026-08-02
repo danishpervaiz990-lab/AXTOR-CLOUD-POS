@@ -31,11 +31,11 @@ exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active Q
 exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after refresh');", 'customer persistence');
 
 const requestSignature = "async function request(path, { method = 'GET', token, body, headers = {}, expected = [200], retries = 2 } = {}) {";
-exact(requestSignature, `let warehouseWriteIndex = 0;\nlet adjustmentWriteIndex = 0;\n${requestSignature}`, 'request helper signature');
+exact(requestSignature, `let warehouseWriteIndex = 0;\nlet adjustmentWriteIndex = 0;\nlet transferWriteIndex = 0;\n${requestSignature}`, 'request helper signature');
 const requestHeaders = "        headers: {\n          Accept: 'application/json',";
 exact(
   requestHeaders,
-  "        headers: {\n          ...(method === 'POST' && path === '/api/v1/inventory/warehouses' ? { 'Idempotency-Key': `${RUN_ID}:warehouse:${++warehouseWriteIndex}` } : {}),\n          ...(method === 'POST' && path === '/api/v1/inventory/adjustments' ? { 'Idempotency-Key': `${RUN_ID}:adjustment:${++adjustmentWriteIndex}` } : {}),\n          Accept: 'application/json',",
+  "        headers: {\n          ...(method === 'POST' && path === '/api/v1/inventory/warehouses' ? { 'Idempotency-Key': `${RUN_ID}:warehouse:${++warehouseWriteIndex}` } : {}),\n          ...(method === 'POST' && path === '/api/v1/inventory/adjustments' ? { 'Idempotency-Key': `${RUN_ID}:adjustment:${++adjustmentWriteIndex}` } : {}),\n          ...(method === 'POST' && path === '/api/v1/inventory/transfers' ? { 'Idempotency-Key': `${RUN_ID}:transfer:${++transferWriteIndex}` } : {}),\n          Accept: 'application/json',",
   'inventory idempotency headers',
 );
 
