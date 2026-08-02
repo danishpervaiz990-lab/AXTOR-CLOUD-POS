@@ -19,6 +19,7 @@ jobs:
       - run: node --check demo-static/js/grocery-report-sync.js
       - run: node --check demo-static/js/grocery-sales-analytics.js
       - run: node --check demo-static/js/grocery-operational-postgres.js
+      - run: node --check demo-static/js/grocery-finance-reports.js
       - run: node --check demo-static/js/grocery-dashboard-postgres.js
       - run: node --check demo-static/js/grocery-production-readiness.js
       - run: node --check demo-static/js/grocery-operations-pack.js
@@ -34,6 +35,7 @@ jobs:
       - run: node --check demo-static/js/grocery-transaction-guard.js
       - run: node tests/grocery-frontend.test.cjs
       - run: node tests/grocery-reports-postgres.test.cjs
+      - run: node tests/grocery-finance-reports.test.cjs
       - run: node tests/grocery-dashboard-postgres.test.cjs
       - run: node tests/grocery-invoice-print.test.cjs
       - run: node tests/grocery-terminal-reconciliation.test.cjs
