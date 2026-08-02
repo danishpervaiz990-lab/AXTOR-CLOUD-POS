@@ -96,7 +96,16 @@ try {
     }
 
     const relevantErrors = cleanErrors(errors, user);
-    results.push({ key: user.key, role: user.role, loginOk, roleOk, pages: pageResults, errors: relevantErrors, pass: loginOk && roleOk && pageResults.every((entry) => entry.ok) && relevantErrors.length === 0 });
+    const allPagesChecked = pageResults.length === pages.length;
+    results.push({
+      key: user.key,
+      role: user.role,
+      loginOk,
+      roleOk,
+      pages: pageResults,
+      errors: relevantErrors,
+      pass: loginOk && roleOk && allPagesChecked && pageResults.every((entry) => entry.ok) && relevantErrors.length === 0,
+    });
     await context.close();
   }
 } finally {
@@ -109,7 +118,8 @@ report.browser = {
     fiveIndependentUsers: results.length === 5,
     allLoginsPass: results.every((item) => item.loginOk),
     allRolesPass: results.every((item) => item.roleOk),
-    dedicatedPharmacyPagesPass: results.every((item) => item.pages.every((entry) => entry.ok)),
+    allRolesCheckedEveryPage: results.every((item) => item.pages.length === pages.length),
+    dedicatedPharmacyPagesPass: results.every((item) => item.pages.length === pages.length && item.pages.every((entry) => entry.ok)),
     expectedRoleRestrictionsPass: results.filter((item) => ['Cashier', 'Salesman'].includes(item.role)).every((item) => item.errors.length === 0),
     noUnexpectedBrowserErrors: results.every((item) => item.errors.length === 0),
   },
