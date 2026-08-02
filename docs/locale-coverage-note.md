@@ -1,0 +1,1 @@
+Grocery tenant locale coverage is enforced for settings, dashboard, terminal, reports, sales, customers/payments, purchases, inventory, products, batches, expiry, receiving, waste, recalls, and invoice printing. Tenant settings remain PostgreSQL-backed through /api/v1/settings.
