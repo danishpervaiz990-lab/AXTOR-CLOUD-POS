@@ -62,18 +62,7 @@ jobs:
       - name: G-02 and G-03 provision tenant, master data and 100 invoices
         id: core_transactions
         continue-on-error: true
-        run: |
-          node <<'NODE'
-          const fs=require('fs');
-          const file='backend/scripts/qa-grocery-full-live-audit.mjs';
-          let source=fs.readFileSync(file,'utf8');
-          const from="const total = Number(items.reduce((sum, item) => sum + item.qty * item.unitPrice - item.discountAmount, 0).toFixed(2));";
-          const to="const total = Number(items.reduce((sum, item) => sum + Number((item.qty * item.unitPrice - item.discountAmount).toFixed(2)), 0).toFixed(2));";
-          if(!source.includes(from)) throw new Error('Expected Grocery total calculation was not found');
-          source=source.replace(from,to);
-          fs.writeFileSync(file,source);
-          NODE
-          node backend/scripts/qa-grocery-full-live-audit.mjs
+        run: node backend/scripts/qa-grocery-full-live-audit.mjs
 
       - name: G-03 and G-04 purchases, returns, refunds and reconciliation
         id: extended_operations
