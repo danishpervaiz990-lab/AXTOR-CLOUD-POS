@@ -1,0 +1,57 @@
+name: Grocery Live Production Certification
+
+on:
+  pull_request:
+    branches: [backend]
+    types: [opened, reopened, synchronize]
+    paths:
+      - "backend/scripts/qa-grocery-live-preflight.mjs"
+      - "backend/scripts/qa-grocery-browser-preflight.mjs"
+      - ".github/workflows/grocery-live-certification.yml"
+      - "ops/GROCERY-LIVE-CERTIFICATION.md"
+
+permissions:
+  contents: read
+
+jobs:
+  grocery-live-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Run backend and route preflight
+        run: node backend/scripts/qa-grocery-live-preflight.mjs
+
+      - name: Install browser runtime
+        run: |
+          mkdir -p /tmp/axtor-playwright
+          npm init -y --prefix /tmp/axtor-playwright >/dev/null
+          npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
+          /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run live browser preflight
+        run: node backend/scripts/qa-grocery-browser-preflight.mjs
+
+      - name: Upload preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grocery-live-preflight-${{ github.run_id }}
+          path: |
+            grocery-live-preflight-report.json
+            grocery-browser-preflight-report.json
+            grocery-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce preflight result
+        if: always()
+        run: |
+          node -e "const fs=require('fs'); for (const file of ['grocery-live-preflight-report.json','grocery-browser-preflight-report.json']) { if (!fs.existsSync(file)) throw new Error(file+' missing'); const report=require('./'+file); console.log(file, report.overall); if(report.overall!=='PASS') process.exit(1); }"
