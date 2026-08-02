@@ -26,12 +26,14 @@ jobs:
       - run: node --check demo-static/js/grocery-document-routing.js
       - run: node --check demo-static/js/grocery-invoice-print-reconciliation.js
       - run: node --check demo-static/js/grocery-terminal-reconciliation.js
+      - run: node --check demo-static/js/grocery-customer-payments.js
       - run: node --check demo-static/js/grocery-transaction-guard.js
       - run: node tests/grocery-frontend.test.cjs
       - run: node tests/grocery-reports-postgres.test.cjs
       - run: node tests/grocery-dashboard-postgres.test.cjs
       - run: node tests/grocery-invoice-print.test.cjs
       - run: node tests/grocery-terminal-reconciliation.test.cjs
+      - run: node tests/grocery-customer-payments.test.cjs
       - run: |
           if grep -R "industry.html?module=" demo-static/grocery-*.html; then exit 1; fi
       - run: |
