@@ -39,7 +39,8 @@ try {
   ]);
   await page.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => null);
   await page.waitForTimeout(1000);
-  const tokenStored = await page.evaluate(() => Boolean(localStorage.getItem('axtorAuthToken'))).catch(() => false);
+  const storage = await context.storageState();
+  const tokenStored = storage.origins.some(origin => origin.localStorage.some(item => item.name === 'axtorAuthToken' && Boolean(item.value)));
   results.push({ name: 'Owner login through live UI', pass: tokenStored, finalUrl: page.url() });
 
   const routes = [
