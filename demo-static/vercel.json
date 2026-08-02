@@ -13,7 +13,17 @@
     { "source": "/receiving", "destination": "/grocery-receiving.html" },
     { "source": "/waste", "destination": "/grocery-waste.html" },
     { "source": "/recalls", "destination": "/grocery-recalls.html" },
-    { "source": "/reports", "destination": "/grocery-reports.html" }
+    { "source": "/reports", "destination": "/grocery-reports.html" },
+    { "source": "/customers", "destination": "/grocery-customers.html" },
+    { "source": "/payments", "destination": "/grocery-customers.html" },
+    { "source": "/sales", "destination": "/grocery-sales.html" },
+    { "source": "/returns", "destination": "/grocery-sales.html" },
+    { "source": "/refunds", "destination": "/grocery-sales.html" },
+    { "source": "/purchases", "destination": "/grocery-purchases.html" },
+    { "source": "/grn", "destination": "/grocery-purchases.html" },
+    { "source": "/inventory", "destination": "/grocery-inventory.html" },
+    { "source": "/settings", "destination": "/grocery-settings.html" },
+    { "source": "/invoice", "destination": "/invoice-view.html" }
   ],
   "headers": [
     { "source": "/(.*)", "headers": [
