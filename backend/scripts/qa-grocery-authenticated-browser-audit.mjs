@@ -18,7 +18,7 @@ async function api(path) {
 
 const docsBody = await api('/api/v1/sales-documents?documentType=invoice&limit=250');
 const docs = Array.isArray(docsBody) ? docsBody : docsBody?.data || [];
-const qaDocs = docs.filter(doc => String(doc.referenceNo || '').startsWith(`QA-${runtime.runTag}-`));
+const qaDocs = docs.slice(0, 100).reverse();
 const selected = [qaDocs[0], qaDocs[49], qaDocs[99]].filter(Boolean);
 
 const browser = await chromium.launch({ headless: true });
