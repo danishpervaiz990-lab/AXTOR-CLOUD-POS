@@ -1,0 +1,7 @@
+- Tenant language persisted in PostgreSQL settings
+- Tenant currency persisted in PostgreSQL settings
+- Number locale and date format persisted
+- RTL enabled for Arabic, Urdu, Farsi, and Hebrew
+- Grocery operational pages load the locale runtime after Axtor API
+- Grocery invoice print adapter dynamically loads the locale runtime
+- CI rejects missing locale coverage and fixed-QAR adapter regressions
