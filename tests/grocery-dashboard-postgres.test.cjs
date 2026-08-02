@@ -1,0 +1,14 @@
+const fs=require('node:fs');
+const path=require('node:path');
+const assert=require('node:assert/strict');
+const root=path.join(__dirname,'../demo-static');
+const html=fs.readFileSync(path.join(root,'grocery-dashboard.html'),'utf8');
+const source=fs.readFileSync(path.join(root,'js/grocery-dashboard-postgres.js'),'utf8');
+assert.match(html,/grocery-dashboard-postgres\.js\?v=20260802-dashboard-postgres1/);
+for(const id of ['daily-sales','grocery-expiry-risk','grocery-waste-share','grocery-recall-share']) assert.match(source,new RegExp(id));
+assert.match(source,/\/api\/v1\/reports\//);
+assert.match(source,/\/api\/v1\/industry\/batches\?limit=500/);
+assert.match(source,/tenant-scoped PostgreSQL reports/);
+assert.doesNotMatch(source,/\/api\/v1\/industry\/records\?entityType=grocery_(waste|recall)/);
+assert.doesNotMatch(source,/localStorage/);
+console.log('PASS: Grocery dashboard KPIs are reconciled through PostgreSQL reports');
