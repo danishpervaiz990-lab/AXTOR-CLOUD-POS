@@ -29,6 +29,7 @@ jobs:
       - run: node --check demo-static/js/grocery-customer-payments.js
       - run: node --check demo-static/js/returns-backend.js
       - run: node --check demo-static/js/grocery-returns-reconciliation.js
+      - run: node --check demo-static/js/grocery-purchase-receiving.js
       - run: node --check demo-static/js/grocery-transaction-guard.js
       - run: node tests/grocery-frontend.test.cjs
       - run: node tests/grocery-reports-postgres.test.cjs
@@ -37,6 +38,7 @@ jobs:
       - run: node tests/grocery-terminal-reconciliation.test.cjs
       - run: node tests/grocery-customer-payments.test.cjs
       - run: node tests/grocery-returns-refunds.test.cjs
+      - run: node tests/grocery-purchase-receiving.test.cjs
       - run: |
           if grep -R "industry.html?module=" demo-static/grocery-*.html; then exit 1; fi
       - run: |
