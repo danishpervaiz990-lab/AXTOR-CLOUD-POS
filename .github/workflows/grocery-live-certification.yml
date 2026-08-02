@@ -77,15 +77,19 @@ jobs:
 
       - name: G-03 and G-04 purchases, returns, refunds and reconciliation
         id: extended_operations
-        if: hashFiles('grocery-live-runtime.json') != ''
+        if: steps.core_transactions.outcome == 'success'
         continue-on-error: true
-        run: node backend/scripts/qa-grocery-extended-operations.mjs
+        run: |
+          test -f grocery-live-runtime.json
+          node backend/scripts/qa-grocery-extended-operations.mjs
 
       - name: G-05 authenticated reports and print evidence
         id: authenticated_browser
-        if: hashFiles('grocery-live-runtime.json') != ''
+        if: steps.core_transactions.outcome == 'success'
         continue-on-error: true
-        run: node backend/scripts/qa-grocery-authenticated-browser-audit.mjs
+        run: |
+          test -f grocery-live-runtime.json
+          node backend/scripts/qa-grocery-authenticated-browser-audit.mjs
 
       - name: Remove live credentials and session token
         if: always()
