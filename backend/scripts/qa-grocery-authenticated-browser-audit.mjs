@@ -18,7 +18,7 @@ async function api(path) {
 
 const docsBody = await api('/api/v1/sales-documents?documentType=invoice&limit=250');
 const docs = Array.isArray(docsBody) ? docsBody : docsBody?.data || [];
-const qaDocs = docs.slice(0, 100).reverse();
+const qaDocs = docs.filter(doc => String(doc.referenceNo || '').startsWith(`QA-${runtime.runTag}-`)).reverse();
 const selected = [qaDocs[0], qaDocs[49], qaDocs[99]].filter(Boolean);
 
 const browser = await chromium.launch({ headless: true });
@@ -29,14 +29,17 @@ try {
   page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
   page.on('response', response => { if (response.status() >= 500) errors.push(`http ${response.status()}: ${response.url()}`); });
 
-  await page.goto(`${runtime.publicOrigin}/login.html`, { waitUntil: 'commit', timeout: 30000 });
-  await page.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => null);
+  await page.goto(`${runtime.publicOrigin}/login.html`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.locator('#businessSlug').fill(runtime.businessSlug);
   await page.locator('#loginEmail').fill(runtime.email);
   await page.locator('#loginPassword').fill(runtime.password);
-  await page.locator('#loginButton').click();
-  await page.waitForFunction(() => Boolean(localStorage.getItem('axtorAuthToken')), null, { timeout: 30000 });
-  const tokenStored = await page.evaluate(() => Boolean(localStorage.getItem('axtorAuthToken')));
+  await Promise.all([
+    page.waitForURL(url => !url.pathname.endsWith('/login.html'), { timeout: 30000 }).catch(() => null),
+    page.locator('#loginButton').click(),
+  ]);
+  await page.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => null);
+  await page.waitForTimeout(1000);
+  const tokenStored = await page.evaluate(() => Boolean(localStorage.getItem('axtorAuthToken'))).catch(() => false);
   results.push({ name: 'Owner login through live UI', pass: tokenStored, finalUrl: page.url() });
 
   const routes = [
@@ -46,8 +49,7 @@ try {
   ];
   for (const [name, route] of routes) {
     try {
-      await page.goto(`${runtime.publicOrigin}/apps/grocery/${route}`, { waitUntil: 'commit', timeout: 30000 });
-      await page.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => null);
+      await page.goto(`${runtime.publicOrigin}/apps/grocery/${route}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(1200);
       const body = await page.locator('body').innerText({ timeout: 10000 }).catch(() => '');
       const pass = !/404|page not found|authentication required/i.test(body) && /grocery|sales|product|inventory|report|setting|batch|expiry/i.test(body);
@@ -63,8 +65,7 @@ try {
     if (!doc) { results.push({ name: `Print profile ${profile}`, pass: false, error: 'No QA invoice available' }); continue; }
     try {
       const url = `${runtime.publicOrigin}/apps/grocery/invoice-view.html?id=${encodeURIComponent(doc.id)}&profile=${encodeURIComponent(profile)}&print=0`;
-      await page.goto(url, { waitUntil: 'commit', timeout: 30000 });
-      await page.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => null);
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(1500);
       const body = await page.locator('body').innerText({ timeout: 10000 }).catch(() => '');
       const pass = body.includes(doc.documentNo) && !/document not found|404/i.test(body);
