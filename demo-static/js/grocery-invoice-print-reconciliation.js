@@ -10,6 +10,14 @@
     { code: "thermal-58", label: "Thermal 58 mm" }
   ];
 
+  function ensureLocaleRuntime() {
+    if (window.AxtorLocale || document.querySelector('script[src*="grocery-tenant-locale.js"]')) return;
+    const script = document.createElement("script");
+    script.src = "js/grocery-tenant-locale.js?v=20260802-locale2";
+    script.async = false;
+    document.head.appendChild(script);
+  }
+
   function esc(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char];
@@ -18,6 +26,14 @@
 
   function unwrap(value) {
     return value && Object.prototype.hasOwnProperty.call(value, "data") ? value.data : value;
+  }
+
+  function money(value) {
+    return window.AxtorLocale?.money ? AxtorLocale.money(value) : Number(value || 0).toFixed(2);
+  }
+
+  function date(value) {
+    return window.AxtorLocale?.date ? AxtorLocale.date(value) : new Date(value).toLocaleDateString();
   }
 
   function decodePayload() {
@@ -97,8 +113,8 @@
     const shift = findById(context.shifts, documentData.shiftId);
     const payments = Array.isArray(documentData.payments) ? documentData.payments : [];
     const paymentBreakdown = payments.length
-      ? payments.map(function (row) { return String(row.method || row.paymentMethod || "payment") + " " + Number(row.amount || 0).toFixed(2); }).join(" · ")
-      : String(documentData.paymentMethod || "—") + " " + Number(documentData.paid || documentData.paidAmount || 0).toFixed(2);
+      ? payments.map(function (row) { return String(row.method || row.paymentMethod || "payment") + " " + money(row.amount); }).join(" · ")
+      : String(documentData.paymentMethod || "—") + " " + money(documentData.paid || documentData.paidAmount || 0);
     return {
       counter: counter?.name || documentData.counterName || "—",
       terminal: terminal?.name || terminal?.code || documentData.terminalName || documentData.terminalCode || "—",
@@ -111,8 +127,8 @@
   function itemBatchText(item) {
     const batch = item.batchNo || item.batchNumber || item.inventoryBatch?.batchNo || item.inventoryBatch?.batchNumber || "";
     const expiryRaw = item.expiryDate || item.inventoryBatch?.expiryDate || item.batchExpiryDate || "";
-    const expiry = expiryRaw ? new Date(expiryRaw) : null;
-    const expiryText = expiry && !Number.isNaN(expiry.getTime()) ? expiry.toLocaleDateString() : "";
+    const expiryDate = expiryRaw ? new Date(expiryRaw) : null;
+    const expiryText = expiryDate && !Number.isNaN(expiryDate.getTime()) ? date(expiryDate) : "";
     if (!batch && !expiryText) return "";
     return [batch ? "Batch: " + batch : "", expiryText ? "Expiry: " + expiryText : ""].filter(Boolean).join(" · ");
   }
@@ -147,6 +163,7 @@
   }
 
   async function init() {
+    ensureLocaleRuntime();
     injectPrintCss();
     let attempts = 0;
     const selectorTimer = setInterval(function () {

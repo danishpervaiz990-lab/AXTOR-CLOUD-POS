@@ -1,0 +1,1 @@
+Supported Grocery pages: settings, dashboard, terminal, reports, sales returns/refunds, customers/payments, purchases/GRN, inventory, products, batches, expiry, receiving, waste, recalls, and invoice printing.
