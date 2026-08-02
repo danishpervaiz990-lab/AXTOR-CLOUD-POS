@@ -31,13 +31,16 @@ test('capability status reports provider, storage and encryption readiness witho
   assert.match(features, /providerConfigured: backupProvider\.configured/);
   assert.match(features, /storageConfigured: backupProvider\.storageConfigured/);
   assert.match(features, /encryptionConfigured: backupProvider\.encryptionConfigured/);
+  assert.match(features, /workerEnabled: backupProvider\.workerEnabled/);
+  assert.match(features, /restoreConfigured: backupProvider\.restoreConfigured/);
   assert.doesNotMatch(features, /BACKUP_STORAGE_URL/);
   assert.doesNotMatch(features, /BACKUP_ENCRYPTION_KEY/);
 });
 
 test('backup environment contract is documented without real credentials', () => {
-  assert.match(envExample, /BACKUP_PROVIDER="object-storage"/);
+  assert.match(envExample, /BACKUP_PROVIDER="railway-volume"/);
   assert.match(envExample, /BACKUP_STORAGE_URL=/);
   assert.match(envExample, /BACKUP_ENCRYPTION_KEY=/);
+  assert.match(envExample, /BACKUP_RESTORE_CONFIRM=/);
   assert.match(envExample, /Never commit real credentials/);
 });

@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createApp } from "../dist/app.js";
-import { prisma } from "../dist/db/prisma.js";
-import "../dist/industry/activate-launch-ready-packs.js";
-import { INDUSTRY_REGISTRY } from "../dist/industry/registry.js";
 
 const RUN = process.env.RUN_DATABASE_INTEGRATION === "1";
 const launchCodes = ["hardware", "paint", "restaurant", "furniture", "workshop", "wholesale", "manufacturing"];
@@ -53,6 +49,12 @@ async function request(base, path, options = {}) {
 }
 
 test("all preview packs provision, authenticate, store forms and serve reports", { skip: !RUN, timeout: 120_000 }, async () => {
+  const [{ createApp }, { prisma }, { INDUSTRY_REGISTRY }] = await Promise.all([
+    import("../dist/app.js"),
+    import("../dist/db/prisma.js"),
+    import("../dist/industry/registry.js"),
+    import("../dist/industry/activate-launch-ready-packs.js"),
+  ]);
   const app = createApp();
   const server = app.listen(0, "127.0.0.1");
   await once(server, "listening");

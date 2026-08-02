@@ -79,19 +79,51 @@ export async function transactGiftCard(businessId: string, userId: string | null
 }
 
 export async function platformSummary(businessId: string): Promise<any> {
-  const [giftCards, companies, apiKeys, webhooks, dashboards, backups] = await Promise.all([listResource(businessId, "gift-cards"), listResource(businessId, "companies"), listResource(businessId, "api-keys"), listResource(businessId, "webhooks"), listResource(businessId, "dashboards"), listResource(businessId, "backups")]);
-  return { giftCards: giftCards.length, companies: companies.length, apiKeys: apiKeys.filter((x) => x.active !== false).length, webhooks: webhooks.filter((x) => x.active !== false).length, dashboards: dashboards.length, backups: backups.length };
+  const [giftCards, companies, apiKeys, webhooks, dashboards, backups] = await Promise.all([
+    listResource(businessId, "gift-cards"),
+    listResource(businessId, "companies"),
+    listResource(businessId, "api-keys"),
+    listResource(businessId, "webhooks"),
+    listResource(businessId, "dashboards"),
+    prisma.backupJob.count({ where: { businessId } }),
+  ]);
+  return { giftCards: giftCards.length, companies: companies.length, apiKeys: apiKeys.filter((x) => x.active !== false).length, webhooks: webhooks.filter((x) => x.active !== false).length, dashboards: dashboards.length, backups };
 }
 
 export async function createBackupManifest(businessId: string, userId: string | null, input: JsonRecord): Promise<any> {
   const provider = requireBackupProvider(input.provider);
-  return createResource(businessId, userId, "backups", {
-    status: "requested",
-    provider: provider.provider,
-    encrypted: true,
-    requestedAt: new Date().toISOString(),
-    completedAt: null,
-    checksum: null,
-    storageKey: null,
+  const idempotencyKey = cleanString(input.idempotencyKey) || null;
+  if (idempotencyKey) {
+    const existing = await prisma.backupJob.findUnique({ where: { businessId_idempotencyKey: { businessId, idempotencyKey } } });
+    if (existing) return existing;
+  }
+  const job = await prisma.backupJob.create({
+    data: {
+      businessId,
+      requestedBy: userId,
+      provider: provider.provider,
+      encrypted: true,
+      idempotencyKey,
+      maxAttempts: Math.min(Math.max(Number(input.maxAttempts) || Number(process.env.BACKUP_MAX_ATTEMPTS) || 3, 1), 10),
+    },
+  });
+  await prisma.auditLog.create({
+    data: {
+      businessId,
+      userId,
+      action: "platform.backups.request",
+      entityType: "backup-job",
+      entityId: job.id,
+      after: asJson({ provider: job.provider, status: job.status, requestedAt: job.requestedAt }),
+    },
+  });
+  return job;
+}
+
+export async function listBackupJobs(businessId: string): Promise<any[]> {
+  return prisma.backupJob.findMany({
+    where: { businessId },
+    orderBy: { requestedAt: "desc" },
+    take: 100,
   });
 }
