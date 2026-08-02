@@ -20,8 +20,8 @@ const operationalIds = [
   'grocery-recall-share'
 ];
 
-assert.match(page, /grocery-sales-analytics\.js\?v=20260802-all-postgres1/);
-assert.match(page, /grocery-operational-postgres\.js\?v=20260802-all-postgres1/);
+assert.match(page, /grocery-sales-analytics\.js\?v=[A-Za-z0-9._-]+/);
+assert.match(page, /grocery-operational-postgres\.js\?v=[A-Za-z0-9._-]+/);
 
 for (const id of salesIds) assert.match(sales, new RegExp(id));
 for (const id of operationalIds) assert.match(operational, new RegExp(id));

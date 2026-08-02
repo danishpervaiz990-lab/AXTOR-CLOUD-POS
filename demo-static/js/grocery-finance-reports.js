@@ -1,0 +1,27 @@
+(function(){
+"use strict";
+if(document.body?.dataset.page!=="reports")return;
+const REPORTS=[
+{id:"grocery-customer-statement",label:"Customer Statement Summary",filter:"customerId"},
+{id:"grocery-supplier-statement",label:"Supplier Statement Summary",filter:"supplierId"},
+{id:"grocery-refund-impact",label:"Returns & Refunds Financial Impact",filter:""},
+{id:"grocery-finance-summary",label:"Finance Reconciliation Summary",filter:""}
+];
+const MONEY=new Set(["invoiced","paid","returned","refunded","periodOutstanding","currentBalance","creditLimit","purchased","periodPayable","invoiceTotal","retainedRevenue","amount"]);
+let options={},last=null;
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const unwrap=v=>v&&Object.prototype.hasOwnProperty.call(v,"data")?v.data:v;
+const money=v=>"QAR "+Number(v||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const today=()=>new Date().toISOString().slice(0,10);
+const monthStart=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10);};
+function mount(){const app=document.getElementById("app");if(!app)return false;const section=document.createElement("section");section.className="g-panel";section.id="gFinanceReports";section.innerHTML='<div class="g-panel-head"><div><h2>Finance Reconciliation</h2><p class="g-note">PostgreSQL-backed customer, supplier, returns/refunds and finance summary reports.</p></div></div><div class="g-form"><div><label>Report</label><select id="gfReport">'+REPORTS.map(r=>'<option value="'+r.id+'">'+r.label+'</option>').join('')+'</select></div><div><label>From</label><input id="gfFrom" type="date"></div><div><label>To</label><input id="gfTo" type="date"></div><div><label>Customer / Supplier</label><select id="gfEntity"><option value="">All records</option></select></div></div><div class="g-actions"><button id="gfRun" class="g-btn">Run Finance Report</button><button id="gfCsv" class="g-btn secondary">Export CSV</button><button id="gfPrint" class="g-btn secondary">Print</button></div><div id="gfStatus" class="g-status"></div><div id="gfSummary" class="g-kpis"></div><div class="g-table-wrap"><table class="g-table"><thead id="gfHead"></thead><tbody id="gfBody"></tbody></table></div>';
+app.appendChild(section);return true;}
+function def(){return REPORTS.find(r=>r.id===document.getElementById("gfReport").value)||REPORTS[0];}
+function refreshEntity(){const d=def(),sel=document.getElementById("gfEntity");const rows=d.filter==="customerId"?(options.customers||[]):d.filter==="supplierId"?(options.suppliers||[]):[];sel.disabled=!d.filter;sel.innerHTML='<option value="">All records</option>'+rows.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name||x.id)+'</option>').join('');}
+function format(v,c){if(/Pct$/.test(c.key)||/%/.test(c.label))return Number(v||0).toFixed(2)+"%";if(MONEY.has(c.key))return money(v);return typeof v==="number"?v.toLocaleString("en-US",{maximumFractionDigits:3}):esc(v??"—");}
+function render(report){last=report;document.getElementById("gfSummary").innerHTML=(report.summary||[]).map(x=>'<div class="g-kpi"><span>'+esc(x.label)+'</span><strong>'+((x.format==="percent")?Number(x.value||0).toFixed(2)+"%":money(x.value))+'</strong></div>').join('');document.getElementById("gfHead").innerHTML='<tr>'+(report.columns||[]).map(c=>'<th>'+esc(c.label)+'</th>').join('')+'</tr>';document.getElementById("gfBody").innerHTML=(report.rows||[]).map(r=>'<tr>'+(report.columns||[]).map(c=>'<td>'+format(r[c.key],c)+'</td>').join('')+'</tr>').join('')||'<tr><td>No records found.</td></tr>';}
+async function run(){const status=document.getElementById("gfStatus");try{const d=def(),q=new URLSearchParams({from:document.getElementById("gfFrom").value,to:document.getElementById("gfTo").value});if(d.filter&&document.getElementById("gfEntity").value)q.set(d.filter,document.getElementById("gfEntity").value);status.textContent="Loading finance report…";const report=unwrap(await AxtorAPI.apiGet('/api/v1/reports/'+encodeURIComponent(d.id)+'?'+q.toString(),{cache:false}));render(report);status.className="g-status ok";status.textContent="Finance report reconciled from PostgreSQL.";}catch(e){status.className="g-status error";status.textContent=e.message||"Finance report failed";}}
+function csv(){if(!last)return;const cols=last.columns||[];const rows=[cols.map(c=>c.label),...(last.rows||[]).map(r=>cols.map(c=>r[c.key]))];const text=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'}));a.download=(last.title||'grocery-finance-report').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.csv';a.click();URL.revokeObjectURL(a.href);}
+async function init(){for(let i=0;i<50&&!document.getElementById("app");i++)await new Promise(r=>setTimeout(r,100));if(!mount())return;document.getElementById("gfFrom").value=monthStart();document.getElementById("gfTo").value=today();options=unwrap(await AxtorAPI.apiGet('/api/v1/reports/options',{cache:false}))||{};refreshEntity();document.getElementById("gfReport").onchange=refreshEntity;document.getElementById("gfRun").onclick=run;document.getElementById("gfCsv").onclick=csv;document.getElementById("gfPrint").onclick=()=>window.print();await run();}
+document.addEventListener("DOMContentLoaded",()=>setTimeout(()=>init().catch(console.error),100));
+})();
