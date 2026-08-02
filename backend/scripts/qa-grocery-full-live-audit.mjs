@@ -27,7 +27,8 @@ try{
   const health=await request('/api/v1/health/db'); if(!health?.ok||health?.database!=='ok')throw new Error('Database health is not OK'); pass('Database health');
   const catalog=unwrap(await request('/api/v1/public/catalog'));
   const grocery=(catalog.industries||[]).find(item=>String(item.code).toLowerCase()==='grocery'&&item.canRegister!==false);
-  const plan=(catalog.plans||[]).find(item=>item.canRegister!==false)||(catalog.plans||[])[0];
+  const registerablePlans=(catalog.plans||[]).filter(item=>item.canRegister!==false);
+  const plan=registerablePlans.find(item=>/enterprise|premium|custom|value|moderate|pro/i.test(`${item.code||''} ${item.name||''}`))||registerablePlans.at(-1)||(catalog.plans||[])[0];
   const currency=(catalog.currencies||[]).find(item=>item.code==='QAR')||{code:'QAR'};
   const language=(catalog.languages||[]).find(item=>['en','EN','english'].includes(item.code))||(catalog.languages||[])[0];
   if(!grocery||!plan||!language)throw new Error('Grocery registration catalogue is incomplete'); pass('Registration catalogue',{groceryCode:grocery.code,planCode:plan.code});
