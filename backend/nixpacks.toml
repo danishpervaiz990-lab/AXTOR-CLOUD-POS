@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["postgresql_16"]
+nixPkgs = ["nodejs_22", "postgresql_16"]
 
 [phases.install]
 cmds = ["npm ci --include=dev --no-audit --no-fund"]
