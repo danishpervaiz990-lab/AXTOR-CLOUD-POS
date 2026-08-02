@@ -50,13 +50,21 @@ jobs:
           const fs=require('fs');
           const file='grocery-browser-preflight-report.json';
           const report=JSON.parse(fs.readFileSync(file,'utf8'));
-          for(const item of report.results||[]){
-            if(String(item.name||'').startsWith('Route ') && item.status===200 && !/404|page not found/i.test(String(item.bodySample||''))) item.pass=true;
-          }
           report.overall=(report.results||[]).every(item=>item.pass)?'PASS':'FAIL';
           fs.writeFileSync(file,JSON.stringify(report,null,2));
-          console.log('normalized public browser preflight:',report.overall);
           if(report.overall!=='PASS') process.exit(1);
+          NODE
+
+      - name: Select full-feature Grocery QA plan
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const file='backend/scripts/qa-grocery-full-live-audit.mjs';
+          let source=fs.readFileSync(file,'utf8');
+          const from="const plan=(catalog.plans||[]).find(item=>item.canRegister!==false)||(catalog.plans||[])[0];";
+          const to="const registerablePlans=(catalog.plans||[]).filter(item=>item.canRegister!==false); const preferredCodes=['enterprise','custom','premium','pro','value','moderate']; const plan=preferredCodes.map(code=>registerablePlans.find(item=>String(item.code).toLowerCase().includes(code))).find(Boolean)||registerablePlans.at(-1)||(catalog.plans||[])[0];";
+          if(!source.includes(from)) throw new Error('Expected plan selection line not found');
+          fs.writeFileSync(file,source.replace(from,to));
           NODE
 
       - name: G-02 and G-03 provision tenant, master data and 100 invoices
