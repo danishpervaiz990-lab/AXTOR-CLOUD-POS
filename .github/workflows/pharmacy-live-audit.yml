@@ -1,0 +1,84 @@
+name: Pharmacy Live Production Audit
+
+on:
+  pull_request:
+    branches: [backend]
+    types: [opened, reopened, synchronize]
+    paths:
+      - "backend/scripts/qa-pharmacy-live-audit.mjs"
+      - "backend/scripts/qa-pharmacy-browser-audit.mjs"
+      - "backend/scripts/qa-retail-live-audit.payload.*"
+      - "backend/scripts/retail-audit-recipient-cert.pem"
+      - ".github/workflows/pharmacy-live-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pharmacy-live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_AUDIT_INDUSTRY: pharmacy
+      AXTOR_AUDIT_PRODUCT_COUNT: "100"
+      AXTOR_AUDIT_CUSTOMER_COUNT: "200"
+      AXTOR_AUDIT_INVOICE_COUNT: "500"
+      AXTOR_AUDIT_CASH_CREDIT_MIX: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Run Pharmacy transaction and data audit
+        id: transaction_audit
+        continue-on-error: true
+        run: node backend/scripts/qa-pharmacy-live-audit.mjs
+
+      - name: Install browser runtime
+        if: always() && steps.transaction_audit.conclusion == 'success'
+        run: |
+          test -f pharmacy-live-audit-runtime.json
+          mkdir -p /tmp/axtor-playwright
+          npm init -y --prefix /tmp/axtor-playwright >/dev/null
+          npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
+          /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Test five users and Pharmacy workflows through Vercel
+        id: browser_audit
+        if: always() && steps.transaction_audit.conclusion == 'success'
+        continue-on-error: true
+        run: node backend/scripts/qa-pharmacy-browser-audit.mjs
+
+      - name: Encrypt Pharmacy credentials
+        if: always() && steps.transaction_audit.conclusion == 'success'
+        run: |
+          test -f pharmacy-live-audit-credentials.json
+          openssl cms -encrypt -binary -aes-256-cbc \
+            -in pharmacy-live-audit-credentials.json \
+            -out pharmacy-live-audit-credentials.p7m \
+            -outform DER \
+            backend/scripts/retail-audit-recipient-cert.pem
+          test -s pharmacy-live-audit-credentials.p7m
+          shred -u pharmacy-live-audit-credentials.json pharmacy-live-audit-runtime.json
+
+      - name: Upload encrypted Pharmacy audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pharmacy-live-audit-${{ github.run_id }}
+          path: |
+            pharmacy-live-audit-report.json
+            pharmacy-live-audit-credentials.p7m
+            pharmacy-live-audit-cleanup.sql
+            pharmacy-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce Pharmacy launch-readiness result
+        if: always()
+        run: |
+          test -s pharmacy-live-audit-report.json
+          node -e "const r=require('./pharmacy-live-audit-report.json'); console.log('Pharmacy audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
