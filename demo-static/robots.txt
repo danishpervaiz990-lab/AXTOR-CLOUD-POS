@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /
+
+# AXTOR POS Cloud is a private authenticated business application.
+# Public search indexing is intentionally disabled.
