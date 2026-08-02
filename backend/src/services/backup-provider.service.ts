@@ -7,6 +7,9 @@ export type BackupProviderStatus = {
   provider: string | null;
   storageConfigured: boolean;
   encryptionConfigured: boolean;
+  credentialsConfigured: boolean;
+  workerEnabled: boolean;
+  restoreConfigured: boolean;
 };
 
 export function getBackupProviderStatus(): BackupProviderStatus {
@@ -16,12 +19,25 @@ export function getBackupProviderStatus(): BackupProviderStatus {
   const provider = SUPPORTED_PROVIDERS.has(providerValue) ? providerValue : null;
   const storageConfigured = Boolean(storageUrl);
   const encryptionConfigured = Boolean(encryptionKey && encryptionKey.length >= 32);
+  const workerEnabled = cleanString(process.env.BACKUP_WORKER_ENABLED)?.toLowerCase() === "true";
+  const credentialsConfigured = provider === "railway-volume" || Boolean(
+    cleanString(process.env.BACKUP_S3_ACCESS_KEY_ID) && cleanString(process.env.BACKUP_S3_SECRET_ACCESS_KEY),
+  );
+  const restoreUrl = cleanString(process.env.BACKUP_RESTORE_DATABASE_URL);
+  const restoreConfigured = Boolean(
+    restoreUrl &&
+    restoreUrl !== cleanString(process.env.DATABASE_URL) &&
+    cleanString(process.env.BACKUP_RESTORE_CONFIRM) === "I_UNDERSTAND_THIS_DATABASE_WILL_BE_REPLACED",
+  );
 
   return {
-    configured: Boolean(provider && storageConfigured && encryptionConfigured),
+    configured: Boolean(provider && storageConfigured && encryptionConfigured && credentialsConfigured && workerEnabled),
     provider,
     storageConfigured,
     encryptionConfigured,
+    credentialsConfigured,
+    workerEnabled,
+    restoreConfigured,
   };
 }
 
@@ -32,6 +48,8 @@ export function requireBackupProvider(requestedProvider?: unknown): BackupProvid
       providerConfigured: Boolean(status.provider),
       storageConfigured: status.storageConfigured,
       encryptionConfigured: status.encryptionConfigured,
+      credentialsConfigured: status.credentialsConfigured,
+      workerEnabled: status.workerEnabled,
     });
   }
 

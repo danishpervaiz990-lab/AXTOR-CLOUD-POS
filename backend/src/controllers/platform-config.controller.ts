@@ -30,4 +30,4 @@ export const apiKeys = go((_req, businessId) => developerKeys.listApiKeys(busine
 export const createApiKey = go((req, businessId, userId) => developerKeys.createApiKey(businessId, userId, req.body || {}));
 export const revokeApiKey = go((req, businessId, userId) => developerKeys.revokeApiKey(businessId, userId, req.params.id));
 export const requestBackup = go((req, businessId, userId) => service.createBackupManifest(businessId, userId, req.body || {}));
-export const backups = go((_req, businessId) => service.listResource(businessId, "backups"));
+export const backups = go((_req, businessId) => service.listBackupJobs(businessId));

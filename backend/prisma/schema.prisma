@@ -3812,3 +3812,36 @@ model ReleaseDNotificationRule {
   @@unique([businessId, industry, eventCode])
   @@map("release_d_notification_rules")
 }
+
+model BackupJob {
+  id                String   @id @default(cuid())
+  businessId        String   @map("business_id")
+  requestedBy       String?  @map("requested_by")
+  provider          String
+  status            String   @default("pending")
+  attempts          Int      @default(0)
+  maxAttempts       Int      @default(3) @map("max_attempts")
+  idempotencyKey    String?  @map("idempotency_key")
+  storageKey        String?  @map("storage_key")
+  checksum          String?
+  archiveSizeBytes  Int?     @map("archive_size_bytes")
+  encrypted         Boolean  @default(true)
+  requestedAt       DateTime @default(now()) @map("requested_at")
+  startedAt         DateTime? @map("started_at")
+  completedAt       DateTime? @map("completed_at")
+  failedAt          DateTime? @map("failed_at")
+  nextAttemptAt     DateTime? @map("next_attempt_at")
+  retentionUntil    DateTime? @map("retention_until")
+  restoreVerifiedAt DateTime? @map("restore_verified_at")
+  restoreEvidence   Json?    @map("restore_evidence")
+  errorCode         String?  @map("error_code")
+  errorMessage      String?  @map("error_message")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([businessId, idempotencyKey])
+  @@index([status, nextAttemptAt, requestedAt])
+  @@index([businessId, requestedAt])
+  @@index([retentionUntil, status])
+  @@map("backup_jobs")
+}
