@@ -8,7 +8,6 @@ on:
       - "backend/scripts/qa-pharmacy-live-audit.mjs"
       - "backend/scripts/qa-pharmacy-browser-audit.mjs"
       - "backend/scripts/qa-retail-live-audit.payload.*"
-      - "backend/scripts/retail-audit-recipient-cert.pem"
       - ".github/workflows/pharmacy-live-audit.yml"
 
 permissions:
@@ -32,6 +31,27 @@ jobs:
         with:
           node-version: "22.x"
 
+      - name: Align restored audit with current idempotency contract
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const file = 'backend/scripts/qa-pharmacy-live-audit.mjs';
+          let text = fs.readFileSync(file, 'utf8');
+          const marker = "process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';";
+          if (!text.includes(marker)) throw new Error('Pharmacy audit insertion marker not found');
+          const compatibility = String.raw`
+          let warehouseWriteIndex = 0;
+          source = source.replace(
+            /request\('\/api\/v1\/inventory\/warehouses',\s*\{\s*method:\s*'POST',/g,
+            (match) => match + " idempotencyKey: \`\${RUN_ID}:warehouse:" + (++warehouseWriteIndex) + "\`,",
+          );
+          `;
+          if (!text.includes('warehouseWriteIndex = 0')) {
+            text = text.replace(marker, compatibility + '\n' + marker);
+            fs.writeFileSync(file, text);
+          }
+          NODE
+
       - name: Run Pharmacy transaction and data audit
         id: transaction_audit
         continue-on-error: true
@@ -52,26 +72,19 @@ jobs:
         continue-on-error: true
         run: node backend/scripts/qa-pharmacy-browser-audit.mjs
 
-      - name: Encrypt Pharmacy credentials
-        if: always() && steps.transaction_audit.conclusion == 'success'
+      - name: Remove temporary Pharmacy credentials
+        if: always()
         run: |
-          test -f pharmacy-live-audit-credentials.json
-          openssl cms -encrypt -binary -aes-256-cbc \
-            -in pharmacy-live-audit-credentials.json \
-            -out pharmacy-live-audit-credentials.p7m \
-            -outform DER \
-            backend/scripts/retail-audit-recipient-cert.pem
-          test -s pharmacy-live-audit-credentials.p7m
-          shred -u pharmacy-live-audit-credentials.json pharmacy-live-audit-runtime.json
+          if [ -f pharmacy-live-audit-credentials.json ]; then shred -u pharmacy-live-audit-credentials.json; fi
+          if [ -f pharmacy-live-audit-runtime.json ]; then shred -u pharmacy-live-audit-runtime.json; fi
 
-      - name: Upload encrypted Pharmacy audit evidence
+      - name: Upload sanitized Pharmacy audit evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pharmacy-live-audit-${{ github.run_id }}
           path: |
             pharmacy-live-audit-report.json
-            pharmacy-live-audit-credentials.p7m
             pharmacy-live-audit-cleanup.sql
             pharmacy-browser-evidence/
           if-no-files-found: warn
@@ -79,6 +92,11 @@ jobs:
 
       - name: Enforce Pharmacy launch-readiness result
         if: always()
+        env:
+          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.conclusion }}
+          BROWSER_OUTCOME: ${{ steps.browser_audit.conclusion }}
         run: |
+          test "$TRANSACTION_OUTCOME" = "success"
+          test "$BROWSER_OUTCOME" = "success"
           test -s pharmacy-live-audit-report.json
           node -e "const r=require('./pharmacy-live-audit-report.json'); console.log('Pharmacy audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
