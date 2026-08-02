@@ -30,6 +30,15 @@ exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range
 exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
 exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after refresh');", 'customer persistence');
 
+const requestSignature = "async function request(path, { method = 'GET', token, body, headers = {}, expected = [200], retries = 2 } = {}) {";
+exact(requestSignature, `let warehouseWriteIndex = 0;\n${requestSignature}`, 'request helper signature');
+const requestHeaders = "        headers: {\n          Accept: 'application/json',";
+exact(
+  requestHeaders,
+  "        headers: {\n          ...(method === 'POST' && path === '/api/v1/inventory/warehouses' ? { 'Idempotency-Key': `${RUN_ID}:warehouse:${++warehouseWriteIndex}` } : {}),\n          Accept: 'application/json',",
+  'warehouse idempotency header',
+);
+
 const paymentBlock = `let unauthorizedCashierPaymentRejected = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:unauthorized-cashier\` } });\n  } catch (error) { unauthorizedCashierPaymentRejected = /Permission denied|payments\\.create/i.test(error.message); }\n  check(unauthorizedCashierPaymentRejected, 'Unauthorized cashier payment action', 'Cashier payment posting was denied and requires an authorized role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
 const pharmacyPaymentBlock = `let cashierPaymentPosted = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:cashier-permission-check\` } });\n    cashierPaymentPosted = true;\n  } catch (error) {\n    if (!/Permission denied|payments\\.create/i.test(error.message)) throw error;\n  }\n  check(true, 'Cashier payment permission behavior', cashierPaymentPosted ? 'Pharmacy Cashier may post customer payments as configured' : 'Pharmacy Cashier payment posting is restricted by role');\n  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: cashierPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
 exact(paymentBlock, pharmacyPaymentBlock, 'Pharmacy cashier payment behavior');
