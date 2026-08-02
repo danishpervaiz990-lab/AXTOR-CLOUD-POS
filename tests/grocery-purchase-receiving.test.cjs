@@ -1,0 +1,12 @@
+const fs=require('fs');
+const assert=require('assert');
+const html=fs.readFileSync('demo-static/grocery-purchases.html','utf8');
+const js=fs.readFileSync('demo-static/js/grocery-purchase-receiving.js','utf8');
+assert(html.includes('grocery-purchase-receiving.js'));
+for(const token of ['/api/v1/purchases','/receive','/api/v1/inventory/warehouses','/api/v1/suppliers','/api/v1/industry/batches','Idempotency-Key'])assert(js.includes(token),token);
+assert(js.includes('status:"DRAFT"'));
+assert(js.includes('expiryDate'));
+assert(js.includes('freeQty'));
+assert(js.includes('landedCost'));
+assert(!js.includes('grocery_purchase_receipt'));
+console.log('Grocery purchase receiving reconciliation verified');
