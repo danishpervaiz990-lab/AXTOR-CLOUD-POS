@@ -47,6 +47,7 @@ jobs:
       - run: node tests/grocery-locale-currency.test.cjs
       - run: node tests/grocery-locale-coverage.test.cjs
       - run: node tests/grocery-locale-money-adapters.test.cjs
+      - run: node tests/grocery-release-candidate.test.cjs
       - run: |
           if grep -R "industry.html?module=" demo-static/grocery-*.html; then exit 1; fi
       - run: |
