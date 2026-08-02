@@ -1,3 +1,4 @@
+import type { SalesDocumentStatus } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 import { ApiError, cleanString, roundMoney } from "../utils/http.js";
 
@@ -8,7 +9,7 @@ const IDS = new Set([
   "grocery-finance-summary",
 ]);
 
-const INVALID = ["DRAFT", "CANCELLED", "VOID"];
+const INVALID: SalesDocumentStatus[] = ["DRAFT", "CANCELLED", "VOID"];
 const money = (value: unknown) => roundMoney(Number(value || 0));
 const pct = (value: unknown, base: unknown) => {
   const denominator = Number(base || 0);
