@@ -6,6 +6,7 @@ import {
   systemRoleDefinitions,
 } from "../dist/services/system-role-definitions.js";
 import { hasPermission } from "../dist/services/access.service.js";
+import { ensureSystemRoles } from "../dist/services/system-roles.service.js";
 
 const byName = new Map(systemRoleDefinitions.map((role) => [role.name, role]));
 const definedPermissions = new Set(permissionDefinitions.map(([key]) => key));
@@ -110,6 +111,44 @@ test("legacy untouched role permissions upgrade without overriding customized ro
 
   const customized = ["sales_documents.view", "reports.view"];
   assert.deepEqual(effectivePermissionsForRole("Retail Manager", customized), [...customized].sort());
+});
+
+test("system role seeding reuses tenant role families and avoids legacy duplicates", async () => {
+  const existing = [
+    { id: "manager", name: "Retail Manager", permissions: byName.get("Manager").legacyPermissions },
+    { id: "cashier", name: "Retail Cashier", permissions: byName.get("Cashier").legacyPermissions },
+    { id: "salesman", name: "Salesman", permissions: byName.get("Salesman").legacyPermissions },
+    { id: "warehouse", name: "Warehouse", permissions: byName.get("Warehouse").legacyPermissions },
+    { id: "owner", name: "Owner", permissions: ["*"] },
+  ];
+  const created = [];
+  const updated = [];
+  const tx = {
+    role: {
+      findMany: async () => existing.map((role) => ({ ...role })),
+      update: async ({ where, data }) => {
+        updated.push({ id: where.id, data });
+        return { ...existing.find((role) => role.id === where.id), ...data };
+      },
+      create: async ({ data }) => {
+        const role = { id: `created-${data.name}`, ...data };
+        created.push(role);
+        return role;
+      },
+    },
+  };
+
+  await ensureSystemRoles(tx, "business-1");
+  const createdNames = created.map((role) => role.name).sort();
+  assert.deepEqual(createdNames, ["Accountant", "Admin", "Auditor"]);
+  assert.equal(createdNames.includes("Manager"), false);
+  assert.equal(createdNames.includes("Cashier"), false);
+  assert.equal(createdNames.includes("Salesperson"), false);
+  assert.equal(createdNames.includes("Storekeeper"), false);
+  assert.equal(createdNames.includes("Salesman"), false);
+  assert.equal(createdNames.includes("Warehouse"), false);
+  assert.ok(updated.some((entry) => entry.id === "manager" && entry.data.permissions.includes("products.manage")));
+  assert.ok(updated.some((entry) => entry.id === "warehouse" && entry.data.permissions.includes("inventory.transfer")));
 });
 
 test("permission evaluation honors owner, admin, exact and wildcard access", () => {
