@@ -8,11 +8,12 @@ const workflowPath = new URL('../../.github/workflows/retail-r13-seven-role-live
 const adapter = fs.readFileSync(adapterPath, 'utf8');
 const workflow = fs.readFileSync(workflowPath, 'utf8');
 
-test('Retail live registration uses bounded retries and traceable diagnostics', () => {
-  assert.match(adapter, /retries: 5/);
+test('Retail live registration respects the five-attempt limiter and preserves diagnostics', () => {
+  assert.match(adapter, /retries: 4/);
+  assert.doesNotMatch(adapter, /retries: 5/);
   assert.match(adapter, /referenceId/);
   assert.match(adapter, /public API error diagnostics/);
-  assert.match(adapter, /bounded tenant-registration retries/);
+  assert.match(adapter, /rate-limit-safe tenant-registration retries/);
   assert.match(workflow, /qa-retail-live-audit-with-registration-resilience\.mjs/);
 });
 
