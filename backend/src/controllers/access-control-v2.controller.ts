@@ -92,9 +92,9 @@ export async function updateRolePermissionsV2(req: Request, res: Response) {
       return res.status(400).json({ ok: false, error: { message: "permissions must be an array" } });
     }
 
-    const allowed = new Set(permissionDefinitions.map(([key]) => key));
-    const permissions = [
-      ...new Set(
+    const allowed = new Set<string>(permissionDefinitions.map(([key]) => key));
+    const permissions: string[] = [
+      ...new Set<string>(
         req.body.permissions
           .map((item: unknown) => String(item || "").trim())
           .filter((item: string) => allowed.has(item) || item === "*"),
