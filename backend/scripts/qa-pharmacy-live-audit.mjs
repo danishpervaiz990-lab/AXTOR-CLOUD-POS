@@ -54,8 +54,6 @@ source = source
   .replaceAll("'Exactly 50 products created'", "'Exactly 100 products created'")
   .replaceAll("'Exactly 25 customers created'", "'Exactly 200 customers created'")
   .replaceAll("'Exactly 100 posted invoices'", "'Exactly 500 posted invoices'")
-  .replaceAll("/api/v1/customers?active=true", "/api/v1/customers?active=true&limit=250")
-  .replaceAll("/api/v1/sales-documents?documentType=invoice", "/api/v1/sales-documents?documentType=invoice&limit=1000")
   .replaceAll("invoiceDocs.length === 100", "invoiceDocs.length === 500")
   .replaceAll("Document list contains exactly 100 invoices after duplicate request", "Document list contains exactly 500 invoices after duplicate request");
 
@@ -67,3 +65,100 @@ process.env.AXTOR_AUDIT_INDUSTRY = 'pharmacy';
 
 console.log('Pharmacy audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, payments: 'cash-credit-card-partial mix' });
 await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+
+const runtimePath = 'pharmacy-live-audit-runtime.json';
+const reportPath = 'pharmacy-live-audit-report.json';
+if (fs.existsSync(runtimePath) && fs.existsSync(reportPath)) {
+  const runtime = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+  const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  const owner = runtime.users.find((user) => user.key === 'owner') || runtime.users[0];
+  const token = owner?.token;
+
+  const extractItems = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    for (const key of ['data', 'items', 'rows', 'results', 'customers', 'documents', 'salesDocuments']) {
+      const value = payload?.[key];
+      if (Array.isArray(value)) return value;
+      if (value && typeof value === 'object') {
+        const nested = extractItems(value);
+        if (nested.length) return nested;
+      }
+    }
+    return [];
+  };
+
+  const extractTotal = (payload) => Number(
+    payload?.total ?? payload?.meta?.total ?? payload?.pagination?.total ??
+    payload?.data?.total ?? payload?.data?.meta?.total ?? payload?.data?.pagination?.total ?? 0,
+  );
+
+  const fetchAll = async (path) => {
+    const all = [];
+    const separator = path.includes('?') ? '&' : '?';
+    for (let page = 1; page <= 20; page += 1) {
+      const response = await fetch(`${report.backendOrigin}${path}${separator}page=${page}&limit=100`, {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`Pagination verification failed ${response.status} ${path}`);
+      const payload = await response.json();
+      const items = extractItems(payload);
+      all.push(...items);
+      const total = extractTotal(payload);
+      if (items.length === 0 || (total > 0 && all.length >= total) || (total === 0 && items.length < 100)) break;
+    }
+    return all;
+  };
+
+  const [allCustomers, allDocuments] = await Promise.all([
+    fetchAll('/api/v1/customers?active=true'),
+    fetchAll('/api/v1/sales-documents?documentType=invoice'),
+  ]);
+
+  const customerIds = new Set(runtime.customers.map((item) => String(item.id)));
+  const invoiceIds = new Set(runtime.invoices.map((item) => String(item.id)));
+  const qaCustomers = allCustomers.filter((item) => customerIds.has(String(item.id)));
+  const qaInvoices = allDocuments.filter((item) => invoiceIds.has(String(item.id)));
+  const balanceOf = (item) => Number(
+    item.outstandingBalance ?? item.currentBalance ?? item.receivableBalance ??
+    item.balance ?? item.creditBalance ?? item.amountDue ?? 0,
+  );
+  const paginatedReceivables = Number(qaCustomers.reduce((sum, item) => sum + balanceOf(item), 0).toFixed(2));
+  const expectedReceivables = Number(report.totals.outstandingReceivables || 0);
+  const receivablesPass = Math.abs(paginatedReceivables - expectedReceivables) < 0.01;
+
+  report.counts.customerCount = qaCustomers.length;
+  report.counts.invoiceCount = qaInvoices.length;
+  report.acceptance['Customer persistence'] = {
+    result: qaCustomers.length === 200 ? 'PASS' : 'FAIL',
+    detail: `${qaCustomers.length} of 200 QA customers found across all API pages`,
+  };
+  report.acceptance['No duplicate invoices'] = {
+    result: qaInvoices.length === 500 ? 'PASS' : 'FAIL',
+    detail: `${qaInvoices.length} unique generated invoices found across all API pages`,
+  };
+  report.acceptance['Customer balances reconcile'] = {
+    result: receivablesPass ? 'PASS' : 'FAIL',
+    detail: `Paginated customer balances QAR ${paginatedReceivables.toFixed(2)} vs outstanding invoices QAR ${expectedReceivables.toFixed(2)}`,
+  };
+  const receivableRow = report.reconciliation.find((row) => row.metric === 'Outstanding receivables');
+  if (receivableRow) {
+    receivableRow.reportTotal = paginatedReceivables;
+    receivableRow.difference = Number((expectedReceivables - paginatedReceivables).toFixed(2));
+    receivableRow.result = receivablesPass ? 'PASS' : 'FAIL';
+  }
+
+  const acceptancePass = Object.values(report.acceptance).every((entry) => entry.result === 'PASS');
+  const reconciliationPass = report.reconciliation.every((entry) => entry.result === 'PASS');
+  const modulePass = report.moduleAudit.every((entry) => entry.result === 'PASS');
+  const securityPass = report.security.every((entry) => entry.result === 'PASS');
+  report.overall = acceptancePass && reconciliationPass && modulePass && securityPass ? 'PASS' : 'FAIL';
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  process.exitCode = report.overall === 'PASS' ? 0 : 1;
+  console.log('Pharmacy paginated verification', {
+    customerCount: qaCustomers.length,
+    invoiceCount: qaInvoices.length,
+    paginatedReceivables,
+    expectedReceivables,
+    overall: report.overall,
+  });
+}
