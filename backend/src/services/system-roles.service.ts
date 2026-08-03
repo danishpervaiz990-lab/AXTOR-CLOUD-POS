@@ -1,29 +1,32 @@
 import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
-import { shouldUpgradeLegacySystemRolePermissions, systemRoleDefinitions } from "./system-role-definitions.js";
+import {
+  findSystemRoleDefinition,
+  shouldUpgradeLegacySystemRolePermissions,
+  systemRoleDefinitions,
+} from "./system-role-definitions.js";
 
 const legacyAliasRoles = new Set(["Salesman", "Warehouse"]);
 
+function roleFamily(name: unknown): string {
+  const value = String(name || "").trim().toLowerCase();
+  if (value.includes("owner")) return "owner";
+  if (value.includes("admin")) return "admin";
+  if (value.includes("manager") || value.includes("supervisor")) return "manager";
+  if (value.includes("cashier") || value.includes("till operator")) return "cashier";
+  if (value.includes("accountant") || value.includes("finance")) return "accountant";
+  if (value.includes("auditor") || value === "audit") return "auditor";
+  if (value.includes("storekeeper") || value.includes("warehouse")) return "storekeeper";
+  if (value.includes("salesperson") || value.includes("salesman") || value.includes("sales representative") || value.includes("van sales")) return "salesperson";
+  return value;
+}
+
 export async function ensureSystemRoles(tx: any, businessId: string): Promise<void> {
-  for (const definition of systemRoleDefinitions) {
-    const current = await tx.role.findUnique({
-      where: { businessId_name: { businessId, name: definition.name } },
-    });
+  const existingRoles = await tx.role.findMany({ where: { businessId } });
 
-    if (!current) {
-      if (legacyAliasRoles.has(definition.name)) continue;
-      await tx.role.create({
-        data: {
-          businessId,
-          name: definition.name,
-          description: definition.description,
-          permissions: [...definition.permissions],
-          isSystemRole: true,
-        },
-      });
-      continue;
-    }
-
+  for (const current of existingRoles) {
+    const definition = findSystemRoleDefinition(current.name);
+    if (!definition) continue;
     const upgradePermissions = shouldUpgradeLegacySystemRolePermissions(current.name, current.permissions);
     await tx.role.update({
       where: { id: current.id },
@@ -33,6 +36,24 @@ export async function ensureSystemRoles(tx: any, businessId: string): Promise<vo
         ...(upgradePermissions ? { permissions: [...definition.permissions] } : {}),
       },
     });
+  }
+
+  for (const definition of systemRoleDefinitions) {
+    if (legacyAliasRoles.has(definition.name)) continue;
+    const family = roleFamily(definition.name);
+    const equivalent = existingRoles.some((role: any) => roleFamily(role.name) === family);
+    if (equivalent) continue;
+
+    const created = await tx.role.create({
+      data: {
+        businessId,
+        name: definition.name,
+        description: definition.description,
+        permissions: [...definition.permissions],
+        isSystemRole: true,
+      },
+    });
+    existingRoles.push(created);
   }
 }
 
