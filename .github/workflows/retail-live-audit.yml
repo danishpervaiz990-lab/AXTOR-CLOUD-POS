@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: axtor-live-tenant-registration
+  cancel-in-progress: false
+
 jobs:
   retail-live-audit:
     runs-on: ubuntu-latest
