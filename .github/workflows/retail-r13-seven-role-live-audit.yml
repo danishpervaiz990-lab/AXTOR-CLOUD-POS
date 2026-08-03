@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-retail-live-audit.mjs"
+      - "backend/scripts/debug-retail-audit-role-source.mjs"
       - "backend/scripts/qa-retail-r13-seven-role-audit.mjs"
       - "backend/scripts/qa-retail-r13-seven-role-browser-audit.mjs"
       - ".github/workflows/retail-r13-seven-role-live-audit.yml"
@@ -26,6 +27,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
+
+      - name: Show historical Retail role resolver
+        run: node backend/scripts/debug-retail-audit-role-source.mjs
 
       - name: Run full isolated Retail transaction audit
         id: transaction_audit
