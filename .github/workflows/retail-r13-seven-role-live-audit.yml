@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-retail-live-audit.mjs"
+      - "backend/scripts/qa-retail-r13-cashier-payment-permission.mjs"
       - "backend/scripts/qa-retail-r13-seven-role-audit.mjs"
       - "backend/scripts/qa-retail-r13-seven-role-browser-audit.mjs"
       - ".github/workflows/retail-r13-seven-role-live-audit.yml"
@@ -63,9 +64,15 @@ jobs:
         continue-on-error: true
         run: node backend/scripts/qa-retail-browser-report-verify.mjs
 
+      - name: Verify Cashier can receive customer payments
+        id: cashier_payment_audit
+        if: always() && steps.baseline_browser_report.outcome == 'success'
+        continue-on-error: true
+        run: node backend/scripts/qa-retail-r13-cashier-payment-permission.mjs
+
       - name: Run seven-role API allow and deny audit
         id: seven_role_api_audit
-        if: always() && steps.baseline_browser_report.outcome == 'success'
+        if: always() && steps.cashier_payment_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-retail-r13-seven-role-audit.mjs
 
@@ -106,6 +113,7 @@ jobs:
           name: retail-r13-seven-role-live-audit-${{ github.run_id }}
           path: |
             retail-live-audit-report.json
+            retail-r13-cashier-payment-permission.json
             retail-r13-seven-role-report.json
             retail-live-audit-credentials.p7m
             retail-r13-seven-role-credentials.p7m
@@ -122,6 +130,7 @@ jobs:
           VOLUME_OUTCOME: ${{ steps.volume_audit.outcome }}
           BASELINE_BROWSER_OUTCOME: ${{ steps.baseline_browser_audit.outcome }}
           BASELINE_REPORT_OUTCOME: ${{ steps.baseline_browser_report.outcome }}
+          CASHIER_PAYMENT_OUTCOME: ${{ steps.cashier_payment_audit.outcome }}
           SEVEN_ROLE_API_OUTCOME: ${{ steps.seven_role_api_audit.outcome }}
           SEVEN_ROLE_BROWSER_OUTCOME: ${{ steps.seven_role_browser_audit.outcome }}
         run: |
@@ -129,16 +138,20 @@ jobs:
           test "$VOLUME_OUTCOME" = "success"
           test "$BASELINE_BROWSER_OUTCOME" = "success"
           test "$BASELINE_REPORT_OUTCOME" = "success"
+          test "$CASHIER_PAYMENT_OUTCOME" = "success"
           test "$SEVEN_ROLE_API_OUTCOME" = "success"
           test "$SEVEN_ROLE_BROWSER_OUTCOME" = "success"
           test -s retail-live-audit-report.json
+          test -s retail-r13-cashier-payment-permission.json
           test -s retail-r13-seven-role-report.json
           node - <<'NODE'
           const base = require('./retail-live-audit-report.json');
+          const cashier = require('./retail-r13-cashier-payment-permission.json');
           const r13 = require('./retail-r13-seven-role-report.json');
           console.log('Retail baseline:', base.overall);
+          console.log('Retail Cashier payment:', cashier.result, cashier.observedStatus);
           console.log('Retail R-13:', r13.overall, r13.summary);
-          if (base.overall !== 'PASS' || r13.overall !== 'PASS') process.exit(1);
+          if (base.overall !== 'PASS' || cashier.result !== 'PASS' || r13.overall !== 'PASS') process.exit(1);
           if (r13.summary?.userCount !== 7 || r13.summary?.browserUsersPassed !== 7) process.exit(1);
           if (r13.summary?.apiChecks !== r13.summary?.apiChecksPassed) process.exit(1);
           NODE
