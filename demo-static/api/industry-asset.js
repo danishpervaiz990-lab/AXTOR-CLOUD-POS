@@ -40,11 +40,8 @@ const CONTENT_TYPES = Object.freeze({
 
 function safePath(value, fallback) {
   let decoded;
-  try {
-    decoded = decodeURIComponent(String(value || "")).replace(/^\/+/, "");
-  } catch {
-    return null;
-  }
+  try { decoded = decodeURIComponent(String(value || "")).replace(/^\/+/, ""); }
+  catch { return null; }
   const selected = decoded || fallback;
   if (!selected || selected.length > 500 || selected.includes("..") || selected.includes("\\") || !/^[A-Za-z0-9._/()-]+$/.test(selected)) return null;
   return selected;
@@ -77,8 +74,13 @@ function injectIndustryRuntime(industry, pathname, bytes, type) {
     scripts.push('<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>');
   }
 
-  if (industry === "retail" && /(^|\/)terminal\.html$/i.test(pathname) && !html.includes("retail-terminal-certification.js")) {
-    scripts.push('<script src="js/retail-terminal-certification.js?v=20260803-retail-cert1"></script>');
+  if (industry === "retail") {
+    if (/(^|\/)terminal\.html$/i.test(pathname) && !html.includes("retail-terminal-certification.js")) {
+      scripts.push('<script src="js/retail-terminal-certification.js?v=20260803-retail-cert1"></script>');
+    }
+    if (!html.includes("retail-sales-finance-certification.js")) {
+      scripts.push('<script src="js/retail-sales-finance-certification.js?v=20260803-retail-finance1"></script>');
+    }
   }
 
   if (!scripts.length) return bytes;
@@ -104,7 +106,7 @@ export default async function industryAsset(request) {
   try {
     const upstream = await fetch(source, {
       method: request.method,
-      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.2" },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.3" },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
