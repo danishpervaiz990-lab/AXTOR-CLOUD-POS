@@ -54,11 +54,11 @@ export async function createUserV2(req: Request, res: Response) {
         if (!branch) throw new Error("Selected branch is invalid or inactive");
       }
 
-      const roleIds = [
-        ...new Set(
+      const roleIds: string[] = [
+        ...new Set<string>(
           requestedRoleIds
             .map((item: unknown) => String(item || "").trim())
-            .filter(Boolean),
+            .filter((item: string) => Boolean(item)),
         ),
       ];
       const roles = roleIds.length
