@@ -8,6 +8,7 @@ on:
       - "backend/scripts/qa-retail-live-audit.mjs"
       - "backend/scripts/qa-retail-r13-cashier-payment-permission.mjs"
       - "backend/scripts/qa-retail-r13-seven-role-audit.mjs"
+      - "backend/scripts/qa-retail-r13-seven-role-audit-with-password-rotation.mjs"
       - "backend/scripts/qa-retail-r13-seven-role-browser-audit.mjs"
       - ".github/workflows/retail-r13-seven-role-live-audit.yml"
 
@@ -74,7 +75,7 @@ jobs:
         id: seven_role_api_audit
         if: always() && steps.cashier_payment_audit.outcome == 'success'
         continue-on-error: true
-        run: node backend/scripts/qa-retail-r13-seven-role-audit.mjs
+        run: node backend/scripts/qa-retail-r13-seven-role-audit-with-password-rotation.mjs
 
       - name: Run seven-role live browser audit
         id: seven_role_browser_audit
@@ -154,4 +155,5 @@ jobs:
           if (base.overall !== 'PASS' || cashier.result !== 'PASS' || r13.overall !== 'PASS') process.exit(1);
           if (r13.summary?.userCount !== 7 || r13.summary?.browserUsersPassed !== 7) process.exit(1);
           if (r13.summary?.apiChecks !== r13.summary?.apiChecksPassed) process.exit(1);
+          if (r13.summary?.passwordRotationBlocksRemaining !== 0) process.exit(1);
           NODE
