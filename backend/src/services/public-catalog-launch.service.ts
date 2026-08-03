@@ -20,6 +20,9 @@ const allowedTaxSystems = new Set(["none", "vat", "gst", "sales_tax"]);
 const allowedBillingCycles = new Set(["MONTHLY", "ANNUAL"]);
 const allowedPrintProfiles = new Set(["a4", "80mm", "58mm"]);
 
+type RoleProvisioningDb = Pick<Prisma.TransactionClient, "role">;
+type SettingProvisioningDb = Pick<Prisma.TransactionClient, "industrySetting">;
+
 function requiredText(value: unknown, label: string, max = 160): string {
   const text = String(value ?? "").trim();
   if (!text) throw new PublicCatalogError(400, "VALIDATION_ERROR", `${label} is required`);
@@ -138,7 +141,7 @@ function assertPackReady(industryCode: string): IndustryPack {
   return pack;
 }
 
-async function createIndustryRoles(tx: Prisma.TransactionClient, businessId: string, pack: IndustryPack): Promise<number> {
+async function createIndustryRoles(db: RoleProvisioningDb, businessId: string, pack: IndustryPack): Promise<number> {
   let count = 0;
   for (const [name, permissions] of Object.entries(pack.defaultRoles)) {
     const roleName = name.trim();
@@ -148,13 +151,13 @@ async function createIndustryRoles(tx: Prisma.TransactionClient, businessId: str
       ...(canonical?.permissions || []),
     ].map(item => String(item).trim()).filter(Boolean))];
     if (!roleName || roleName.toLowerCase() === "owner" || !uniquePermissions.length) continue;
-    await tx.role.create({ data: { businessId, name: roleName, description: `Default ${pack.name} operational role`, isSystemRole: true, permissions: uniquePermissions } });
+    await db.role.create({ data: { businessId, name: roleName, description: `Default ${pack.name} operational role`, isSystemRole: true, permissions: uniquePermissions } });
     count += 1;
   }
   return count;
 }
 
-async function createIndustrySettings(tx: Prisma.TransactionClient, businessId: string, pack: IndustryPack, printProfile: string): Promise<void> {
+async function createIndustrySettings(db: SettingProvisioningDb, businessId: string, pack: IndustryPack, printProfile: string): Promise<void> {
   const values: Array<[string, Prisma.InputJsonValue]> = [
     ["industry.defaults", pack.defaultSettings as Prisma.InputJsonValue],
     ["industry.modules", { modules: pack.modules, sidebarOrder: pack.sidebarOrder, dashboardWidgets: pack.dashboardWidgets } as Prisma.InputJsonValue],
@@ -163,7 +166,17 @@ async function createIndustrySettings(tx: Prisma.TransactionClient, businessId: 
     ["industry.forms", { entities: pack.entities.map(entity => ({ type: entity.type, label: entity.label, pluralLabel: entity.pluralLabel, icon: entity.icon, permission: entity.permission, statuses: entity.statuses, fields: entity.fields })) } as Prisma.InputJsonValue],
     ["industry.launch", { registryVersion: INDUSTRY_REGISTRY_VERSION, operationalStatus: pack.operationalStatus, registrationEnabled: pack.registrationEnabled, activatedAt: new Date().toISOString() } as Prisma.InputJsonValue],
   ];
-  for (const [key, value] of values) await tx.industrySetting.create({ data: { businessId, key, value } });
+  for (const [key, value] of values) await db.industrySetting.create({ data: { businessId, key, value } });
+}
+
+async function cleanupProvisioningBusiness(businessId: string): Promise<boolean> {
+  try {
+    await prisma.business.deleteMany({ where: { id: businessId } });
+    return true;
+  } catch (cleanupError) {
+    console.error("Tenant provisioning cleanup failed", { businessId, cleanupError });
+    return false;
+  }
 }
 
 export async function register(req: Request, input: Record<string, unknown>) {
@@ -215,70 +228,80 @@ export async function register(req: Request, input: Record<string, unknown>) {
   if (!plan?.active) throw new PublicCatalogError(409, "PLAN_UNAVAILABLE", "Selected subscription plan is unavailable");
   if (!currency?.active) throw new PublicCatalogError(409, "CURRENCY_UNAVAILABLE", "Selected currency is unavailable");
 
-  // Password derivation is CPU-heavy. Complete it before opening a database
-  // transaction so concurrent tenant registrations do not hold connections idle.
   const ownerPasswordHash = hashPassword(password);
   const slug = `${slugBase(businessName)}-${crypto.randomBytes(3).toString("hex")}`;
   const now = new Date();
   const trialEndsAt = new Date(now.getTime() + 14 * 86400000);
   const ipAddress = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim() || null;
   const userAgent = String(req.headers["user-agent"] || "").slice(0, 500) || null;
+  let createdBusinessId: string | null = null;
 
   try {
-    return await prisma.$transaction(async tx => {
-      const business = await tx.business.create({ data: { name: businessName, slug, status: "TRIAL", country, timezone, currency: baseCurrency, subscriptionPlan: plan.code, subscriptionStatus: "TRIAL", trialEndsAt, defaultLanguage: language, onboardingState: "COMPLETED", onboardingStep: 18, onboardingCompletedAt: now, taxLabel } });
-      const branch = await tx.branch.create({ data: { businessId: business.id, name: firstBranch, code: "MAIN", country, type: pack.name } });
-      const warehouse = await tx.warehouse.create({ data: { businessId: business.id, branchId: branch.id, name: firstWarehouse, code: "MAIN" } });
-      const ownerRole = await tx.role.create({ data: { businessId: business.id, name: "Owner", description: "Business owner with full tenant access", isSystemRole: true, permissions: ["*"] } });
-      const rolePresetCount = await createIndustryRoles(tx, business.id, pack);
-      const owner = await tx.user.create({ data: { businessId: business.id, branchId: branch.id, name: ownerName, email, passwordHash: ownerPasswordHash, preferredLanguage: language, status: "ACTIVE" } });
-      await tx.userRole.create({ data: { businessId: business.id, userId: owner.id, roleId: ownerRole.id } });
-      const counter = await tx.counter.create({ data: { businessId: business.id, branchId: branch.id, name: firstCounter, code: "POS-1", cashierUserId: owner.id } });
-      await tx.businessIndustry.create({ data: { businessId: business.id, industryId: industry.id, provisioningState: "completed", registryVersion: INDUSTRY_REGISTRY_VERSION } });
-      await tx.tenantSubscription.create({ data: { businessId: business.id, planId: plan.id, status: "TRIAL", billingCycle: billingCycle as "MONTHLY" | "ANNUAL", startsAt: now, trialEndsAt, currentPeriodStart: now, currentPeriodEnd: trialEndsAt, isCurrent: true, provider: "manual" } });
-      await tx.businessCurrency.create({ data: { businessId: business.id, currencyCode: baseCurrency, isBase: true, active: true } });
-      await tx.businessTaxSetting.create({ data: { businessId: business.id, taxSystem, taxLabel, registrationNumber: taxRegistrationNumber, pricesIncludeTax: input.pricesIncludeTax === true } });
-      await tx.businessLocale.create({ data: { businessId: business.id, countryCode: country, languageCode: language, timezone, dateFormat: String(input.dateFormat || "yyyy-MM-dd"), numberLocale: String(input.numberLocale || "en-QA") } });
-      await tx.tenantOnboarding.create({ data: { businessId: business.id, currentStep: 18, completedSteps: Array.from({ length: 18 }, (_, index) => index + 1), state: "COMPLETED", answers: { businessName, ownerName, email, country, timezone, baseCurrency, language, industryCode, planCode, billingCycle, branchName: firstBranch, warehouseName: firstWarehouse, counterName: firstCounter, taxSystem, printProfile, sampleDataRequested: input.sampleDataRequested === true }, sampleDataRequested: input.sampleDataRequested === true, completedAt: now } });
-      await createIndustrySettings(tx, business.id, pack, printProfile);
-      await tx.documentCounter.createMany({ data: [
-        { businessId: business.id, branchId: branch.id, documentType: "INVOICE", prefix: invoicePrefix, nextNumber: 1, padding: 6 },
-        { businessId: business.id, branchId: branch.id, documentType: "QUOTATION", prefix: "QUO", nextNumber: 1, padding: 6 },
-        { businessId: business.id, branchId: branch.id, documentType: "DELIVERY_NOTE", prefix: "DN", nextNumber: 1, padding: 6 },
-      ] });
+    // Railway's pooled production connection cannot reliably start Prisma
+    // interactive transactions. Provision with ordinary queries and compensate
+    // by cascade-deleting the temporary Business if any dependent write fails.
+    let business = await prisma.business.create({ data: { name: businessName, slug, status: "SUSPENDED", country, timezone, currency: baseCurrency, subscriptionPlan: plan.code, subscriptionStatus: "TRIAL", trialEndsAt, defaultLanguage: language, onboardingState: "IN_PROGRESS", onboardingStep: 0, taxLabel } });
+    createdBusinessId = business.id;
 
-      const profileRows = [
-        { code: "invoice-a4", name: "A4 Invoice", paperSize: "A4", widthMm: 210, heightMm: 297 },
-        { code: "receipt-80", name: "80 mm Receipt", paperSize: "THERMAL", widthMm: 80, heightMm: null },
-        { code: "receipt-58", name: "58 mm Receipt", paperSize: "THERMAL", widthMm: 58, heightMm: null },
-      ];
-      for (const profile of profileRows) {
-        await tx.printProfile.create({ data: { businessId: business.id, code: profile.code, name: profile.name, documentType: "invoice", paperSize: profile.paperSize, widthMm: profile.widthMm, heightMm: profile.heightMm, isDefault: profile.code === (printProfile === "80mm" ? "receipt-80" : printProfile === "58mm" ? "receipt-58" : "invoice-a4"), config: { fields: pack.printFields, browserPrint: true, industryCode: pack.code }, createdByUserId: owner.id, updatedByUserId: owner.id } });
-      }
-      for (const rule of pack.notificationRules) {
-        await tx.notificationRule.create({ data: { businessId: business.id, code: rule.code, name: rule.code.split("-").map(part => part[0]?.toUpperCase() + part.slice(1)).join(" "), eventType: rule.eventType, channels: ["in_app"], schedule: rule.daysBefore ? { daysBefore: rule.daysBefore } : undefined, conditions: {}, template: { title: pack.name, body: `Action required for ${rule.eventType}` }, createdByUserId: owner.id, updatedByUserId: owner.id } });
-      }
+    const branch = await prisma.branch.create({ data: { businessId: business.id, name: firstBranch, code: "MAIN", country, type: pack.name } });
+    const warehouse = await prisma.warehouse.create({ data: { businessId: business.id, branchId: branch.id, name: firstWarehouse, code: "MAIN" } });
+    const ownerRole = await prisma.role.create({ data: { businessId: business.id, name: "Owner", description: "Business owner with full tenant access", isSystemRole: true, permissions: ["*"] } });
+    const rolePresetCount = await createIndustryRoles(prisma, business.id, pack);
+    const owner = await prisma.user.create({ data: { businessId: business.id, branchId: branch.id, name: ownerName, email, passwordHash: ownerPasswordHash, preferredLanguage: language, status: "ACTIVE" } });
+    await prisma.userRole.create({ data: { businessId: business.id, userId: owner.id, roleId: ownerRole.id } });
+    const counter = await prisma.counter.create({ data: { businessId: business.id, branchId: branch.id, name: firstCounter, code: "POS-1", cashierUserId: owner.id } });
+    await prisma.businessIndustry.create({ data: { businessId: business.id, industryId: industry.id, provisioningState: "completed", registryVersion: INDUSTRY_REGISTRY_VERSION } });
+    await prisma.tenantSubscription.create({ data: { businessId: business.id, planId: plan.id, status: "TRIAL", billingCycle: billingCycle as "MONTHLY" | "ANNUAL", startsAt: now, trialEndsAt, currentPeriodStart: now, currentPeriodEnd: trialEndsAt, isCurrent: true, provider: "manual" } });
+    await prisma.businessCurrency.create({ data: { businessId: business.id, currencyCode: baseCurrency, isBase: true, active: true } });
+    await prisma.businessTaxSetting.create({ data: { businessId: business.id, taxSystem, taxLabel, registrationNumber: taxRegistrationNumber, pricesIncludeTax: input.pricesIncludeTax === true } });
+    await prisma.businessLocale.create({ data: { businessId: business.id, countryCode: country, languageCode: language, timezone, dateFormat: String(input.dateFormat || "yyyy-MM-dd"), numberLocale: String(input.numberLocale || "en-QA") } });
+    await prisma.tenantOnboarding.create({ data: { businessId: business.id, currentStep: 18, completedSteps: Array.from({ length: 18 }, (_, index) => index + 1), state: "COMPLETED", answers: { businessName, ownerName, email, country, timezone, baseCurrency, language, industryCode, planCode, billingCycle, branchName: firstBranch, warehouseName: firstWarehouse, counterName: firstCounter, taxSystem, printProfile, sampleDataRequested: input.sampleDataRequested === true }, sampleDataRequested: input.sampleDataRequested === true, completedAt: now } });
+    await createIndustrySettings(prisma, business.id, pack, printProfile);
+    await prisma.documentCounter.createMany({ data: [
+      { businessId: business.id, branchId: branch.id, documentType: "INVOICE", prefix: invoicePrefix, nextNumber: 1, padding: 6 },
+      { businessId: business.id, branchId: branch.id, documentType: "QUOTATION", prefix: "QUO", nextNumber: 1, padding: 6 },
+      { businessId: business.id, branchId: branch.id, documentType: "DELIVERY_NOTE", prefix: "DN", nextNumber: 1, padding: 6 },
+    ] });
 
-      const launchEvidence = { industryCode, planCode, registryVersion: INDUSTRY_REGISTRY_VERSION, rolePresetCount, moduleCount: pack.modules.length, reportCount: pack.reports.length, formSchemaCount: pack.entities.length, notificationRuleCount: pack.notificationRules.length, printFieldCount: pack.printFields.length, sampleDataRequested: input.sampleDataRequested === true };
-      await tx.auditLog.create({ data: { businessId: business.id, userId: owner.id, action: "tenant.provisioned", entityType: "Business", entityId: business.id, after: launchEvidence, ipAddress, userAgent } });
+    const profileRows = [
+      { code: "invoice-a4", name: "A4 Invoice", paperSize: "A4", widthMm: 210, heightMm: 297 },
+      { code: "receipt-80", name: "80 mm Receipt", paperSize: "THERMAL", widthMm: 80, heightMm: null },
+      { code: "receipt-58", name: "58 mm Receipt", paperSize: "THERMAL", widthMm: 58, heightMm: null },
+    ];
+    for (const profile of profileRows) {
+      await prisma.printProfile.create({ data: { businessId: business.id, code: profile.code, name: profile.name, documentType: "invoice", paperSize: profile.paperSize, widthMm: profile.widthMm, heightMm: profile.heightMm, isDefault: profile.code === (printProfile === "80mm" ? "receipt-80" : printProfile === "58mm" ? "receipt-58" : "invoice-a4"), config: { fields: pack.printFields, browserPrint: true, industryCode: pack.code }, createdByUserId: owner.id, updatedByUserId: owner.id } });
+    }
+    for (const rule of pack.notificationRules) {
+      await prisma.notificationRule.create({ data: { businessId: business.id, code: rule.code, name: rule.code.split("-").map(part => part[0]?.toUpperCase() + part.slice(1)).join(" "), eventType: rule.eventType, channels: ["in_app"], schedule: rule.daysBefore ? { daysBefore: rule.daysBefore } : undefined, conditions: {}, template: { title: pack.name, body: `Action required for ${rule.eventType}` }, createdByUserId: owner.id, updatedByUserId: owner.id } });
+    }
 
-      const response = {
-        business: { id: business.id, name: business.name, slug: business.slug, status: business.status, timezone: business.timezone, currency: business.currency, industryCode: pack.code, industry: { code: pack.code, name: pack.name } },
-        owner: { email: owner.email },
-        industry: { code: pack.code, name: pack.name, registryVersion: INDUSTRY_REGISTRY_VERSION, operationalStatus: pack.operationalStatus },
-        plan: { code: plan.code, name: plan.name },
-        provisioning: { state: "completed", branchId: branch.id, warehouseId: warehouse.id, counterId: counter.id, rolePresetCount, moduleCount: pack.modules.length, reportCount: pack.reports.length, formSchemaCount: pack.entities.length },
-        next: { page: "router.html", industryCode: pack.code },
-      };
-      await tx.tenantProvisioningRun.create({ data: { businessId: business.id, idempotencyKey, requestHash: fingerprint, status: "completed", response } });
-      return plain(response);
-    });
+    const launchEvidence = { industryCode, planCode, registryVersion: INDUSTRY_REGISTRY_VERSION, rolePresetCount, moduleCount: pack.modules.length, reportCount: pack.reports.length, formSchemaCount: pack.entities.length, notificationRuleCount: pack.notificationRules.length, printFieldCount: pack.printFields.length, sampleDataRequested: input.sampleDataRequested === true };
+    await prisma.auditLog.create({ data: { businessId: business.id, userId: owner.id, action: "tenant.provisioned", entityType: "Business", entityId: business.id, after: launchEvidence, ipAddress, userAgent } });
+
+    business = await prisma.business.update({ where: { id: business.id }, data: { status: "TRIAL", onboardingState: "COMPLETED", onboardingStep: 18, onboardingCompletedAt: now } });
+    const response = {
+      business: { id: business.id, name: business.name, slug: business.slug, status: business.status, timezone: business.timezone, currency: business.currency, industryCode: pack.code, industry: { code: pack.code, name: pack.name } },
+      owner: { email: owner.email },
+      industry: { code: pack.code, name: pack.name, registryVersion: INDUSTRY_REGISTRY_VERSION, operationalStatus: pack.operationalStatus },
+      plan: { code: plan.code, name: plan.name },
+      provisioning: { state: "completed", branchId: branch.id, warehouseId: warehouse.id, counterId: counter.id, rolePresetCount, moduleCount: pack.modules.length, reportCount: pack.reports.length, formSchemaCount: pack.entities.length },
+      next: { page: "router.html", industryCode: pack.code },
+    };
+    await prisma.tenantProvisioningRun.create({ data: { businessId: business.id, idempotencyKey, requestHash: fingerprint, status: "completed", response } });
+    createdBusinessId = null;
+    return plain(response);
   } catch (error: any) {
+    const businessIdToCleanup = createdBusinessId;
+    const cleanupSucceeded = !businessIdToCleanup || await cleanupProvisioningBusiness(businessIdToCleanup);
+
     if (error?.code === "P2002") {
       const retry = await prisma.tenantProvisioningRun.findUnique({ where: { idempotencyKey } });
       if (retry && retry.requestHash === fingerprint) return plain(retry.response);
+      if (!cleanupSucceeded) throw new PublicCatalogError(500, "PROVISIONING_CLEANUP_FAILED", "Workspace provisioning failed and automatic cleanup could not complete", { cleanupRequired: true });
       throw new PublicCatalogError(409, "REGISTRATION_CONFLICT", "A registration with the same unique information already exists");
     }
+
+    if (!cleanupSucceeded) throw new PublicCatalogError(500, "PROVISIONING_CLEANUP_FAILED", "Workspace provisioning failed and automatic cleanup could not complete", { cleanupRequired: true });
     throw error;
   }
 }
