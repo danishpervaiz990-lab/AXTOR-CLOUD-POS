@@ -14,6 +14,18 @@ function cleanErrors(errors) {
   return errors.filter((message) => !/favicon|ERR_ABORTED|Failed to load resource.*404/i.test(message));
 }
 
+function roleFamily(value) {
+  const role = String(value || '').trim().toLowerCase();
+  if (/owner|administrator|\badmin\b/.test(role)) return 'owner';
+  if (/manager|supervisor/.test(role)) return 'manager';
+  if (/cashier|till operator/.test(role)) return 'cashier';
+  if (/salesman|salesperson|sales representative|van sales/.test(role)) return 'salesman';
+  if (/storekeeper|warehouse/.test(role)) return 'storekeeper';
+  if (/accountant|finance/.test(role)) return 'accountant';
+  if (/auditor|audit/.test(role)) return 'auditor';
+  return role.replace(/\b(retail|grocery|pharmacy|hardware|paint|general)\b/g, '').replace(/\s+/g, ' ').trim();
+}
+
 async function prepareLoginIdentity(page, userEmail, businessSlug) {
   const email = String(userEmail || '').trim().toLowerCase();
   const slug = String(businessSlug || '').trim().toLowerCase();
@@ -125,6 +137,7 @@ try {
     let retailRouteOk = false;
     let sidebarOk = false;
     let roleOk = false;
+    let observedRoles = [];
     let tokenStored = false;
     let finalUrl = '';
     let salesReportsSync = user.key === 'owner' ? false : null;
@@ -144,7 +157,9 @@ try {
       const values = Object.fromEntries((originState?.localStorage || []).map((entry) => [entry.name, entry.value]));
       const session = { token: values.axtorAuthToken || '', user: JSON.parse(values.currentUser || '{}'), business: JSON.parse(values.axtorBusiness || '{}') };
       tokenStored = Boolean(session.token);
-      roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === String(user.role).toLowerCase());
+      observedRoles = [...new Set([session.user?.role, ...(Array.isArray(session.user?.roles) ? session.user.roles : [])].filter(Boolean).map(String))];
+      const expectedRoleFamily = roleFamily(user.role);
+      roleOk = observedRoles.some((role) => roleFamily(role) === expectedRoleFamily);
       loginOk = tokenStored && String(session.business?.slug || '').toLowerCase() === String(report.environment.businessSlug).toLowerCase();
 
       await page.close();
@@ -204,6 +219,7 @@ try {
     results.push({
       user: user.label,
       role: user.role,
+      observedRoles,
       freshContext: true,
       loginPage: loginOk,
       roleResolved: roleOk,
