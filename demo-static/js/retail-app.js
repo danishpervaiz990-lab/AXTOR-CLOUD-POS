@@ -43,6 +43,39 @@
     if (target) target.textContent = value;
   }
 
+  function roleFamily(value) {
+    const role = String(value || "").trim().toLowerCase();
+    if (role.includes("owner")) return "owner";
+    if (role.includes("admin")) return "admin";
+    if (role.includes("manager") || role.includes("supervisor")) return "manager";
+    if (role.includes("accountant") || role.includes("finance")) return "accountant";
+    if (role.includes("auditor") || role === "audit") return "auditor";
+    if (role.includes("storekeeper") || role.includes("warehouse")) return "storekeeper";
+    if (role.includes("cashier") || role.includes("till operator")) return "cashier";
+    if (role.includes("salesperson") || role.includes("salesman") || role.includes("sales representative") || role.includes("van sales")) return "salesperson";
+    return role;
+  }
+
+  function canViewFinancialReports(session) {
+    const user = session?.user || {};
+    const roles = [user.role].concat(Array.isArray(user.roles) ? user.roles : []).filter(Boolean);
+    return roles.some(function (role) {
+      return ["owner", "admin", "manager", "accountant", "auditor"].includes(roleFamily(role));
+    });
+  }
+
+  function currentRoleLabel(session) {
+    const user = session?.user || {};
+    return String(user.role || (Array.isArray(user.roles) ? user.roles[0] : "") || "this role");
+  }
+
+  function setReportVisibility(allowed) {
+    document.querySelectorAll("[data-report-access='required']").forEach(function (element) {
+      element.hidden = !allowed;
+      element.setAttribute("aria-hidden", allowed ? "false" : "true");
+    });
+  }
+
   function renderTopProducts(report) {
     const body = document.getElementById("topProductsBody");
     if (!body) return;
@@ -69,55 +102,89 @@
     if (code && code !== "retail") throw new Error("This application is available only to General Retail tenants.");
   }
 
+  async function loadOperationalDashboard() {
+    const values = await Promise.all([
+      window.AxtorAPI.apiGet("/api/v1/dashboard/summary"),
+      window.AxtorAPI.apiGet("/api/v1/products?active=true"),
+      window.AxtorAPI.apiGet("/api/v1/customers?active=true")
+    ]);
+    return {
+      summary: unwrap(values[0]) || {},
+      products: values[1]?.products || unwrap(values[1]) || [],
+      customers: values[2]?.customers || unwrap(values[2]) || []
+    };
+  }
+
+  function renderOperationalValues(operational) {
+    setText("productCount", String(operational.products.length));
+    setText("customerCount", String(operational.customers.length));
+    setText("lowStock", String(operational.summary.inventory?.lowStockCount || 0));
+  }
+
+  function renderRestrictedDashboard(session, operational) {
+    setReportVisibility(false);
+    renderOperationalValues(operational);
+    setText("reportPeriod", "Restricted");
+    setText("topProductCount", "Restricted");
+    setText("dashboardSyncText", "Operational dashboard loaded · Financial reports restricted");
+    const status = document.getElementById("retailStatus");
+    status.textContent = currentRoleLabel(session) + " can use permitted Retail operations. Financial report requests were not sent.";
+    status.className = "retail-status success";
+  }
+
+  async function renderReportDashboard(operational) {
+    setReportVisibility(true);
+    const period = monthWindow();
+    const today = localDate(new Date());
+    const values = await Promise.all([
+      window.AxtorAPI.apiGet(reportPath("daily-sales", today, today)),
+      window.AxtorAPI.apiGet(reportPath("daily-sales", period.from, period.to)),
+      window.AxtorAPI.apiGet(reportPath("sale-products", period.from, period.to)),
+      window.AxtorAPI.apiGet(reportPath("profit-loss", period.from, period.to))
+    ]);
+
+    const todayReport = unwrap(values[0]) || {};
+    const monthReport = unwrap(values[1]) || {};
+    const productReport = unwrap(values[2]) || {};
+    const profitReport = unwrap(values[3]) || {};
+    const profitRow = (profitReport.rows || []).find(function (row) { return row.line === "Gross Profit"; }) || {};
+    const grossProfit = summaryValue(profitReport, "Gross Profit") || number(profitRow.amount);
+    const grossMargin = summaryValue(profitReport, "Gross Margin %") || number(profitRow.salesPct);
+
+    renderOperationalValues(operational);
+    setText("todaySales", money(summaryValue(todayReport, "Sales")));
+    setText("invoiceCount", String(summaryValue(todayReport, "Invoices")));
+    setText("monthlySalesLabel", period.label + " Sales");
+    setText("monthlySales", money(summaryValue(monthReport, "Sales")));
+    setText("monthlyGrossProfit", money(grossProfit));
+    setText("monthlyGrossMargin", grossMargin.toFixed(2) + "%");
+    setText("receivables", money(operational.summary.receivables?.outstanding || 0));
+    setText("reportPeriod", period.from + " to " + period.to);
+    setText("dashboardSyncText", "Synced with Reports · " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    renderTopProducts(productReport);
+    const status = document.getElementById("retailStatus");
+    status.textContent = "Dashboard and Reports are reconciled from the same invoice-only report endpoints.";
+    status.className = "retail-status success";
+  }
+
   async function load() {
     const status = document.getElementById("retailStatus");
     try {
       if (!window.AxtorAPI || typeof window.AxtorAPI.apiGet !== "function") throw new Error("Axtor API helper is unavailable.");
       await verifyTenant();
-      const period = monthWindow();
-      const today = localDate(new Date());
-      const values = await Promise.all([
-        window.AxtorAPI.apiGet(reportPath("daily-sales", today, today)),
-        window.AxtorAPI.apiGet(reportPath("daily-sales", period.from, period.to)),
-        window.AxtorAPI.apiGet(reportPath("sale-products", period.from, period.to)),
-        window.AxtorAPI.apiGet(reportPath("profit-loss", period.from, period.to)),
-        window.AxtorAPI.apiGet("/api/v1/dashboard/summary"),
-        window.AxtorAPI.apiGet("/api/v1/products?active=true"),
-        window.AxtorAPI.apiGet("/api/v1/customers?active=true")
-      ]);
-
-      const todayReport = unwrap(values[0]) || {};
-      const monthReport = unwrap(values[1]) || {};
-      const productReport = unwrap(values[2]) || {};
-      const profitReport = unwrap(values[3]) || {};
-      const summary = unwrap(values[4]) || {};
-      const products = values[5]?.products || unwrap(values[5]) || [];
-      const customers = values[6]?.customers || unwrap(values[6]) || [];
-      const profitRow = (profitReport.rows || []).find(function (row) { return row.line === "Gross Profit"; }) || {};
-      const grossProfit = summaryValue(profitReport, "Gross Profit") || number(profitRow.amount);
-      const grossMargin = summaryValue(profitReport, "Gross Margin %") || number(profitRow.salesPct);
-
-      setText("todaySales", money(summaryValue(todayReport, "Sales")));
-      setText("invoiceCount", String(summaryValue(todayReport, "Invoices")));
-      setText("monthlySalesLabel", period.label + " Sales");
-      setText("monthlySales", money(summaryValue(monthReport, "Sales")));
-      setText("monthlyGrossProfit", money(grossProfit));
-      setText("monthlyGrossMargin", grossMargin.toFixed(2) + "%");
-      setText("productCount", String(products.length));
-      setText("customerCount", String(customers.length));
-      setText("lowStock", String(summary.inventory?.lowStockCount || 0));
-      setText("receivables", money(summary.receivables?.outstanding || 0));
-      setText("reportPeriod", period.from + " to " + period.to);
-      setText("dashboardSyncText", "Synced with Reports · " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-      renderTopProducts(productReport);
-      status.textContent = "Dashboard and Reports are reconciled from the same invoice-only report endpoints.";
-      status.className = "retail-status success";
+      const session = unwrap(await window.AxtorAPI.apiGet("/api/v1/auth/me")) || {};
+      const operational = await loadOperationalDashboard();
+      if (canViewFinancialReports(session)) {
+        await renderReportDashboard(operational);
+      } else {
+        renderRestrictedDashboard(session, operational);
+      }
     } catch (error) {
-      setText("dashboardSyncText", "Report synchronization failed");
+      setText("dashboardSyncText", "Dashboard synchronization failed");
       status.textContent = error?.message || "Retail dashboard could not be loaded";
       status.className = "retail-status error";
       const body = document.getElementById("topProductsBody");
-      if (body) body.innerHTML = '<tr><td colspan="5">Dashboard report data could not be loaded.</td></tr>';
+      if (body) body.innerHTML = '<tr><td colspan="5">Dashboard data could not be loaded.</td></tr>';
     }
   }
 
