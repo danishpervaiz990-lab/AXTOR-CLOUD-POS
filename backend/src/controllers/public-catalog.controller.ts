@@ -5,6 +5,8 @@ import * as service from "../services/public-catalog-launch.service.js";
 import { createAuthToken, hashAuthToken } from "../utils/auth-token.js";
 import { verifyPassword } from "../utils/password.js";
 
+type RegistrationStage = "tenant_provisioning" | "owner_session";
+
 function fail(res: Response, error: unknown) {
   if (error instanceof service.PublicCatalogError) {
     res.status(error.status).json({
@@ -24,6 +26,50 @@ function fail(res: Response, error: unknown) {
     error: {
       code: "INTERNAL_ERROR",
       message: "Unable to complete the request",
+      referenceId: res.locals.requestId,
+    },
+  });
+}
+
+function prismaErrorCode(error: unknown): string | null {
+  const code = String((error as any)?.code || "").trim();
+  return /^P\d{4}$/.test(code) ? code : null;
+}
+
+function failRegistration(res: Response, error: unknown, stage: RegistrationStage) {
+  if (error instanceof service.PublicCatalogError) {
+    fail(res, error);
+    return;
+  }
+
+  const databaseCode = prismaErrorCode(error);
+  const retryableDatabaseCodes = new Set(["P1001", "P1002", "P2024", "P2028", "P2034"]);
+  const retryable = Boolean(databaseCode && retryableDatabaseCodes.has(databaseCode));
+  const status = retryable ? 503 : 500;
+  const code = databaseCode ? "REGISTRATION_DATABASE_ERROR" : "REGISTRATION_INTERNAL_ERROR";
+  const message = stage === "owner_session"
+    ? "Workspace provisioning completed, but owner session setup could not complete"
+    : "Workspace provisioning could not complete";
+
+  console.error("Public registration failed", {
+    referenceId: res.locals.requestId,
+    stage,
+    databaseCode,
+    retryable,
+    error,
+  });
+
+  if (retryable) res.setHeader("Retry-After", "2");
+  res.status(status).json({
+    ok: false,
+    error: {
+      code,
+      message,
+      details: {
+        stage,
+        retryable,
+        ...(databaseCode ? { databaseCode } : {}),
+      },
       referenceId: res.locals.requestId,
     },
   });
@@ -94,11 +140,13 @@ async function createProvisionedOwnerSession(req: Request, result: any, password
 }
 
 export async function register(req: Request, res: Response) {
+  let stage: RegistrationStage = "tenant_provisioning";
   try {
     const result = await service.register(req, req.body || {});
+    stage = "owner_session";
     const auth = await createProvisionedOwnerSession(req, result, String(req.body?.password || ""));
     res.status(201).json({ ok: true, data: { ...result, auth } });
   } catch (error) {
-    fail(res, error);
+    failRegistration(res, error, stage);
   }
 }
