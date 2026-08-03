@@ -8,6 +8,7 @@ const reportPath = 'retail-live-audit-report.json';
 const runtime = JSON.parse(await fs.readFile(runtimePath, 'utf8'));
 const report = JSON.parse(await fs.readFile(reportPath, 'utf8'));
 const evidenceDir = 'retail-browser-evidence';
+const backendOrigin = runtime.backendOrigin || report.environment?.backendUrl || 'https://axtor-cloud-pos-production.up.railway.app';
 await fs.mkdir(evidenceDir, { recursive: true });
 
 function cleanErrors(errors) {
@@ -44,6 +45,21 @@ async function prepareLoginIdentity(page, userEmail, businessSlug) {
     { expectedEmail: email, expectedSlug: slug },
     { timeout: 10000 },
   );
+}
+
+async function verifyBackendSession(token) {
+  const response = await fetch(`${backendOrigin}/api/v1/auth/me`, {
+    cache: 'no-store',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok) {
+    throw new Error(`Backend session verification failed with HTTP ${response.status}: ${payload?.error?.message || 'invalid response'}`);
+  }
+  return payload;
 }
 
 async function waitForSynchronizedStatus(page, selector) {
@@ -137,7 +153,9 @@ try {
     let retailRouteOk = false;
     let sidebarOk = false;
     let roleOk = false;
+    let backendSessionVerified = false;
     let observedRoles = [];
+    let storedRoles = [];
     let tokenStored = false;
     let finalUrl = '';
     let salesReportsSync = user.key === 'owner' ? false : null;
@@ -157,10 +175,16 @@ try {
       const values = Object.fromEntries((originState?.localStorage || []).map((entry) => [entry.name, entry.value]));
       const session = { token: values.axtorAuthToken || '', user: JSON.parse(values.currentUser || '{}'), business: JSON.parse(values.axtorBusiness || '{}') };
       tokenStored = Boolean(session.token);
-      observedRoles = [...new Set([session.user?.role, ...(Array.isArray(session.user?.roles) ? session.user.roles : [])].filter(Boolean).map(String))];
+      storedRoles = [...new Set([session.user?.role, ...(Array.isArray(session.user?.roles) ? session.user.roles : [])].filter(Boolean).map(String))];
+
+      const verifiedSession = await verifyBackendSession(session.token);
+      backendSessionVerified = true;
+      observedRoles = [...new Set([verifiedSession.user?.role, ...(Array.isArray(verifiedSession.user?.roles) ? verifiedSession.user.roles : [])].filter(Boolean).map(String))];
       const expectedRoleFamily = roleFamily(user.role);
       roleOk = observedRoles.some((role) => roleFamily(role) === expectedRoleFamily);
-      loginOk = tokenStored && String(session.business?.slug || '').toLowerCase() === String(report.environment.businessSlug).toLowerCase();
+      loginOk = tokenStored
+        && String(session.business?.slug || '').toLowerCase() === String(report.environment.businessSlug).toLowerCase()
+        && String(verifiedSession.business?.slug || '').toLowerCase() === String(report.environment.businessSlug).toLowerCase();
 
       await page.close();
       page = await context.newPage();
@@ -215,11 +239,13 @@ try {
     }
     const filtered = cleanErrors(errors);
     const reportingOk = user.key === 'owner' ? salesReportsSync === true : true;
-    const result = loginOk && roleOk && retailRouteOk && sidebarOk && reportingOk && filtered.length === 0 ? 'PASS' : 'FAIL';
+    const result = loginOk && backendSessionVerified && roleOk && retailRouteOk && sidebarOk && reportingOk && filtered.length === 0 ? 'PASS' : 'FAIL';
     results.push({
       user: user.label,
       role: user.role,
       observedRoles,
+      storedRoles,
+      backendSessionVerified,
       freshContext: true,
       loginPage: loginOk,
       roleResolved: roleOk,
@@ -243,7 +269,7 @@ report.browserAudit = results;
 const allPass = results.length === 5 && results.every((row) => row.result === 'PASS');
 const ownerReporting = results.find((row) => row.salesReportsSync !== null);
 const reportingPass = ownerReporting?.salesReportsSync === true;
-report.acceptance['Five-login browser test'] = { result: allPass ? 'PASS' : 'FAIL', detail: allPass ? 'All five users signed in through the actual login page in fresh browser contexts and loaded the dedicated Retail application' : 'One or more browser login/route/sidebar checks failed' };
+report.acceptance['Five-login browser test'] = { result: allPass ? 'PASS' : 'FAIL', detail: allPass ? 'All five users signed in through the actual login page in fresh browser contexts, verified their backend sessions and loaded the dedicated Retail application' : 'One or more browser login/backend-session/route/sidebar checks failed' };
 report.acceptance['Sales Overview and Reports UI reconciliation'] = {
   result: reportingPass ? 'PASS' : 'FAIL',
   detail: reportingPass
