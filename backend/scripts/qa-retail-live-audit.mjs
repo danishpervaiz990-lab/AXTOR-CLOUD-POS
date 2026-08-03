@@ -30,4 +30,11 @@ exact(
   'inventory idempotency headers',
 );
 
+const requestHeaderTail = "          ...headers,\n        },";
+exact(
+  requestHeaderTail,
+  "          ...headers,\n          ...(method === 'POST' && path === '/api/v1/sales-documents' ? { 'Idempotency-Key': `${RUN_ID}:sales:${crypto.createHash('sha256').update(JSON.stringify(body ?? null)).digest('hex').slice(0, 24)}` } : {}),\n        },",
+  'sales document payload idempotency header',
+);
+
 await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
