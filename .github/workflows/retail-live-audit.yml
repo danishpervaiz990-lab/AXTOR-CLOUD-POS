@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-retail-live-audit.mjs"
+      - "backend/scripts/qa-retail-release-volume-verify.mjs"
       - "backend/scripts/qa-retail-browser-audit.mjs"
       - "backend/scripts/retail-audit-recipient-cert.pem"
       - ".github/workflows/retail-live-audit.yml"
@@ -32,8 +33,14 @@ jobs:
         continue-on-error: true
         run: node backend/scripts/qa-retail-live-audit.mjs
 
-      - name: Install browser runtime
+      - name: Verify Retail release data volumes and uniqueness
+        id: volume_audit
         if: always() && steps.transaction_audit.outcome == 'success'
+        continue-on-error: true
+        run: node backend/scripts/qa-retail-release-volume-verify.mjs
+
+      - name: Install browser runtime
+        if: always() && steps.transaction_audit.outcome == 'success' && steps.volume_audit.outcome == 'success'
         run: |
           test -f retail-live-audit-runtime.json
           mkdir -p /tmp/axtor-playwright
@@ -43,7 +50,7 @@ jobs:
 
       - name: Test all five users through the live login page
         id: browser_audit
-        if: always() && steps.transaction_audit.outcome == 'success'
+        if: always() && steps.transaction_audit.outcome == 'success' && steps.volume_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-retail-browser-audit.mjs
 
@@ -76,9 +83,11 @@ jobs:
         if: always()
         env:
           TRANSACTION_OUTCOME: ${{ steps.transaction_audit.outcome }}
+          VOLUME_OUTCOME: ${{ steps.volume_audit.outcome }}
           BROWSER_OUTCOME: ${{ steps.browser_audit.outcome }}
         run: |
           test "$TRANSACTION_OUTCOME" = "success"
+          test "$VOLUME_OUTCOME" = "success"
           test "$BROWSER_OUTCOME" = "success"
           test -s retail-live-audit-report.json
           node -e "const r=require('./retail-live-audit-report.json'); console.log('Retail audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
