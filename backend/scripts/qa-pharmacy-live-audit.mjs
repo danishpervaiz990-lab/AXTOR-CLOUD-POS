@@ -53,7 +53,11 @@ source = source
   .replaceAll("'Unauthorized cashier payment action'", "'Cashier payment permission behavior'")
   .replaceAll("'Exactly 50 products created'", "'Exactly 100 products created'")
   .replaceAll("'Exactly 25 customers created'", "'Exactly 200 customers created'")
-  .replaceAll("'Exactly 100 posted invoices'", "'Exactly 500 posted invoices'");
+  .replaceAll("'Exactly 100 posted invoices'", "'Exactly 500 posted invoices'")
+  .replaceAll("/api/v1/customers?active=true", "/api/v1/customers?active=true&limit=250")
+  .replaceAll("/api/v1/sales-documents?documentType=invoice", "/api/v1/sales-documents?documentType=invoice&limit=1000")
+  .replaceAll("invoiceDocs.length === 100", "invoiceDocs.length === 500")
+  .replaceAll("Document list contains exactly 100 invoices after duplicate request", "Document list contains exactly 500 invoices after duplicate request");
 
 process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';
 process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
