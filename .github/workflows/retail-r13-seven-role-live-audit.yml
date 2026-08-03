@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-retail-live-audit.mjs"
+      - "backend/scripts/qa-retail-live-audit-with-registration-resilience.mjs"
       - "backend/scripts/qa-retail-r13-cashier-payment-permission.mjs"
       - "backend/scripts/qa-retail-r13-seven-role-audit.mjs"
       - "backend/scripts/qa-retail-r13-seven-role-audit-with-password-rotation.mjs"
@@ -36,7 +37,7 @@ jobs:
       - name: Run full isolated Retail transaction audit
         id: transaction_audit
         continue-on-error: true
-        run: node backend/scripts/qa-retail-live-audit.mjs
+        run: node backend/scripts/qa-retail-live-audit-with-registration-resilience.mjs
 
       - name: Verify Retail release data volumes and uniqueness
         id: volume_audit
