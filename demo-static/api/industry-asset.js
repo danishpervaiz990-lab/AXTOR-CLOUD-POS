@@ -67,14 +67,23 @@ function textResponse(message, status, extraHeaders = {}) {
 }
 
 function injectIndustryRuntime(industry, pathname, bytes, type) {
-  if (industry !== "grocery" || !type.startsWith("text/html")) return bytes;
+  if (!type.startsWith("text/html")) return bytes;
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let html = decoder.decode(bytes);
-  if (!html.includes("grocery-sidebar-repair.js")) {
-    const script = '<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>';
-    html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, script + "</body>") : html + script;
+  const scripts = [];
+
+  if (industry === "grocery" && !html.includes("grocery-sidebar-repair.js")) {
+    scripts.push('<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>');
   }
+
+  if (industry === "retail" && /(^|\/)terminal\.html$/i.test(pathname) && !html.includes("retail-terminal-certification.js")) {
+    scripts.push('<script src="js/retail-terminal-certification.js?v=20260803-retail-cert1"></script>');
+  }
+
+  if (!scripts.length) return bytes;
+  const injection = scripts.join("");
+  html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, injection + "</body>") : html + injection;
   return encoder.encode(html);
 }
 
@@ -95,7 +104,7 @@ export default async function industryAsset(request) {
   try {
     const upstream = await fetch(source, {
       method: request.method,
-      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.1" },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.2" },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
