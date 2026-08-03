@@ -36,6 +36,22 @@ function prismaErrorCode(error: unknown): string | null {
   return /^P\d{4}$/.test(code) ? code : null;
 }
 
+function safeErrorType(error: unknown): string {
+  const name = String((error as any)?.name || (error as any)?.constructor?.name || "Error").trim();
+  return /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) ? name : "Error";
+}
+
+function safeSourceLocation(error: unknown): string | null {
+  const stack = String((error as any)?.stack || "");
+  const match = stack.match(/public-catalog-launch\.service\.(?:js|ts):(\d+):\d+/);
+  return match ? `public-catalog-launch.service:${match[1]}` : null;
+}
+
+function safeModelName(error: unknown): string | null {
+  const model = String((error as any)?.meta?.modelName || "").trim();
+  return /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(model) ? model : null;
+}
+
 function failRegistration(res: Response, error: unknown, stage: RegistrationStage) {
   if (error instanceof service.PublicCatalogError) {
     fail(res, error);
@@ -43,6 +59,9 @@ function failRegistration(res: Response, error: unknown, stage: RegistrationStag
   }
 
   const databaseCode = prismaErrorCode(error);
+  const errorType = safeErrorType(error);
+  const sourceLocation = safeSourceLocation(error);
+  const modelName = safeModelName(error);
   const retryableDatabaseCodes = new Set(["P1001", "P1002", "P2024", "P2028", "P2034"]);
   const retryable = Boolean(databaseCode && retryableDatabaseCodes.has(databaseCode));
   const status = retryable ? 503 : 500;
@@ -55,6 +74,9 @@ function failRegistration(res: Response, error: unknown, stage: RegistrationStag
     referenceId: res.locals.requestId,
     stage,
     databaseCode,
+    errorType,
+    sourceLocation,
+    modelName,
     retryable,
     error,
   });
@@ -68,6 +90,9 @@ function failRegistration(res: Response, error: unknown, stage: RegistrationStag
       details: {
         stage,
         retryable,
+        errorType,
+        ...(sourceLocation ? { sourceLocation } : {}),
+        ...(modelName ? { modelName } : {}),
         ...(databaseCode ? { databaseCode } : {}),
       },
       referenceId: res.locals.requestId,
