@@ -33,6 +33,13 @@ exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range
 exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
 exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 50, 'Customer persistence', 'Exactly 50 QA customers remain after refresh');", 'customer persistence');
 
+// Keep the historical dataset builder compatible with canonical production role names.
+exact(
+  "  const cashierRole = roleByName.get('cashier');\n  const salesmanRole = roleByName.get('salesman');",
+  "  const cashierRole = roleByName.get('retail cashier') || roleByName.get('cashier');\n  const salesmanRole = roleByName.get('salesperson') || roleByName.get('salesman');",
+  'canonical Retail role resolver',
+);
+
 const requestSignature = "async function request(path, { method = 'GET', token, body, headers = {}, expected = [200], retries = 2 } = {}) {";
 exact(
   requestSignature,
@@ -65,53 +72,7 @@ process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';
 process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '50';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 
-// The historical payload expects the legacy labels Salesman and Warehouse.
-// Translate canonical role-name strings in JSON responses only inside this
-// process. Production, persisted roles and final R-13 evidence stay canonical.
-function legacyAuditRoleNames(value) {
-  if (value === 'Salesperson') return 'Salesman';
-  if (value === 'Storekeeper') return 'Warehouse';
-  if (Array.isArray(value)) return value.map(legacyAuditRoleNames);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, legacyAuditRoleNames(item)]));
-  }
-  return value;
-}
-
-const nativeFetch = globalThis.fetch;
-globalThis.fetch = async (input, init) => {
-  const response = await nativeFetch(input, init);
-  if (!response.ok || !String(response.headers.get('content-type') || '').toLowerCase().includes('application/json')) {
-    return response;
-  }
-
-  const payloadText = await response.text();
-  let payloadJson;
-  try {
-    payloadJson = JSON.parse(payloadText);
-  } catch {
-    return new Response(payloadText, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    });
-  }
-
-  const headers = new Headers(response.headers);
-  headers.delete('content-length');
-  headers.delete('content-encoding');
-  return new Response(JSON.stringify(legacyAuditRoleNames(payloadJson)), {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-};
-
-try {
-  await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
-} finally {
-  globalThis.fetch = nativeFetch;
-}
+await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
 // Add the ten required suppliers through the authenticated production API and verify persistence.
 const runtimePath = 'retail-live-audit-runtime.json';
