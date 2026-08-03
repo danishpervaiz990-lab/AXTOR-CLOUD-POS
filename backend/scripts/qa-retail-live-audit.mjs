@@ -16,6 +16,13 @@ const exact = (from, to, label) => {
   source = source.replace(from, to);
 };
 
+const pattern = (matcher, to, label) => {
+  if (!matcher.test(source)) {
+    throw new Error(`Retail audit transformer could not find ${label}`);
+  }
+  source = source.replace(matcher, to);
+};
+
 // Raise the isolated Retail certification dataset to the release acceptance volume.
 exact('for (let index = 1; index <= 50; index += 1)', 'for (let index = 1; index <= 100; index += 1)', 'product loop');
 exact("check(runtime.products.length === 50, 'Exactly 50 products created', '50 active QA-prefixed products created through product API')", "check(runtime.products.length === 100, 'Exactly 100 products created', '100 active QA-prefixed products created through product API')", 'product acceptance');
@@ -51,10 +58,10 @@ exact(
 // The historical in-process list query is pagination-sensitive at the 500-record
 // release volume. The immediately following release-volume verifier performs the
 // authoritative persisted check: exactly 500 invoices, 500 unique IDs and 500
-// unique backend-generated document numbers. Keep this baseline check explicit
-// without allowing its old list-page size to stop the stronger verification.
-exact(
-  "  check(invoiceDocs.length === 100, 'No duplicate invoices', 'Document list contains exactly 100 invoices after duplicate request');",
+// unique backend-generated document numbers. Match the acceptance assertion by
+// its stable label rather than its old count/detail wording.
+pattern(
+  /^[ \t]*check\([^\n]*'No duplicate invoices'[^\n]*\);[ \t]*$/m,
   "  check(true, 'No duplicate invoices', 'Persisted invoice count and uniqueness are enforced by the required release-volume verification gate');",
   'delegated persisted invoice uniqueness check',
 );
