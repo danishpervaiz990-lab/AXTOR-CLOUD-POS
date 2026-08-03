@@ -84,4 +84,11 @@ replaceExact(
   'password-rotation result enforcement',
 );
 
-await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+if (process.env.AXTOR_R13_ADAPTER_VALIDATE_ONLY === '1') {
+  if (!source.includes("/api/v1/auth/change-password") || !source.includes("passwordRotationBlocksRemaining")) {
+    throw new Error('Retail R-13 password-rotation adapter validation failed');
+  }
+  console.log('PASS: Retail R-13 password-rotation adapter matches the current audit source');
+} else {
+  await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+}
