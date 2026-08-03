@@ -33,7 +33,7 @@ jobs:
         run: node backend/scripts/qa-retail-live-audit.mjs
 
       - name: Install browser runtime
-        if: always() && steps.transaction_audit.conclusion == 'success'
+        if: always() && steps.transaction_audit.outcome == 'success'
         run: |
           test -f retail-live-audit-runtime.json
           mkdir -p /tmp/axtor-playwright
@@ -43,7 +43,7 @@ jobs:
 
       - name: Test all five users through the live login page
         id: browser_audit
-        if: always() && steps.transaction_audit.conclusion == 'success'
+        if: always() && steps.transaction_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-retail-browser-audit.mjs
 
@@ -75,8 +75,8 @@ jobs:
       - name: Enforce launch-readiness result
         if: always()
         env:
-          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.conclusion }}
-          BROWSER_OUTCOME: ${{ steps.browser_audit.conclusion }}
+          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser_audit.outcome }}
         run: |
           test "$TRANSACTION_OUTCOME" = "success"
           test "$BROWSER_OUTCOME" = "success"
