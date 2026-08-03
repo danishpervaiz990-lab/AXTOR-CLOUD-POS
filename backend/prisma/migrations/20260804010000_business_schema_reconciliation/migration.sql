@@ -44,8 +44,7 @@ ALTER TABLE "businesses"
   ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
--- Existing installations may have nullable columns created by an earlier manual
--- schema push. Fill safe defaults before enforcing the current Prisma contract.
+-- Fill nulls safely where a legacy manual schema push created nullable columns.
 UPDATE "businesses" SET
   "default_language" = COALESCE("default_language", 'en'),
   "date_format" = COALESCE("date_format", 'yyyy-MM-dd'),
@@ -56,23 +55,3 @@ UPDATE "businesses" SET
   "maintenance_mode" = COALESCE("maintenance_mode", false),
   "created_at" = COALESCE("created_at", CURRENT_TIMESTAMP),
   "updated_at" = COALESCE("updated_at", CURRENT_TIMESTAMP);
-
-ALTER TABLE "businesses"
-  ALTER COLUMN "default_language" SET DEFAULT 'en',
-  ALTER COLUMN "default_language" SET NOT NULL,
-  ALTER COLUMN "date_format" SET DEFAULT 'yyyy-MM-dd',
-  ALTER COLUMN "date_format" SET NOT NULL,
-  ALTER COLUMN "number_locale" SET DEFAULT 'en-QA',
-  ALTER COLUMN "number_locale" SET NOT NULL,
-  ALTER COLUMN "tax_label" SET DEFAULT 'Tax',
-  ALTER COLUMN "tax_label" SET NOT NULL,
-  ALTER COLUMN "onboarding_state" SET DEFAULT 'NOT_STARTED',
-  ALTER COLUMN "onboarding_state" SET NOT NULL,
-  ALTER COLUMN "onboarding_step" SET DEFAULT 1,
-  ALTER COLUMN "onboarding_step" SET NOT NULL,
-  ALTER COLUMN "maintenance_mode" SET DEFAULT false,
-  ALTER COLUMN "maintenance_mode" SET NOT NULL,
-  ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP,
-  ALTER COLUMN "created_at" SET NOT NULL,
-  ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP,
-  ALTER COLUMN "updated_at" SET NOT NULL;
