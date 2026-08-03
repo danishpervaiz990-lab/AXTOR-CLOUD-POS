@@ -29,37 +29,68 @@ function invalidLogin(res: Response): void {
 
 export async function login(req: Request, res: Response): Promise<void> {
   try {
-    const businessSlug = String(req.body?.businessSlug || '').trim().toLowerCase();
+    const workspace = String(req.body?.businessSlug || '').trim().toLowerCase();
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
 
-    if (!businessSlug || !email || !password) {
+    if (!workspace || !email || !password) {
       res.status(400).json({
         ok: false,
         error: {
-          message: 'businessSlug, email, and password are required'
+          message: 'workspace, email, and password are required'
         }
       });
       return;
     }
 
-    const business = await prisma.business.findUnique({
-      where: {
-        slug: businessSlug
-      },
-      include: {
-        businessIndustry: {
-          include: {
-            industry: {
-              select: {
-                code: true,
-                name: true
-              }
+    const businessInclude = {
+      businessIndustry: {
+        include: {
+          industry: {
+            select: {
+              code: true,
+              name: true
             }
           }
         }
       }
-    });
+    } as const;
+
+    let business;
+
+    if (workspace === email) {
+      const memberships = await prisma.user.findMany({
+        where: {
+          email,
+          status: 'ACTIVE',
+          business: {
+            status: {
+              in: ['ACTIVE', 'TRIAL']
+            }
+          }
+        },
+        select: {
+          business: {
+            include: businessInclude
+          }
+        },
+        take: 2
+      });
+
+      if (memberships.length !== 1) {
+        invalidLogin(res);
+        return;
+      }
+
+      business = memberships[0].business;
+    } else {
+      business = await prisma.business.findUnique({
+        where: {
+          slug: workspace
+        },
+        include: businessInclude
+      });
+    }
 
     if (!business) {
       invalidLogin(res);
