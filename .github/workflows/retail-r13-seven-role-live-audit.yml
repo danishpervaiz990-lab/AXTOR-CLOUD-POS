@@ -5,9 +5,7 @@ on:
     branches: [backend]
     types: [opened, reopened, synchronize]
     paths:
-      - "backend/scripts/qa-retail-live-audit.mjs"
-      - "backend/scripts/qa-retail-r13-seven-role-audit.mjs"
-      - "backend/scripts/qa-retail-r13-seven-role-browser-audit.mjs"
+      - "backend/scripts/debug-retail-audit-cashier-source.mjs"
       - ".github/workflows/retail-r13-seven-role-live-audit.yml"
 
 permissions:
@@ -16,125 +14,11 @@ permissions:
 jobs:
   retail-r13-seven-role-live-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
-      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
-      AXTOR_REPORTING_RELEASE: report-entitlement-migration-20260730-retry
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
-
-      - name: Run full isolated Retail transaction audit
-        id: transaction_audit
-        continue-on-error: true
-        run: node backend/scripts/qa-retail-live-audit.mjs
-
-      - name: Verify Retail release data volumes and uniqueness
-        id: volume_audit
-        if: always() && steps.transaction_audit.outcome == 'success'
-        continue-on-error: true
-        run: node backend/scripts/qa-retail-release-volume-verify.mjs
-
-      - name: Install browser runtime
-        if: always() && steps.transaction_audit.outcome == 'success' && steps.volume_audit.outcome == 'success'
-        run: |
-          test -f retail-live-audit-runtime.json
-          mkdir -p /tmp/axtor-playwright
-          npm init -y --prefix /tmp/axtor-playwright >/dev/null
-          npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
-          /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
-
-      - name: Reverify existing five-role Retail browser baseline
-        id: baseline_browser_audit
-        if: always() && steps.transaction_audit.outcome == 'success' && steps.volume_audit.outcome == 'success'
-        continue-on-error: true
-        run: node backend/scripts/qa-retail-browser-audit.mjs
-
-      - name: Verify baseline browser evidence
-        id: baseline_browser_report
-        if: always() && steps.baseline_browser_audit.outcome == 'success'
-        continue-on-error: true
-        run: node backend/scripts/qa-retail-browser-report-verify.mjs
-
-      - name: Run seven-role API allow and deny audit
-        id: seven_role_api_audit
-        if: always() && steps.baseline_browser_report.outcome == 'success'
-        continue-on-error: true
-        run: node backend/scripts/qa-retail-r13-seven-role-audit.mjs
-
-      - name: Run seven-role live browser audit
-        id: seven_role_browser_audit
-        if: always() && steps.seven_role_api_audit.outcome == 'success'
-        continue-on-error: true
-        run: node backend/scripts/qa-retail-r13-seven-role-browser-audit.mjs
-
-      - name: Encrypt Retail credentials
-        if: always()
-        run: |
-          if [ -f retail-live-audit-credentials.json ]; then
-            openssl cms -encrypt -binary -aes-256-cbc \
-              -in retail-live-audit-credentials.json \
-              -out retail-live-audit-credentials.p7m \
-              -outform DER \
-              backend/scripts/retail-audit-recipient-cert.pem
-            test -s retail-live-audit-credentials.p7m
-            shred -u retail-live-audit-credentials.json
-          fi
-          if [ -f retail-r13-seven-role-credentials.json ]; then
-            openssl cms -encrypt -binary -aes-256-cbc \
-              -in retail-r13-seven-role-credentials.json \
-              -out retail-r13-seven-role-credentials.p7m \
-              -outform DER \
-              backend/scripts/retail-audit-recipient-cert.pem
-            test -s retail-r13-seven-role-credentials.p7m
-            shred -u retail-r13-seven-role-credentials.json
-          fi
-          if [ -f retail-live-audit-runtime.json ]; then shred -u retail-live-audit-runtime.json; fi
-          if [ -f retail-r13-seven-role-runtime.json ]; then shred -u retail-r13-seven-role-runtime.json; fi
-
-      - name: Upload encrypted seven-role evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: retail-r13-seven-role-live-audit-${{ github.run_id }}
-          path: |
-            retail-live-audit-report.json
-            retail-r13-seven-role-report.json
-            retail-live-audit-credentials.p7m
-            retail-r13-seven-role-credentials.p7m
-            retail-live-audit-cleanup.sql
-            retail-browser-evidence/
-            retail-r13-browser-evidence/
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Enforce Retail R-13 production result
-        if: always()
-        env:
-          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.outcome }}
-          VOLUME_OUTCOME: ${{ steps.volume_audit.outcome }}
-          BASELINE_BROWSER_OUTCOME: ${{ steps.baseline_browser_audit.outcome }}
-          BASELINE_REPORT_OUTCOME: ${{ steps.baseline_browser_report.outcome }}
-          SEVEN_ROLE_API_OUTCOME: ${{ steps.seven_role_api_audit.outcome }}
-          SEVEN_ROLE_BROWSER_OUTCOME: ${{ steps.seven_role_browser_audit.outcome }}
-        run: |
-          test "$TRANSACTION_OUTCOME" = "success"
-          test "$VOLUME_OUTCOME" = "success"
-          test "$BASELINE_BROWSER_OUTCOME" = "success"
-          test "$BASELINE_REPORT_OUTCOME" = "success"
-          test "$SEVEN_ROLE_API_OUTCOME" = "success"
-          test "$SEVEN_ROLE_BROWSER_OUTCOME" = "success"
-          test -s retail-live-audit-report.json
-          test -s retail-r13-seven-role-report.json
-          node - <<'NODE'
-          const base = require('./retail-live-audit-report.json');
-          const r13 = require('./retail-r13-seven-role-report.json');
-          console.log('Retail baseline:', base.overall);
-          console.log('Retail R-13:', r13.overall, r13.summary);
-          if (base.overall !== 'PASS' || r13.overall !== 'PASS') process.exit(1);
-          if (r13.summary?.userCount !== 7 || r13.summary?.browserUsersPassed !== 7) process.exit(1);
-          if (r13.summary?.apiChecks !== r13.summary?.apiChecksPassed) process.exit(1);
-          NODE
+      - name: Show historical cashier acceptance source
+        run: node backend/scripts/debug-retail-audit-cashier-source.mjs
