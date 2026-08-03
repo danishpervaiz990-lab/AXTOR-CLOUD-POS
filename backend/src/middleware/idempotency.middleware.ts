@@ -78,7 +78,11 @@ export function requirePersistentIdempotency(action: string) {
       }
 
       const originalJson = res.json.bind(res);
+      let responseScheduled = false;
       res.json = ((body: any) => {
+        if (responseScheduled) return res;
+        responseScheduled = true;
+
         const success = res.statusCode >= 200 && res.statusCode < 300;
         const operation = success
           ? prisma.$executeRaw`
@@ -92,8 +96,16 @@ export function requirePersistentIdempotency(action: string) {
               DELETE FROM "idempotency_records"
               WHERE "id" = ${recordId} AND "status" = 'IN_PROGRESS'
             `;
-        void operation.catch((error: unknown) => console.error("Idempotency persistence failed:", error));
-        return originalJson(body);
+
+        void operation
+          .catch((error: unknown) => {
+            console.error("Idempotency persistence failed:", error);
+          })
+          .finally(() => {
+            if (!res.headersSent) originalJson(body);
+          });
+
+        return res;
       }) as Response["json"];
 
       next();
