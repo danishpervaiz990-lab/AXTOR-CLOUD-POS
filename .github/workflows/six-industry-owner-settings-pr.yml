@@ -1,8 +1,12 @@
 name: Six Industry Owner Settings PR Verification
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [backend]
+    paths:
+      - "backend/scripts/qa-six-industry-owner-settings-live.mjs"
+      - ".github/workflows/six-industry-owner-settings-pr.yml"
 
 permissions:
   contents: read
