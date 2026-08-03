@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 import { ONBOARDING_READY_INDUSTRY_CODES, industryLaunchReadiness } from "../industry/activate-launch-ready-packs.js";
 import { getIndustryPack, INDUSTRY_REGISTRY_VERSION, publicIndustryRegistry, type IndustryPack } from "../industry/registry.js";
+import { findSystemRoleDefinition } from "./system-role-definitions.js";
 import { hashPassword } from "../utils/password.js";
 import { plain } from "../utils/http.js";
 
@@ -141,7 +142,11 @@ async function createIndustryRoles(tx: Prisma.TransactionClient, businessId: str
   let count = 0;
   for (const [name, permissions] of Object.entries(pack.defaultRoles)) {
     const roleName = name.trim();
-    const uniquePermissions = [...new Set(permissions.map(item => String(item).trim()).filter(Boolean))];
+    const canonical = findSystemRoleDefinition(roleName);
+    const uniquePermissions = [...new Set([
+      ...permissions,
+      ...(canonical?.permissions || []),
+    ].map(item => String(item).trim()).filter(Boolean))];
     if (!roleName || roleName.toLowerCase() === "owner" || !uniquePermissions.length) continue;
     await tx.role.create({ data: { businessId, name: roleName, description: `Default ${pack.name} operational role`, isSystemRole: true, permissions: uniquePermissions } });
     count += 1;
@@ -210,6 +215,9 @@ export async function register(req: Request, input: Record<string, unknown>) {
   if (!plan?.active) throw new PublicCatalogError(409, "PLAN_UNAVAILABLE", "Selected subscription plan is unavailable");
   if (!currency?.active) throw new PublicCatalogError(409, "CURRENCY_UNAVAILABLE", "Selected currency is unavailable");
 
+  // Password derivation is CPU-heavy. Complete it before opening a database
+  // transaction so concurrent tenant registrations do not hold connections idle.
+  const ownerPasswordHash = hashPassword(password);
   const slug = `${slugBase(businessName)}-${crypto.randomBytes(3).toString("hex")}`;
   const now = new Date();
   const trialEndsAt = new Date(now.getTime() + 14 * 86400000);
@@ -223,7 +231,7 @@ export async function register(req: Request, input: Record<string, unknown>) {
       const warehouse = await tx.warehouse.create({ data: { businessId: business.id, branchId: branch.id, name: firstWarehouse, code: "MAIN" } });
       const ownerRole = await tx.role.create({ data: { businessId: business.id, name: "Owner", description: "Business owner with full tenant access", isSystemRole: true, permissions: ["*"] } });
       const rolePresetCount = await createIndustryRoles(tx, business.id, pack);
-      const owner = await tx.user.create({ data: { businessId: business.id, branchId: branch.id, name: ownerName, email, passwordHash: hashPassword(password), preferredLanguage: language, status: "ACTIVE" } });
+      const owner = await tx.user.create({ data: { businessId: business.id, branchId: branch.id, name: ownerName, email, passwordHash: ownerPasswordHash, preferredLanguage: language, status: "ACTIVE" } });
       await tx.userRole.create({ data: { businessId: business.id, userId: owner.id, roleId: ownerRole.id } });
       const counter = await tx.counter.create({ data: { businessId: business.id, branchId: branch.id, name: firstCounter, code: "POS-1", cashierUserId: owner.id } });
       await tx.businessIndustry.create({ data: { businessId: business.id, industryId: industry.id, provisioningState: "completed", registryVersion: INDUSTRY_REGISTRY_VERSION } });
@@ -264,7 +272,7 @@ export async function register(req: Request, input: Record<string, unknown>) {
       };
       await tx.tenantProvisioningRun.create({ data: { businessId: business.id, idempotencyKey, requestHash: fingerprint, status: "completed", response } });
       return plain(response);
-    }, { timeout: 30_000 });
+    });
   } catch (error: any) {
     if (error?.code === "P2002") {
       const retry = await prisma.tenantProvisioningRun.findUnique({ where: { idempotencyKey } });

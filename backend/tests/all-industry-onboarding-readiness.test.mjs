@@ -11,6 +11,7 @@ const seed = fs.readFileSync(new URL("../src/scripts/seed-commercial-catalog.ts"
 const releaseC = fs.readFileSync(new URL("../src/routes/release-c.routes.ts", import.meta.url), "utf8");
 const releaseD = fs.readFileSync(new URL("../src/routes/release-d.routes.ts", import.meta.url), "utf8");
 const manufacturing = fs.readFileSync(new URL("../src/routes/manufacturing.routes.ts", import.meta.url), "utf8");
+const prismaClient = fs.readFileSync(new URL("../src/db/prisma.ts", import.meta.url), "utf8");
 
 const expectedCodes = [
   "retail", "grocery", "pharmacy", "hardware", "paint", "gym", "clinic",
@@ -50,6 +51,8 @@ test("catalogue and registration use readiness, not a six-industry allowlist", (
 
 test("new tenants receive operational roles and persisted launch configuration", () => {
   assert.match(launchService, /Object\.entries\(pack\.defaultRoles\)/);
+  assert.match(launchService, /findSystemRoleDefinition\(roleName\)/);
+  assert.match(launchService, /canonical\?\.permissions/);
   assert.match(launchService, /Default \$\{pack\.name\} operational role/);
   for (const key of ["industry.defaults", "industry.modules", "industry.reports", "industry.printing", "industry.forms", "industry.launch"]) {
     assert.match(launchService, new RegExp(key.replaceAll(".", "\\.")));
@@ -61,6 +64,18 @@ test("new tenants receive operational roles and persisted launch configuration",
   assert.match(launchService, /tenant\.provisioned/);
   assert.match(launchService, /prisma\.\$transaction/);
   assert.match(launchService, /Idempotency-Key/);
+});
+
+test("registration keeps CPU work outside queued database transactions", () => {
+  const hashIndex = launchService.indexOf("const ownerPasswordHash = hashPassword(password)");
+  const transactionIndex = launchService.indexOf("return await prisma.$transaction");
+  assert.ok(hashIndex >= 0, "owner password hash must be derived");
+  assert.ok(transactionIndex > hashIndex, "password hashing must finish before the transaction starts");
+  assert.match(launchService, /passwordHash: ownerPasswordHash/);
+  assert.doesNotMatch(launchService, /passwordHash: hashPassword\(password\)/);
+  assert.match(prismaClient, /transactionOptions/);
+  assert.match(prismaClient, /PRISMA_TRANSACTION_MAX_WAIT_MS/);
+  assert.match(prismaClient, /PRISMA_TRANSACTION_TIMEOUT_MS/);
 });
 
 test("catalogue seeding activates all industry rows and feature contracts", () => {
