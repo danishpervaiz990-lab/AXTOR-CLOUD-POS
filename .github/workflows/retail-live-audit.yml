@@ -8,6 +8,7 @@ on:
       - "backend/scripts/qa-retail-live-audit.mjs"
       - "backend/scripts/qa-retail-release-volume-verify.mjs"
       - "backend/scripts/qa-retail-browser-audit.mjs"
+      - "backend/scripts/qa-retail-browser-report-verify.mjs"
       - "backend/scripts/retail-audit-recipient-cert.pem"
       - ".github/workflows/retail-live-audit.yml"
 
@@ -54,6 +55,12 @@ jobs:
         continue-on-error: true
         run: node backend/scripts/qa-retail-browser-audit.mjs
 
+      - name: Verify final browser evidence
+        id: browser_report_audit
+        if: always() && steps.browser_audit.outcome == 'success'
+        continue-on-error: true
+        run: node backend/scripts/qa-retail-browser-report-verify.mjs
+
       - name: Encrypt credential report
         if: always() && hashFiles('retail-live-audit-credentials.json') != ''
         run: |
@@ -85,9 +92,11 @@ jobs:
           TRANSACTION_OUTCOME: ${{ steps.transaction_audit.outcome }}
           VOLUME_OUTCOME: ${{ steps.volume_audit.outcome }}
           BROWSER_OUTCOME: ${{ steps.browser_audit.outcome }}
+          BROWSER_REPORT_OUTCOME: ${{ steps.browser_report_audit.outcome }}
         run: |
           test "$TRANSACTION_OUTCOME" = "success"
           test "$VOLUME_OUTCOME" = "success"
           test "$BROWSER_OUTCOME" = "success"
+          test "$BROWSER_REPORT_OUTCOME" = "success"
           test -s retail-live-audit-report.json
           node -e "const r=require('./retail-live-audit-report.json'); console.log('Retail audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
