@@ -65,7 +65,48 @@ process.env.AXTOR_AUDIT_PRODUCT_COUNT = '100';
 process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '50';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 
-await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+// The historical payload expects the legacy labels Salesman and Warehouse.
+// Present canonical Salesperson/Storekeeper role IDs through those labels only
+// inside this audit process so the legacy dataset builder remains valid while
+// production and all final evidence use the canonical names.
+const nativeFetch = globalThis.fetch;
+globalThis.fetch = async (input, init) => {
+  const response = await nativeFetch(input, init);
+  const url = typeof input === 'string' ? input : input?.url || '';
+  if (!url.includes('/api/v1/access-control') || !response.ok) return response;
+
+  const payloadText = await response.text();
+  let payloadJson;
+  try {
+    payloadJson = JSON.parse(payloadText);
+  } catch {
+    return new Response(payloadText, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }
+
+  const roles = payloadJson?.data?.roles;
+  if (Array.isArray(roles)) {
+    payloadJson.data.roles = roles.map((role) => {
+      if (role?.name === 'Salesperson') return { ...role, name: 'Salesman' };
+      if (role?.name === 'Storekeeper') return { ...role, name: 'Warehouse' };
+      return role;
+    });
+  }
+  return new Response(JSON.stringify(payloadJson), {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+};
+
+try {
+  await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+} finally {
+  globalThis.fetch = nativeFetch;
+}
 
 // Add the ten required suppliers through the authenticated production API and verify persistence.
 const runtimePath = 'retail-live-audit-runtime.json';
