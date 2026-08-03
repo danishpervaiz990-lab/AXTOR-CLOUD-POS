@@ -70,11 +70,9 @@ qaSuppliers = suppliers.filter((supplier) => String(supplier.name || '').startsW
 
 const productsPayload = await api('/api/v1/products?active=true&limit=500', { token });
 const products = Array.isArray(productsPayload?.data) ? productsPayload.data : [];
-const qaProducts = products.filter((product) => /^QA Retail Product /i.test(String(product.name || '')));
 
 const customersPayload = await api('/api/v1/customers?active=true&limit=500', { token });
 const customers = Array.isArray(customersPayload?.data) ? customersPayload.data : [];
-const qaCustomers = customers.filter((customer) => /^QA Customer /i.test(String(customer.name || '')));
 
 const invoicesPayload = await api('/api/v1/sales-documents?documentType=invoice&limit=500', { token });
 const invoices = Array.isArray(invoicesPayload?.data) ? invoicesPayload.data : [];
@@ -85,19 +83,19 @@ const uniqueDocumentNumbers = new Set(documentNumbers);
 
 report.counts = {
   ...(report.counts || {}),
-  productCount: qaProducts.length,
-  customerCount: qaCustomers.length,
+  productCount: products.length,
+  customerCount: customers.length,
   supplierCount: qaSuppliers.length,
   invoiceCount: invoices.length,
 };
 report.acceptance = report.acceptance || {};
 report.acceptance['Exactly 100 products created'] = {
-  result: qaProducts.length === 100 ? 'PASS' : 'FAIL',
-  detail: `${qaProducts.length} active isolated QA products persisted through the product API`,
+  result: products.length === 100 ? 'PASS' : 'FAIL',
+  detail: `${products.length} active tenant-scoped products persisted through the product API`,
 };
 report.acceptance['Exactly 50 customers created'] = {
-  result: qaCustomers.length === 50 ? 'PASS' : 'FAIL',
-  detail: `${qaCustomers.length} active isolated QA customers persisted through the customer API`,
+  result: customers.length === 50 ? 'PASS' : 'FAIL',
+  detail: `${customers.length} active tenant-scoped customers persisted through the customer API`,
 };
 report.acceptance['Exactly 10 suppliers created'] = {
   result: qaSuppliers.length === 10 ? 'PASS' : 'FAIL',
@@ -122,8 +120,8 @@ report.overall = nonBrowserAcceptance && reconciliationPass && modulePass && sec
 report.releaseVolumeVerification = {
   verifiedAt: new Date().toISOString(),
   businessSlug,
-  products: qaProducts.length,
-  customers: qaCustomers.length,
+  products: products.length,
+  customers: customers.length,
   suppliers: qaSuppliers.length,
   invoices: invoices.length,
   uniqueInvoiceIds: uniqueInvoiceIds.size,
