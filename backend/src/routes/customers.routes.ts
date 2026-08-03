@@ -7,16 +7,17 @@ import {
   updateCustomer,
 } from "../controllers/customers.controller.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { requirePermission } from "../middleware/permission.middleware.js";
 
 export const customersRouter = Router();
 
 customersRouter.use(requireAuth);
 
-customersRouter.get("/", listCustomers);
-customersRouter.get("/:id", getCustomer);
-customersRouter.post("/", createCustomer);
-customersRouter.patch("/:id", updateCustomer);
-customersRouter.delete("/:id", deleteCustomer);
+customersRouter.get("/", requirePermission("customers.view"), listCustomers);
+customersRouter.get("/:id", requirePermission("customers.view"), getCustomer);
+customersRouter.post("/", requirePermission("customers.manage"), createCustomer);
+customersRouter.patch("/:id", requirePermission("customers.manage"), updateCustomer);
+customersRouter.delete("/:id", requirePermission("customers.manage"), deleteCustomer);
 
 export const customersRoutes = customersRouter;
 export const router = customersRouter;
