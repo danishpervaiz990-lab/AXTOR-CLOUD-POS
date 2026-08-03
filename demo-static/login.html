@@ -13,29 +13,32 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    :root{--green:#0f9f78;--dark:#08775b;--ink:#0f172a}*{box-sizing:border-box}body{min-height:100vh;margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:radial-gradient(circle at 12% 15%,rgba(78,227,180,.28),transparent 30%),radial-gradient(circle at 86% 20%,rgba(15,159,120,.20),transparent 28%),linear-gradient(135deg,#f7fffb,#eefbf6 45%,#fff)}.shell{width:min(1120px,calc(100% - 32px));min-height:100vh;margin:auto;display:grid;grid-template-columns:1fr 460px;gap:32px;align-items:center;padding:36px 0}.hero,.panel{border:1px solid rgba(15,159,120,.18);border-radius:32px;box-shadow:0 28px 90px rgba(15,23,42,.16);backdrop-filter:blur(22px)}.hero{padding:42px;background:rgba(255,255,255,.65)}.brand{display:flex;align-items:center;gap:14px;margin-bottom:42px}.mark{width:52px;height:52px;border-radius:18px;display:grid;place-items:center;color:#fff;font-size:26px;font-weight:900;background:linear-gradient(135deg,var(--green),#4ee3b4)}h1{font-size:24px;font-weight:900;margin:0}.hero h2{font-size:clamp(38px,5vw,64px);line-height:.98;letter-spacing:-.06em;font-weight:900}.hero h2 span{color:var(--green)}.hero p{max-width:580px;color:#475569;font-size:17px;line-height:1.7}.panel{padding:34px;background:rgba(255,255,255,.88)}.panel h2{font-size:32px;font-weight:900;letter-spacing:-.04em}.subtitle{color:#64748b;line-height:1.6;margin:8px 0 26px}.form-label{font-size:13px;font-weight:800}.form-control{min-height:52px;border-radius:16px;border:1px solid rgba(15,23,42,.12);font-weight:600}.form-control:focus{border-color:rgba(15,159,120,.55);box-shadow:0 0 0 4px rgba(15,159,120,.11)}.password-wrap{position:relative}.password-toggle{position:absolute;right:14px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#64748b}.login-btn{min-height:54px;border:0;border-radius:17px;color:#fff;font-weight:900;background:linear-gradient(135deg,var(--green),#16c79a);box-shadow:0 16px 34px rgba(15,159,120,.28)}.login-btn:disabled{opacity:.7}.hint{margin-top:12px;font-size:12px;color:#64748b}.alert{border-radius:16px;border:0;font-weight:700}.new-link{color:var(--dark);font-weight:800;text-decoration:none}@media(max-width:900px){.shell{grid-template-columns:1fr;padding:22px 0}.hero{display:none}.panel{padding:26px}}
+    :root{--green:#0f9f78;--dark:#08775b;--ink:#0f172a}*{box-sizing:border-box}body{min-height:100vh;margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:radial-gradient(circle at 12% 15%,rgba(78,227,180,.28),transparent 30%),radial-gradient(circle at 86% 20%,rgba(15,159,120,.20),transparent 28%),linear-gradient(135deg,#f7fffb,#eefbf6 45%,#fff)}.shell{width:min(1120px,calc(100% - 32px));min-height:100vh;margin:auto;display:grid;grid-template-columns:1fr 460px;gap:32px;align-items:center;padding:36px 0}.hero,.panel{border:1px solid rgba(15,159,120,.18);border-radius:32px;box-shadow:0 28px 90px rgba(15,23,42,.16);backdrop-filter:blur(22px)}.hero{padding:42px;background:rgba(255,255,255,.65)}.brand{display:flex;align-items:center;gap:14px;margin-bottom:42px}.mark{width:52px;height:52px;border-radius:18px;display:grid;place-items:center;color:#fff;font-size:26px;font-weight:900;background:linear-gradient(135deg,var(--green),#4ee3b4)}h1{font-size:24px;font-weight:900;margin:0}.hero h2{font-size:clamp(38px,5vw,64px);line-height:.98;letter-spacing:-.06em;font-weight:900}.hero h2 span{color:var(--green)}.hero p{max-width:580px;color:#475569;font-size:17px;line-height:1.7}.panel{padding:34px;background:rgba(255,255,255,.88)}.panel h2{font-size:32px;font-weight:900;letter-spacing:-.04em}.subtitle{color:#64748b;line-height:1.6;margin:8px 0 26px}.form-label{font-size:13px;font-weight:800}.form-control{min-height:52px;border-radius:16px;border:1px solid rgba(15,23,42,.12);font-weight:600}.form-control:focus{border-color:rgba(15,159,120,.55);box-shadow:0 0 0 4px rgba(15,159,120,.11)}.form-control[readonly]{background:#ecfdf5;color:#08775b}.password-wrap{position:relative}.password-toggle{position:absolute;right:14px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#64748b}.login-btn{min-height:54px;border:0;border-radius:17px;color:#fff;font-weight:900;background:linear-gradient(135deg,var(--green),#16c79a);box-shadow:0 16px 34px rgba(15,159,120,.28)}.login-btn:disabled{opacity:.7}.hint{margin-top:8px;font-size:12px;color:#64748b}.alert{border-radius:16px;border:0;font-weight:700}.new-link{color:var(--dark);font-weight:800;text-decoration:none}@media(max-width:900px){.shell{grid-template-columns:1fr;padding:22px 0}.hero{display:none}.panel{padding:26px}}
   </style>
 </head>
 <body>
   <main class="shell">
     <section class="hero">
       <div class="brand"><div class="mark">A</div><div><h1>Axtor POS Cloud</h1><small class="text-secondary fw-semibold">Secure multi-industry workspace</small></div></div>
-      <h2>Your business. Your <span>workspace.</span></h2>
-      <p>Sign in to the tenant created during registration. AXTOR automatically routes each business to its selected industry dashboard.</p>
+      <h2>Your email is your <span>workspace.</span></h2>
+      <p>Enter your registered email once. AXTOR uses the same email as the workspace identifier and routes you to the correct industry dashboard.</p>
     </section>
     <section class="panel">
       <h2>Welcome back</h2>
-      <p class="subtitle">Use the workspace generated for your business and your owner credentials.</p>
+      <p class="subtitle">Your workspace and login email are the same.</p>
       <form id="loginForm" novalidate>
         <div id="loginError" class="alert alert-danger d-none" role="alert"></div>
         <div class="mb-3">
-          <label class="form-label" for="businessSlug">Workspace</label>
-          <input id="businessSlug" class="form-control" type="text" autocomplete="organization" placeholder="your-business-workspace" maxlength="100" required>
-          <div class="hint">Automatically filled after registration or when opened from your workspace link.</div>
+          <label class="form-label" for="loginEmail">Email address</label>
+          <input id="loginEmail" class="form-control" type="email" autocomplete="username" placeholder="name@company.com" maxlength="254" required>
         </div>
-        <div class="mb-3"><label class="form-label" for="loginEmail">Email address</label><input id="loginEmail" class="form-control" type="email" autocomplete="username" placeholder="name@company.com" maxlength="254" required></div>
+        <div class="mb-3">
+          <label class="form-label" for="businessSlug">Workspace</label>
+          <input id="businessSlug" class="form-control" type="email" autocomplete="off" readonly required>
+          <div class="hint">Automatically matches your email address.</div>
+        </div>
         <div class="mb-3"><label class="form-label" for="loginPassword">Password</label><div class="password-wrap"><input id="loginPassword" class="form-control pe-5" type="password" autocomplete="current-password" required><button id="passwordToggle" class="password-toggle" type="button" aria-label="Show password"><i class="bi bi-eye"></i></button></div></div>
-        <label class="form-check mb-4"><input class="form-check-input" id="rememberDevice" type="checkbox" checked><span class="form-check-label fw-semibold">Remember workspace on this device</span></label>
+        <label class="form-check mb-4"><input class="form-check-input" id="rememberDevice" type="checkbox" checked><span class="form-check-label fw-semibold">Remember email on this device</span></label>
         <button id="loginButton" class="login-btn w-100" type="submit">Login to workspace</button>
         <div class="text-center mt-3"><a class="new-link" href="industries.html">New business? Create a workspace</a></div>
       </form>
@@ -46,7 +49,6 @@
 'use strict';
 const API='https://axtor-cloud-pos-production.up.railway.app';
 const TOKEN='axtorAuthToken';
-const LAST_WORKSPACE='axtorLastWorkspace';
 const LAST_EMAIL='axtorLastLoginEmail';
 const form=document.getElementById('loginForm');
 const workspace=document.getElementById('businessSlug');
@@ -55,36 +57,34 @@ const password=document.getElementById('loginPassword');
 const button=document.getElementById('loginButton');
 const errorBox=document.getElementById('loginError');
 const params=new URLSearchParams(location.search);
-function cleanSlug(value){return String(value||'').trim().toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,100)}
+function normalizeEmail(value){return String(value||'').trim().toLowerCase().slice(0,254)}
+function syncWorkspace(){workspace.value=normalizeEmail(email.value)}
 function showError(message){errorBox.textContent=message||'Unable to sign in.';errorBox.classList.remove('d-none')}
 function hideError(){errorBox.classList.add('d-none')}
 function loading(active){button.disabled=active;button.innerHTML=active?'<span class="spinner-border spinner-border-sm me-2"></span>Signing in…':'Login to workspace'}
 function clearSession(){[TOKEN,'axtorTokenType','axtorTokenExpiresIn','axtorBusiness','currentUser','axtorCurrentUser'].forEach(function(k){localStorage.removeItem(k)})}
 function safeReturn(value){const v=String(value||'router.html');return /^(?![a-z]+:|\/\/)[A-Za-z0-9._~!$&'()*+,;=:@%?\/#-]+$/i.test(v)?v:'router.html'}
-const queryWorkspace=cleanSlug(params.get('workspace')||params.get('businessSlug')||params.get('tenant'));
-const savedWorkspace=cleanSlug(sessionStorage.getItem('axtorCreatedWorkspace')||localStorage.getItem(LAST_WORKSPACE));
-workspace.value=queryWorkspace||savedWorkspace||'';
-email.value=String(params.get('email')||sessionStorage.getItem('axtorCreatedEmail')||localStorage.getItem(LAST_EMAIL)||'');
-if(workspace.value)workspace.classList.add('border-success');
+email.value=normalizeEmail(params.get('email')||params.get('workspace')||sessionStorage.getItem('axtorCreatedEmail')||localStorage.getItem(LAST_EMAIL));
+syncWorkspace();
+email.addEventListener('input',syncWorkspace);
 if(params.get('reason')==='session-expired')showError('Your session expired. Please sign in again.');
 document.getElementById('passwordToggle').addEventListener('click',function(){const visible=password.type==='text';password.type=visible?'password':'text';this.innerHTML=visible?'<i class="bi bi-eye"></i>':'<i class="bi bi-eye-slash"></i>'});
 form.addEventListener('submit',async function(event){
  event.preventDefault();hideError();clearSession();
- const businessSlug=cleanSlug(workspace.value),loginEmail=email.value.trim().toLowerCase(),loginPassword=password.value;
- if(!businessSlug||!loginEmail||!loginPassword){showError('Workspace, email, and password are required.');return}
+ const loginEmail=normalizeEmail(email.value),loginPassword=password.value;syncWorkspace();
+ if(!loginEmail||!loginPassword){showError('Email and password are required.');return}
  loading(true);
  try{
-  const response=await fetch(API+'/api/v1/auth/login',{method:'POST',cache:'no-store',credentials:'omit',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({businessSlug:businessSlug,email:loginEmail,password:loginPassword})});
+  const response=await fetch(API+'/api/v1/auth/login',{method:'POST',cache:'no-store',credentials:'omit',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({businessSlug:loginEmail,email:loginEmail,password:loginPassword})});
   const result=await response.json().catch(function(){return null});
-  if(!response.ok||!result?.ok||!result?.token){showError(response.status===401?'Invalid workspace, email, or password.':result?.error?.message||'Unable to sign in.');return}
+  if(!response.ok||!result?.ok||!result?.token){showError(response.status===401?'Invalid email or password.':result?.error?.message||'Unable to sign in.');return}
   const meResponse=await fetch(API+'/api/v1/auth/me',{cache:'no-store',credentials:'omit',headers:{Accept:'application/json',Authorization:'Bearer '+result.token}});
   const session=await meResponse.json().catch(function(){return null});
   if(!meResponse.ok||!session?.ok){showError(session?.error?.message||'The login session could not be verified.');return}
   const business=result.business||session.business||{};
-  const actualWorkspace=cleanSlug(business.slug||businessSlug);
-  const appUser={id:result.user?.id||null,name:result.user?.name||'User',email:result.user?.email||loginEmail,role:result.user?.role||'User',roles:result.user?.roles||[],businessId:business.id||null,businessSlug:actualWorkspace,salesmanId:null,mustChangePassword:Boolean(result.user?.mustChangePassword)};
+  const appUser={id:result.user?.id||null,name:result.user?.name||'User',email:result.user?.email||loginEmail,role:result.user?.role||'User',roles:result.user?.roles||[],businessId:business.id||null,businessSlug:business.slug||'',salesmanId:null,mustChangePassword:Boolean(result.user?.mustChangePassword)};
   localStorage.setItem('axtorApiBaseUrl',API);localStorage.setItem(TOKEN,result.token);localStorage.setItem('axtorTokenType',result.tokenType||'Bearer');localStorage.setItem('axtorTokenExpiresIn',String(result.expiresIn||86400));localStorage.setItem('axtorBusiness',JSON.stringify(business));localStorage.setItem('currentUser',JSON.stringify(appUser));localStorage.setItem('axtorCurrentUser',JSON.stringify(appUser));
-  if(document.getElementById('rememberDevice').checked){localStorage.setItem(LAST_WORKSPACE,actualWorkspace);localStorage.setItem(LAST_EMAIL,loginEmail)}else{localStorage.removeItem(LAST_WORKSPACE);localStorage.removeItem(LAST_EMAIL)}
+  if(document.getElementById('rememberDevice').checked)localStorage.setItem(LAST_EMAIL,loginEmail);else localStorage.removeItem(LAST_EMAIL);
   sessionStorage.removeItem('axtorCreatedWorkspace');sessionStorage.removeItem('axtorCreatedEmail');sessionStorage.removeItem('axtorAuthRedirectInProgress');
   const target=safeReturn(params.get('return')||sessionStorage.getItem('axtorAuthReturnUrl')||'router.html');sessionStorage.removeItem('axtorAuthReturnUrl');
   if(appUser.mustChangePassword){sessionStorage.setItem('axtorPasswordChangeReturn',target);location.assign('change-password.html')}else location.assign(target);
