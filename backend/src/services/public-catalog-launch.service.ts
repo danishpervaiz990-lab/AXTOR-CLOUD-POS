@@ -240,7 +240,7 @@ export async function register(req: Request, input: Record<string, unknown>) {
     // Railway's pooled production connection cannot reliably start Prisma
     // interactive transactions. Provision with ordinary queries and compensate
     // by cascade-deleting the temporary Business if any dependent write fails.
-    let business = await prisma.business.create({ data: { name: businessName, slug, status: "PROVISIONING", country, timezone, currency: baseCurrency, subscriptionPlan: plan.code, subscriptionStatus: "TRIAL", trialEndsAt, defaultLanguage: language, onboardingState: "IN_PROGRESS", onboardingStep: 0, taxLabel } });
+    let business = await prisma.business.create({ data: { name: businessName, slug, status: "SUSPENDED", country, timezone, currency: baseCurrency, subscriptionPlan: plan.code, subscriptionStatus: "TRIAL", trialEndsAt, defaultLanguage: language, onboardingState: "IN_PROGRESS", onboardingStep: 0, taxLabel } });
     createdBusinessId = business.id;
 
     const branch = await prisma.branch.create({ data: { businessId: business.id, name: firstBranch, code: "MAIN", country, type: pack.name } });
