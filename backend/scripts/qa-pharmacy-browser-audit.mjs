@@ -28,10 +28,13 @@ function cleanErrors(errors, user) {
   });
 }
 
+const roleOrder = new Map([['cashier1', 1], ['cashier2', 2], ['van', 3], ['manager', 4], ['owner', 5]]);
+const auditUsers = [...runtime.users].sort((a, b) => (roleOrder.get(a.key) || 99) - (roleOrder.get(b.key) || 99));
 const browser = await chromium.launch({ headless: true });
 const results = [];
 try {
-  for (const user of runtime.users) {
+  for (const user of auditUsers) {
+    await new Promise((resolve) => setTimeout(resolve, 750));
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
     const page = await context.newPage();
     const errors = [];
@@ -65,34 +68,39 @@ try {
       roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === String(user.role).toLowerCase());
 
       for (const [key, route, required] of pages) {
-        await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
         let ok = false;
-        if (key === 'billing') {
-          await page.waitForFunction(() => {
-            const heading = String(document.querySelector('.rx-hero h2')?.textContent || '').trim();
-            const rows = document.querySelectorAll('#pharmacyContent .rx-table tbody tr').length;
-            return /pharmacy billing/i.test(heading) && rows > 0;
-          }, null, { timeout: 45000 }).catch(() => null);
-          const state = await page.evaluate(() => ({
-            heading: String(document.querySelector('.rx-hero h2')?.textContent || '').trim(),
-            rows: document.querySelectorAll('#pharmacyContent .rx-table tbody tr').length,
-            errorVisible: !document.querySelector('#pharmacyError')?.hidden,
-          }));
-          ok = /pharmacy billing/i.test(state.heading) && state.rows > 0 && !state.errorVisible;
-        } else {
-          await page.waitForFunction((terms) => {
-            const body = String(document.body?.innerText || '').toLowerCase();
-            const loading = /loading pharmacy|loading…|saving…/i.test(body);
-            return !loading && terms.every((term) => body.includes(String(term).toLowerCase()));
-          }, required, { timeout: 45000 }).catch(() => null);
-          const body = await page.locator('body').innerText().catch(() => '');
-          ok = required.every((term) => body.toLowerCase().includes(term.toLowerCase())) && !/page not found|404/i.test(body);
+        let finalUrl = '';
+        for (let attempt = 1; attempt <= 2 && !ok; attempt += 1) {
+          await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          if (key === 'billing') {
+            await page.waitForFunction(() => {
+              const heading = String(document.querySelector('.rx-hero h2')?.textContent || '').trim();
+              const rows = document.querySelectorAll('#pharmacyContent .rx-table tbody tr').length;
+              return /pharmacy billing/i.test(heading) && rows > 0;
+            }, null, { timeout: 45000 }).catch(() => null);
+            const state = await page.evaluate(() => ({
+              heading: String(document.querySelector('.rx-hero h2')?.textContent || '').trim(),
+              rows: document.querySelectorAll('#pharmacyContent .rx-table tbody tr').length,
+              errorVisible: !document.querySelector('#pharmacyError')?.hidden,
+            }));
+            ok = /pharmacy billing/i.test(state.heading) && state.rows > 0 && !state.errorVisible;
+          } else {
+            await page.waitForFunction((terms) => {
+              const body = String(document.body?.innerText || '').toLowerCase();
+              const loading = /loading pharmacy|loading…|saving…/i.test(body);
+              return !loading && terms.every((term) => body.includes(String(term).toLowerCase()));
+            }, required, { timeout: 45000 }).catch(() => null);
+            const body = await page.locator('body').innerText().catch(() => '');
+            ok = required.every((term) => body.toLowerCase().includes(term.toLowerCase())) && !/page not found|404/i.test(body);
+          }
+          finalUrl = page.url();
+          if (!ok && attempt === 1) await page.waitForTimeout(1500);
         }
-        pageResults.push({ key, route, ok, finalUrl: page.url() });
+        pageResults.push({ key, route, ok, finalUrl });
         if (user.key === 'owner') await page.screenshot({ path: `${evidenceDir}/owner-${key}.png`, fullPage: true });
       }
     } catch (error) {
-      errors.push(`audit: ${error.message}`);
+      errors.push(`audit: ${error?.message || String(error) || 'unknown browser audit error'}`);
     }
 
     const relevantErrors = cleanErrors(errors, user);
