@@ -2,6 +2,8 @@ import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
 import { shouldUpgradeLegacySystemRolePermissions, systemRoleDefinitions } from "./system-role-definitions.js";
 
+const legacyAliasRoles = new Set(["Salesman", "Warehouse"]);
+
 export async function ensureSystemRoles(tx: any, businessId: string): Promise<void> {
   for (const definition of systemRoleDefinitions) {
     const current = await tx.role.findUnique({
@@ -9,6 +11,7 @@ export async function ensureSystemRoles(tx: any, businessId: string): Promise<vo
     });
 
     if (!current) {
+      if (legacyAliasRoles.has(definition.name)) continue;
       await tx.role.create({
         data: {
           businessId,
