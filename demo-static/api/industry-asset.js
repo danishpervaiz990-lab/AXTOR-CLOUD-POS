@@ -45,17 +45,8 @@ function safePath(value, fallback) {
   } catch {
     return null;
   }
-
   const selected = decoded || fallback;
-  if (
-    !selected ||
-    selected.length > 500 ||
-    selected.includes("..") ||
-    selected.includes("\\") ||
-    !/^[A-Za-z0-9._/()-]+$/.test(selected)
-  ) {
-    return null;
-  }
+  if (!selected || selected.length > 500 || selected.includes("..") || selected.includes("\\") || !/^[A-Za-z0-9._/()-]+$/.test(selected)) return null;
   return selected;
 }
 
@@ -72,32 +63,31 @@ function numericHeader(headers, name) {
 }
 
 function textResponse(message, status, extraHeaders = {}) {
-  return new Response(message, {
-    status,
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "X-Content-Type-Options": "nosniff",
-      ...extraHeaders
-    }
-  });
+  return new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff", ...extraHeaders } });
+}
+
+function injectIndustryRuntime(industry, pathname, bytes, type) {
+  if (industry !== "grocery" || !type.startsWith("text/html")) return bytes;
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let html = decoder.decode(bytes);
+  if (!html.includes("grocery-sidebar-repair.js")) {
+    const script = '<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>';
+    html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, script + "</body>") : html + script;
+  }
+  return encoder.encode(html);
 }
 
 export default async function industryAsset(request) {
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return textResponse("Method not allowed", 405, { Allow: "GET, HEAD" });
-  }
+  if (request.method !== "GET" && request.method !== "HEAD") return textResponse("Method not allowed", 405, { Allow: "GET, HEAD" });
 
   const requestUrl = new URL(request.url);
   const industry = String(requestUrl.searchParams.get("industry") || "").toLowerCase().trim();
   const release = RELEASES[industry];
-  if (!release) {
-    return textResponse("Industry frontend is not released", 404);
-  }
+  if (!release) return textResponse("Industry frontend is not released", 404);
 
   const pathname = safePath(requestUrl.searchParams.get("path"), release.dashboard);
-  if (!pathname) {
-    return textResponse("Invalid industry asset path", 400);
-  }
+  if (!pathname) return textResponse("Invalid industry asset path", 400);
 
   const encodedPath = pathname.split("/").map(encodeURIComponent).join("/");
   const source = `${REPOSITORY_RAW}/${release.branch}/demo-static/${encodedPath}`;
@@ -105,25 +95,15 @@ export default async function industryAsset(request) {
   try {
     const upstream = await fetch(source, {
       method: request.method,
-      headers: {
-        Accept: "*/*",
-        "User-Agent": "Axtor-POS-Industry-Delivery/2.0"
-      },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.1" },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
 
-    if (!upstream.ok) {
-      return textResponse(
-        upstream.status === 404 ? "Industry asset not found" : "Industry asset source unavailable",
-        upstream.status === 404 ? 404 : 502
-      );
-    }
+    if (!upstream.ok) return textResponse(upstream.status === 404 ? "Industry asset not found" : "Industry asset source unavailable", upstream.status === 404 ? 404 : 502);
 
     const declaredSize = numericHeader(upstream.headers, "content-length");
-    if (declaredSize !== null && declaredSize > MAX_ASSET_BYTES) {
-      return textResponse("Industry asset exceeds delivery limit", 413);
-    }
+    if (declaredSize !== null && declaredSize > MAX_ASSET_BYTES) return textResponse("Industry asset exceeds delivery limit", 413);
 
     const type = CONTENT_TYPES[extension(pathname)] || upstream.headers.get("content-type") || "application/octet-stream";
     const isDocument = type.startsWith("text/html") || pathname === "service-worker.js" || pathname === "session-handoff.html";
@@ -135,9 +115,7 @@ export default async function industryAsset(request) {
       "X-Robots-Tag": "noindex",
       "X-Axtor-Industry": industry,
       "X-Axtor-Frontend-Branch": release.branch,
-      "Cache-Control": isDocument
-        ? "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
-        : "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400"
+      "Cache-Control": isDocument ? "public, max-age=0, s-maxage=30, stale-while-revalidate=60" : "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
     });
 
     const etag = upstream.headers.get("etag");
@@ -145,24 +123,15 @@ export default async function industryAsset(request) {
     if (etag) headers.set("ETag", etag);
     if (lastModified) headers.set("Last-Modified", lastModified);
 
-    if (request.method === "HEAD") {
-      return new Response(null, { status: 200, headers });
-    }
+    if (request.method === "HEAD") return new Response(null, { status: 200, headers });
 
-    const bytes = await upstream.arrayBuffer();
-    if (bytes.byteLength > MAX_ASSET_BYTES) {
-      return textResponse("Industry asset exceeds delivery limit", 413);
-    }
-
-    return new Response(bytes, { status: 200, headers });
+    const raw = new Uint8Array(await upstream.arrayBuffer());
+    if (raw.byteLength > MAX_ASSET_BYTES) return textResponse("Industry asset exceeds delivery limit", 413);
+    const body = injectIndustryRuntime(industry, pathname, raw, type);
+    return new Response(body, { status: 200, headers });
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
-    console.error("Industry asset proxy failed", {
-      industry,
-      pathname,
-      timedOut,
-      message: error instanceof Error ? error.message : String(error)
-    });
+    console.error("Industry asset proxy failed", { industry, pathname, timedOut, message: error instanceof Error ? error.message : String(error) });
     return textResponse(timedOut ? "Industry asset source timed out" : "Industry asset source unavailable", 502);
   }
 }
