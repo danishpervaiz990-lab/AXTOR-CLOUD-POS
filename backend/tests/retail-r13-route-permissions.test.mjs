@@ -44,7 +44,7 @@ test("financial and stock mutations keep persistent idempotency after authorizat
     ["sales-returns", ["sales_return.create"]],
     ["refunds", ["refund.create"]],
     ["inventory", ["inventory.adjustment.create", "inventory.transfer.create", "inventory.stock-count.approve"]],
-    ["purchases", ["purchase.create", "purchase.receive", "purchase.return", "purchase.supplier-payment.create"]],
+    ["purchases", ["purchase.create", "purchase.receive", "purchase.return.create", "purchase.supplier-payment.create"]],
   ];
 
   for (const [routeName, actions] of criticalRoutes) {
