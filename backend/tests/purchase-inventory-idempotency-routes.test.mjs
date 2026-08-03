@@ -39,8 +39,16 @@ test("all inventory-changing writes require persistent idempotency", () => {
   }
 });
 
-test("inventory read routes remain available without write middleware", () => {
-  assert.match(inventoryRoutes, /router\.get\(\"\/stock\",c\.stock\)/);
-  assert.match(inventoryRoutes, /router\.get\(\"\/movements\",c\.movements\)/);
-  assert.match(inventoryRoutes, /router\.get\(\"\/valuation\",c\.valuation\)/);
+test("inventory read routes remain permission protected without write idempotency", () => {
+  for (const [path, handler] of [
+    ["/stock", "stock"],
+    ["/movements", "movements"],
+    ["/valuation", "valuation"],
+  ]) {
+    const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const routePattern = new RegExp(`router\\.get\\(\\"${escapedPath}\\", requirePermission\\(\\"inventory\\.view\\"\\), c\\.${handler}\\)`);
+    assert.match(inventoryRoutes, routePattern);
+    const writeMiddlewareOnRead = new RegExp(`router\\.get\\(\\"${escapedPath}\\"[^;]*requirePersistentIdempotency`);
+    assert.doesNotMatch(inventoryRoutes, writeMiddlewareOnRead);
+  }
 });

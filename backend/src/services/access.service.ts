@@ -1,4 +1,5 @@
 import type { Request } from "express";
+import { effectivePermissionsForRole } from "./system-role-definitions.js";
 
 export type UserAccess = {
   userId: string;
@@ -27,7 +28,7 @@ export async function loadUserAccess(tx: any, businessId: string, userId?: strin
   const permissions = new Set<string>();
 
   for (const entry of user.userRoles || []) {
-    for (const permission of entry.role?.permissions || []) {
+    for (const permission of effectivePermissionsForRole(entry.role?.name, entry.role?.permissions)) {
       const value = String(permission || "").trim();
       if (value) permissions.add(value);
     }
@@ -56,7 +57,6 @@ export function hasPermission(access: UserAccess, permission: string, legacyDefa
     if (access.permissions.has(wildcard)) return true;
   }
 
-  // Backward compatibility: existing installations may have roles but no populated permission array yet.
   if (legacyDefault && access.permissions.size === 0) return true;
   return false;
 }
