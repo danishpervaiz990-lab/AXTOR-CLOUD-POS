@@ -113,7 +113,7 @@ test("legacy untouched role permissions upgrade without overriding customized ro
   assert.deepEqual(effectivePermissionsForRole("Retail Manager", customized), [...customized].sort());
 });
 
-test("system role seeding reuses tenant role families and avoids legacy duplicates", async () => {
+test("system role seeding migrates untouched aliases and avoids duplicate role families", async () => {
   const existing = [
     { id: "manager", name: "Retail Manager", permissions: byName.get("Manager").legacyPermissions },
     { id: "cashier", name: "Retail Cashier", permissions: byName.get("Cashier").legacyPermissions },
@@ -127,8 +127,10 @@ test("system role seeding reuses tenant role families and avoids legacy duplicat
     role: {
       findMany: async () => existing.map((role) => ({ ...role })),
       update: async ({ where, data }) => {
+        const original = existing.find((role) => role.id === where.id);
+        const next = { ...original, ...data };
         updated.push({ id: where.id, data });
-        return { ...existing.find((role) => role.id === where.id), ...data };
+        return next;
       },
       create: async ({ data }) => {
         const role = { id: `created-${data.name}`, ...data };
@@ -148,7 +150,40 @@ test("system role seeding reuses tenant role families and avoids legacy duplicat
   assert.equal(createdNames.includes("Salesman"), false);
   assert.equal(createdNames.includes("Warehouse"), false);
   assert.ok(updated.some((entry) => entry.id === "manager" && entry.data.permissions.includes("products.manage")));
-  assert.ok(updated.some((entry) => entry.id === "warehouse" && entry.data.permissions.includes("inventory.transfer")));
+  assert.ok(updated.some((entry) => entry.id === "salesman" && entry.data.name === "Salesperson"));
+  assert.ok(updated.some((entry) => entry.id === "warehouse" && entry.data.name === "Storekeeper" && entry.data.permissions.includes("inventory.transfer")));
+});
+
+test("custom legacy aliases are preserved while canonical roles are added", async () => {
+  const existing = [
+    { id: "custom-salesman", name: "Salesman", permissions: ["sales_documents.view"] },
+    { id: "custom-warehouse", name: "Warehouse", permissions: ["inventory.view"] },
+    { id: "owner", name: "Owner", permissions: ["*"] },
+  ];
+  const created = [];
+  const updated = [];
+  const tx = {
+    role: {
+      findMany: async () => existing.map((role) => ({ ...role })),
+      update: async ({ where, data }) => {
+        const original = existing.find((role) => role.id === where.id);
+        const next = { ...original, ...data };
+        updated.push({ id: where.id, data });
+        return next;
+      },
+      create: async ({ data }) => {
+        const role = { id: `created-${data.name}`, ...data };
+        created.push(role);
+        return role;
+      },
+    },
+  };
+
+  await ensureSystemRoles(tx, "business-1");
+  assert.ok(created.some((role) => role.name === "Salesperson"));
+  assert.ok(created.some((role) => role.name === "Storekeeper"));
+  assert.equal(updated.find((entry) => entry.id === "custom-salesman")?.data.name, "Salesman");
+  assert.equal(updated.find((entry) => entry.id === "custom-warehouse")?.data.name, "Warehouse");
 });
 
 test("permission evaluation honors owner, admin, exact and wildcard access", () => {

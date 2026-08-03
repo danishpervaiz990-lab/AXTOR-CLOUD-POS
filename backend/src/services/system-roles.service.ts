@@ -7,6 +7,10 @@ import {
 } from "./system-role-definitions.js";
 
 const legacyAliasRoles = new Set(["Salesman", "Warehouse"]);
+const canonicalRoleRenames = new Map([
+  ["salesman", "Salesperson"],
+  ["warehouse", "Storekeeper"],
+]);
 
 function roleFamily(name: unknown): string {
   const value = String(name || "").trim().toLowerCase();
@@ -21,27 +25,48 @@ function roleFamily(name: unknown): string {
   return value;
 }
 
+function isCanonicalExactMatch(roleName: unknown, canonicalName: string): boolean {
+  return String(roleName || "").trim().toLowerCase() === canonicalName.toLowerCase();
+}
+
 export async function ensureSystemRoles(tx: any, businessId: string): Promise<void> {
   const existingRoles = await tx.role.findMany({ where: { businessId } });
 
   for (const current of existingRoles) {
     const definition = findSystemRoleDefinition(current.name);
     if (!definition) continue;
+
     const upgradePermissions = shouldUpgradeLegacySystemRolePermissions(current.name, current.permissions);
-    await tx.role.update({
+    const canonicalRename = canonicalRoleRenames.get(String(current.name || "").trim().toLowerCase());
+    const canonicalAlreadyExists = canonicalRename
+      ? existingRoles.some((role: any) => role.id !== current.id && isCanonicalExactMatch(role.name, canonicalRename))
+      : false;
+    const nextName = canonicalRename && upgradePermissions && !canonicalAlreadyExists
+      ? canonicalRename
+      : current.name;
+
+    const updated = await tx.role.update({
       where: { id: current.id },
       data: {
+        name: nextName,
         isSystemRole: true,
         description: definition.description,
         ...(upgradePermissions ? { permissions: [...definition.permissions] } : {}),
       },
     });
+    current.name = updated.name;
+    current.permissions = updated.permissions;
+    current.description = updated.description;
+    current.isSystemRole = updated.isSystemRole;
   }
 
   for (const definition of systemRoleDefinitions) {
     if (legacyAliasRoles.has(definition.name)) continue;
     const family = roleFamily(definition.name);
-    const equivalent = existingRoles.some((role: any) => roleFamily(role.name) === family);
+    const exactCanonicalRequired = definition.name === "Salesperson" || definition.name === "Storekeeper";
+    const equivalent = existingRoles.some((role: any) => exactCanonicalRequired
+      ? isCanonicalExactMatch(role.name, definition.name)
+      : roleFamily(role.name) === family);
     if (equivalent) continue;
 
     const created = await tx.role.create({
