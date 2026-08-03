@@ -33,20 +33,22 @@ jobs:
         run: node backend/scripts/qa-retail-live-audit.mjs
 
       - name: Install browser runtime
-        if: hashFiles('retail-live-audit-runtime.json') != ''
+        if: always() && steps.transaction_audit.conclusion == 'success'
         run: |
+          test -f retail-live-audit-runtime.json
           mkdir -p /tmp/axtor-playwright
           npm init -y --prefix /tmp/axtor-playwright >/dev/null
           npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
           /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
 
       - name: Test all five users through the live login page
-        if: hashFiles('retail-live-audit-runtime.json') != ''
+        id: browser_audit
+        if: always() && steps.transaction_audit.conclusion == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-retail-browser-audit.mjs
 
       - name: Encrypt credential report
-        if: hashFiles('retail-live-audit-credentials.json') != ''
+        if: always() && hashFiles('retail-live-audit-credentials.json') != ''
         run: |
           openssl cms -encrypt -binary -aes-256-cbc \
             -in retail-live-audit-credentials.json \
@@ -54,7 +56,8 @@ jobs:
             -outform DER \
             backend/scripts/retail-audit-recipient-cert.pem
           test -s retail-live-audit-credentials.p7m
-          shred -u retail-live-audit-credentials.json retail-live-audit-runtime.json
+          shred -u retail-live-audit-credentials.json
+          if [ -f retail-live-audit-runtime.json ]; then shred -u retail-live-audit-runtime.json; fi
 
       - name: Upload encrypted audit package
         if: always()
@@ -71,6 +74,11 @@ jobs:
 
       - name: Enforce launch-readiness result
         if: always()
+        env:
+          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.conclusion }}
+          BROWSER_OUTCOME: ${{ steps.browser_audit.conclusion }}
         run: |
+          test "$TRANSACTION_OUTCOME" = "success"
+          test "$BROWSER_OUTCOME" = "success"
           test -s retail-live-audit-report.json
           node -e "const r=require('./retail-live-audit-report.json'); console.log('Retail audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
