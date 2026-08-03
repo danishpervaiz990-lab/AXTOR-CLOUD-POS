@@ -125,7 +125,7 @@ test('failed provisioning cascade-deletes the temporary Business and all partial
 
 test('production registration avoids Prisma interactive transactions', () => {
   assert.doesNotMatch(serviceSource, /prisma\.\$transaction\s*\(\s*async/);
-  assert.match(serviceSource, /status: "PROVISIONING"/);
+  assert.match(serviceSource, /status: "SUSPENDED"/);
   assert.match(serviceSource, /onboardingState: "IN_PROGRESS"/);
   assert.match(serviceSource, /cleanupProvisioningBusiness/);
   assert.match(serviceSource, /business = await prisma\.business\.update/);
