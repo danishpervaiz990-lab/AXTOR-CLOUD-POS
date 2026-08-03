@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: axtor-live-tenant-registration
+  cancel-in-progress: false
+
 jobs:
   retail-r13-seven-role-live-audit:
     runs-on: ubuntu-latest
