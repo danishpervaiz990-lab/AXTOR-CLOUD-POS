@@ -40,6 +40,14 @@ exact(
   'canonical Retail role resolver',
 );
 
+// Cashiers are now intentionally authorized to receive payments. Verify that
+// authorization reaches business validation without creating a financial record.
+exact(
+  "  let unauthorizedCashierPaymentRejected = false;\n  try {\n    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: `${RUN_ID}:payment:unauthorized-cashier` } });\n  } catch (error) { unauthorizedCashierPaymentRejected = /Permission denied|payments\\.create/i.test(error.message); }\n  check(unauthorizedCashierPaymentRejected, 'Unauthorized cashier payment action', 'Cashier payment posting was denied and requires an authorized role');",
+  "  const cashierPaymentValidation = await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [400], retries: 0, body: {} });\n  check(cashierPaymentValidation.status === 400 && !/Permission denied|payments\\.create/i.test(String(cashierPaymentValidation.payload?.error?.message || '')), 'Authorized cashier payment action', 'Cashier payment permission reached business validation without posting a financial record');",
+  'cashier payment permission acceptance',
+);
+
 const requestSignature = "async function request(path, { method = 'GET', token, body, headers = {}, expected = [200], retries = 2 } = {}) {";
 exact(
   requestSignature,
