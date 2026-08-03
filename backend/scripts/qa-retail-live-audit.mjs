@@ -66,14 +66,24 @@ process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '50';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 
 // The historical payload expects the legacy labels Salesman and Warehouse.
-// Present canonical Salesperson/Storekeeper role IDs through those labels only
-// inside this audit process so the legacy dataset builder remains valid while
-// production and all final evidence use the canonical names.
+// Translate canonical role-name strings in JSON responses only inside this
+// process. Production, persisted roles and final R-13 evidence stay canonical.
+function legacyAuditRoleNames(value) {
+  if (value === 'Salesperson') return 'Salesman';
+  if (value === 'Storekeeper') return 'Warehouse';
+  if (Array.isArray(value)) return value.map(legacyAuditRoleNames);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, legacyAuditRoleNames(item)]));
+  }
+  return value;
+}
+
 const nativeFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   const response = await nativeFetch(input, init);
-  const url = typeof input === 'string' ? input : input?.url || '';
-  if (!url.includes('/api/v1/access-control') || !response.ok) return response;
+  if (!response.ok || !String(response.headers.get('content-type') || '').toLowerCase().includes('application/json')) {
+    return response;
+  }
 
   const payloadText = await response.text();
   let payloadJson;
@@ -87,18 +97,13 @@ globalThis.fetch = async (input, init) => {
     });
   }
 
-  const roles = payloadJson?.data?.roles;
-  if (Array.isArray(roles)) {
-    payloadJson.data.roles = roles.map((role) => {
-      if (role?.name === 'Salesperson') return { ...role, name: 'Salesman' };
-      if (role?.name === 'Storekeeper') return { ...role, name: 'Warehouse' };
-      return role;
-    });
-  }
-  return new Response(JSON.stringify(payloadJson), {
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  return new Response(JSON.stringify(legacyAuditRoleNames(payloadJson)), {
     status: response.status,
     statusText: response.statusText,
-    headers: response.headers,
+    headers,
   });
 };
 
