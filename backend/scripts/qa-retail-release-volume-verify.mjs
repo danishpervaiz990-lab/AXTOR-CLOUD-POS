@@ -68,11 +68,11 @@ supplierPayload = await api('/api/v1/suppliers?active=true', { token });
 suppliers = Array.isArray(supplierPayload?.data) ? supplierPayload.data : [];
 qaSuppliers = suppliers.filter((supplier) => String(supplier.name || '').startsWith(supplierPrefix));
 
-const productsPayload = await api('/api/v1/products?active=true&limit=500', { token });
-const products = Array.isArray(productsPayload?.data) ? productsPayload.data : [];
+const productsPayload = await api('/api/v1/products?active=true', { token });
+const products = Array.isArray(productsPayload?.products) ? productsPayload.products : [];
 
-const customersPayload = await api('/api/v1/customers?active=true&limit=500', { token });
-const customers = Array.isArray(customersPayload?.data) ? customersPayload.data : [];
+const customersPayload = await api('/api/v1/customers?active=true', { token });
+const customers = Array.isArray(customersPayload?.customers) ? customersPayload.customers : [];
 
 const invoicesPayload = await api('/api/v1/sales-documents?documentType=invoice&limit=500', { token });
 const invoices = Array.isArray(invoicesPayload?.data) ? invoicesPayload.data : [];
