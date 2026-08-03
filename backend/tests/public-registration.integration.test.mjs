@@ -48,6 +48,31 @@ function registrationInput(suffix) {
   };
 }
 
+async function installCounterFailureTrigger() {
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE FUNCTION axtor_test_fail_counter_insert()
+    RETURNS trigger AS $$
+    BEGIN
+      IF NEW."name" LIKE 'FAIL_COUNTER_%' THEN
+        RAISE EXCEPTION 'Injected counter provisioning failure';
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql
+  `);
+  await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS axtor_test_fail_counter_insert ON "counters"');
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER axtor_test_fail_counter_insert
+    BEFORE INSERT ON "counters"
+    FOR EACH ROW EXECUTE FUNCTION axtor_test_fail_counter_insert()
+  `);
+}
+
+async function removeCounterFailureTrigger() {
+  await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS axtor_test_fail_counter_insert ON "counters"');
+  await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS axtor_test_fail_counter_insert()');
+}
+
 test('public registration provisions a complete Retail tenant in PostgreSQL', async () => {
   const suffix = crypto.randomBytes(8).toString('hex');
   const idempotencyKey = `registration-integration-${suffix}`;
@@ -96,21 +121,23 @@ test('public registration provisions a complete Retail tenant in PostgreSQL', as
 
 test('failed provisioning cascade-deletes the temporary Business and all partial children', async () => {
   const suffix = crypto.randomBytes(8).toString('hex');
-  const input = registrationInput(`rollback-${suffix}`);
-  const idempotencyKey = `registration-rollback-${suffix}`;
-  const originalCreate = prisma.counter.create;
-
-  prisma.counter.create = async () => {
-    throw new Error('Injected counter provisioning failure');
+  const input = {
+    ...registrationInput(`rollback-${suffix}`),
+    firstCounter: `FAIL_COUNTER_${suffix}`,
   };
+  const idempotencyKey = `registration-rollback-${suffix}`;
 
+  await installCounterFailureTrigger();
   try {
     await assert.rejects(
       service.register(requestFor(idempotencyKey), input),
-      /Injected counter provisioning failure/,
+      (error) => {
+        assert.match(String(error?.message || error), /Injected counter provisioning failure/);
+        return true;
+      },
     );
   } finally {
-    prisma.counter.create = originalCreate;
+    await removeCounterFailureTrigger();
   }
 
   const [business, provisioningRun, ownerUser] = await Promise.all([
