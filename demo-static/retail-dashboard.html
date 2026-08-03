@@ -55,21 +55,21 @@
           <div class="retail-visual-orbit orbit-three"><i class="bi bi-upc-scan"></i></div>
           <div class="retail-visual-main"><i class="bi bi-shop-window"></i><span>Retail</span><small>Sell · Stock · Grow</small></div>
         </div>
-        <div class="retail-sync"><span class="retail-sync-dot"></span><span id="dashboardSyncText">Synchronizing with Reports…</span></div>
+        <div class="retail-sync"><span class="retail-sync-dot"></span><span id="dashboardSyncText">Loading permitted dashboard data…</span></div>
       </section>
 
       <div class="retail-kpis retail-kpis-expanded">
-        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-cash-stack"></i></div><div><span>Today Sales</span><strong id="todaySales">—</strong><small>Daily Sales report</small></div></div>
-        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-receipt-cutoff"></i></div><div><span>Today Invoices</span><strong id="invoiceCount">—</strong><small>Invoice-only count</small></div></div>
-        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-calendar2-check"></i></div><div><span id="monthlySalesLabel">Monthly Sales</span><strong id="monthlySales">—</strong><small>Daily Sales report</small></div></div>
-        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-graph-up-arrow"></i></div><div><span>Monthly Gross Profit</span><strong id="monthlyGrossProfit">—</strong><small>Profit &amp; Loss report</small></div></div>
-        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-percent"></i></div><div><span>Gross Margin</span><strong id="monthlyGrossMargin">—</strong><small>Gross profit ÷ net sales</small></div></div>
+        <div class="retail-kpi" data-report-access="required"><div class="retail-kpi-icon"><i class="bi bi-cash-stack"></i></div><div><span>Today Sales</span><strong id="todaySales">—</strong><small>Daily Sales report</small></div></div>
+        <div class="retail-kpi" data-report-access="required"><div class="retail-kpi-icon"><i class="bi bi-receipt-cutoff"></i></div><div><span>Today Invoices</span><strong id="invoiceCount">—</strong><small>Invoice-only count</small></div></div>
+        <div class="retail-kpi" data-report-access="required"><div class="retail-kpi-icon"><i class="bi bi-calendar2-check"></i></div><div><span id="monthlySalesLabel">Monthly Sales</span><strong id="monthlySales">—</strong><small>Daily Sales report</small></div></div>
+        <div class="retail-kpi" data-report-access="required"><div class="retail-kpi-icon"><i class="bi bi-graph-up-arrow"></i></div><div><span>Monthly Gross Profit</span><strong id="monthlyGrossProfit">—</strong><small>Profit &amp; Loss report</small></div></div>
+        <div class="retail-kpi" data-report-access="required"><div class="retail-kpi-icon"><i class="bi bi-percent"></i></div><div><span>Gross Margin</span><strong id="monthlyGrossMargin">—</strong><small>Gross profit ÷ net sales</small></div></div>
         <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-box-seam"></i></div><div><span>Products</span><strong id="productCount">—</strong><small>Active catalogue</small></div></div>
         <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-people"></i></div><div><span>Customers</span><strong id="customerCount">—</strong><small>Active customers</small></div></div>
-        <div class="retail-kpi"><div class="retail-kpi-icon"><i class="bi bi-credit-card-2-front"></i></div><div><span>Outstanding Receivables</span><strong id="receivables">—</strong><small>All open invoice balances</small></div></div>
+        <div class="retail-kpi" data-report-access="required"><div class="retail-kpi-icon"><i class="bi bi-credit-card-2-front"></i></div><div><span>Outstanding Receivables</span><strong id="receivables">—</strong><small>All open invoice balances</small></div></div>
       </div>
 
-      <section class="retail-panel retail-panel-featured">
+      <section class="retail-panel retail-panel-featured" data-report-access="required">
         <div class="retail-panel-head"><div><span class="retail-section-icon"><i class="bi bi-trophy"></i></span><div><h2>Top Products This Month</h2><p>Exactly the same rows and values used by Sales by Product report.</p></div></div><a class="retail-link-button" href="reports.html"><i class="bi bi-arrow-up-right"></i> Open Full Reports</a></div>
         <div class="retail-table-wrap"><table class="retail-table"><thead><tr><th>Product</th><th>Qty</th><th>Sales</th><th>Profit</th><th>Margin %</th></tr></thead><tbody id="topProductsBody"><tr><td colspan="5">Loading report-backed products…</td></tr></tbody></table></div>
       </section>
@@ -77,7 +77,7 @@
       <section class="retail-panel">
         <div class="retail-panel-head"><div><span class="retail-section-icon"><i class="bi bi-sliders"></i></span><div><h2>Retail Control</h2><p>Operational values that complement the financial reports.</p></div></div></div>
         <div class="retail-control-grid"><div><i class="bi bi-exclamation-triangle"></i><span>Low-stock items</span><strong id="lowStock">—</strong></div><div><i class="bi bi-calendar-range"></i><span>Report period</span><strong id="reportPeriod">—</strong></div><div><i class="bi bi-list-ol"></i><span>Top-product rows</span><strong id="topProductCount">—</strong></div></div>
-        <div class="retail-note"><i class="bi bi-info-circle"></i><span>Monthly Sales, Monthly Gross Profit, Gross Margin and Top Products are loaded directly from the same report endpoints used by the Reports page.</span></div>
+        <div class="retail-note"><i class="bi bi-info-circle"></i><span>Financial report data is loaded only for roles authorized by the backend role matrix.</span></div>
         <div id="retailStatus" class="retail-status" role="status" aria-live="polite"></div>
       </section>
 
@@ -87,7 +87,7 @@
           <a class="retail-action" href="terminal.html"><i class="bi bi-upc-scan"></i><div><strong>New Checkout</strong><span>Open the retail POS terminal</span></div><b>→</b></a>
           <a class="retail-action" href="sales.html"><i class="bi bi-receipt"></i><div><strong>Sales Register</strong><span>Invoices, returns and payments</span></div><b>→</b></a>
           <a class="retail-action" href="products.html"><i class="bi bi-box-seam"></i><div><strong>Product Catalogue</strong><span>SKU, barcode and pricing</span></div><b>→</b></a>
-          <a class="retail-action" href="reports.html"><i class="bi bi-bar-chart-line"></i><div><strong>Financial Reports</strong><span>Amounts, percentages and exports</span></div><b>→</b></a>
+          <a class="retail-action" href="reports.html" data-report-access="required"><i class="bi bi-bar-chart-line"></i><div><strong>Financial Reports</strong><span>Amounts, percentages and exports</span></div><b>→</b></a>
         </div>
       </section>
     </main>
@@ -99,6 +99,6 @@
 <script src="js/core-data.js?v=20260731-premium-v2"></script>
 <script src="js/main.js?v=20260731-premium-v2"></script>
 <script src="js/theme-switcher.js?v=20260731-premium-v2"></script>
-<script src="js/retail-app.js?v=20260730-report-sync1"></script>
+<script src="js/retail-app.js?v=20260803-role-aware1"></script>
 </body>
 </html>
