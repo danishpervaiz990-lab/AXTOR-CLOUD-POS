@@ -73,18 +73,18 @@ exact(
   'request helper signature',
 );
 
+const requestLoop = `${requestSignature}\n  let last;`;
+exact(
+  requestLoop,
+  `${requestSignature}\n  const explicitIdempotencyKey = headers['Idempotency-Key'] || headers['idempotency-key'];\n  const automaticIdempotencyKey = explicitIdempotencyKey || (\n    method === 'POST' && path === '/api/v1/inventory/warehouses' ? \`${'${RUN_ID}'}:warehouse:${'${++warehouseWriteIndex}'}\` :\n    method === 'POST' && path === '/api/v1/inventory/adjustments' ? \`${'${RUN_ID}'}:adjustment:${'${++adjustmentWriteIndex}'}\` :\n    method === 'POST' && path === '/api/v1/inventory/transfers' ? \`${'${RUN_ID}'}:transfer:${'${++transferWriteIndex}'}\` :\n    method === 'POST' && path === '/api/v1/sales-documents' ? \`${'${RUN_ID}'}:sales:${'${crypto.createHash(\'sha256\').update(JSON.stringify(body ?? null)).digest(\'hex\').slice(0, 24)}'}\` :\n    null\n  );\n  let last;`,
+  'stable logical-request idempotency key',
+);
+
 const requestHeaders = "        headers: {\n          Accept: 'application/json',";
 exact(
   requestHeaders,
-  "        headers: {\n          ...(method === 'POST' && path === '/api/v1/inventory/warehouses' ? { 'Idempotency-Key': `${RUN_ID}:warehouse:${++warehouseWriteIndex}` } : {}),\n          ...(method === 'POST' && path === '/api/v1/inventory/adjustments' ? { 'Idempotency-Key': `${RUN_ID}:adjustment:${++adjustmentWriteIndex}` } : {}),\n          ...(method === 'POST' && path === '/api/v1/inventory/transfers' ? { 'Idempotency-Key': `${RUN_ID}:transfer:${++transferWriteIndex}` } : {}),\n          Accept: 'application/json',",
-  'inventory idempotency headers',
-);
-
-const requestHeaderTail = "          ...headers,\n        },";
-exact(
-  requestHeaderTail,
-  "          ...headers,\n          ...(method === 'POST' && path === '/api/v1/sales-documents' ? { 'Idempotency-Key': `${RUN_ID}:sales:${crypto.createHash('sha256').update(JSON.stringify(body ?? null)).digest('hex').slice(0, 24)}` } : {}),\n        },",
-  'sales document payload idempotency header',
+  "        headers: {\n          ...(automaticIdempotencyKey ? { 'Idempotency-Key': automaticIdempotencyKey } : {}),\n          Accept: 'application/json',",
+  'stable automatic idempotency header',
 );
 
 source = source
