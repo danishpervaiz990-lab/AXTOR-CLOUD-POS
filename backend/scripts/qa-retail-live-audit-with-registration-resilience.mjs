@@ -13,13 +13,13 @@ if (!adapterSource.includes(marker)) {
 const errorFrom = "      last = new Error(`${method} ${path} returned HTTP ${response.status}: ${payload?.error?.message || 'unexpected response'}`);";
 const errorTo = "      last = new Error(`${method} ${path} returned HTTP ${response.status}: ${payload?.error?.message || 'unexpected response'}${payload?.error?.code ? ` [${payload.error.code}]` : ''}${payload?.error?.referenceId ? ` [ref ${payload.error.referenceId}]` : ''}`);";
 const registrationFrom = "  const registration = await request('/api/v1/public/register', {\n    method: 'POST',";
-const registrationTo = "  const registration = await request('/api/v1/public/register', {\n    method: 'POST',\n    retries: 5,";
+const registrationTo = "  const registration = await request('/api/v1/public/register', {\n    method: 'POST',\n    retries: 4,";
 
 const injected = [
   `exact(${JSON.stringify(errorFrom)}, ${JSON.stringify(errorTo)}, 'public API error diagnostics');`,
-  `exact(${JSON.stringify(registrationFrom)}, ${JSON.stringify(registrationTo)}, 'bounded tenant-registration retries');`,
+  `exact(${JSON.stringify(registrationFrom)}, ${JSON.stringify(registrationTo)}, 'rate-limit-safe tenant-registration retries');`,
   "if (process.env.AXTOR_RETAIL_REGISTRATION_ADAPTER_VALIDATE_ONLY === '1') {",
-  "  if (!source.includes('retries: 5') || !source.includes('referenceId')) throw new Error('Retail registration resilience validation failed');",
+  "  if (!source.includes('retries: 4') || !source.includes('referenceId')) throw new Error('Retail registration resilience validation failed');",
   "  console.log('PASS: Retail live registration resilience adapter matches the current audit source');",
   "} else {",
   `  ${marker}`,
