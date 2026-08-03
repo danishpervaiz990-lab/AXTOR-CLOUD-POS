@@ -14,6 +14,26 @@ function cleanErrors(errors) {
   return errors.filter((message) => !/favicon|ERR_ABORTED|Failed to load resource.*404/i.test(message));
 }
 
+async function prepareLoginIdentity(page, userEmail, businessSlug) {
+  const email = String(userEmail || '').trim().toLowerCase();
+  const slug = String(businessSlug || '').trim().toLowerCase();
+  await page.locator('#loginEmail').fill(email);
+  const workspace = page.locator('#businessSlug');
+  const editable = await workspace.isEditable().catch(() => false);
+  if (editable) {
+    await workspace.fill(slug);
+    return;
+  }
+  await page.waitForFunction(
+    ({ expectedEmail, expectedSlug }) => {
+      const value = String(document.querySelector('#businessSlug')?.value || '').trim().toLowerCase();
+      return value === expectedEmail || value === expectedSlug;
+    },
+    { expectedEmail: email, expectedSlug: slug },
+    { timeout: 10000 },
+  );
+}
+
 async function waitForSynchronizedStatus(page, selector) {
   try {
     await page.waitForFunction((target) => {
@@ -90,7 +110,7 @@ const browser = await chromium.launch({ headless: true });
 const results = [];
 try {
   for (const user of runtime.users) {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
     let page = await context.newPage();
     const errors = [];
     const attachDiagnostics = (targetPage) => {
@@ -112,8 +132,7 @@ try {
     let reportsReporting = null;
     try {
       await page.goto(`${runtime.publicOrigin}/login.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.locator('#businessSlug').fill(runtime.ids.businessSlug || report.environment.businessSlug);
-      await page.locator('#loginEmail').fill(user.email);
+      await prepareLoginIdentity(page, user.email, runtime.ids.businessSlug || report.environment.businessSlug);
       await page.locator('#loginPassword').fill(user.password);
       await Promise.all([
         page.locator('#loginButton').click(),
