@@ -38,10 +38,11 @@
     const nav = document.querySelector(".g-nav");
     if (!nav) return;
     const current = window.location.pathname.split("/").pop();
-    nav.innerHTML = '<div class="g-brand">AXTOR · GROCERY</div><div class="g-nav-section">Grocery Operations</div>' + NAV_ITEMS.map(function (item) {
+    const html = '<div class="g-brand">AXTOR · GROCERY</div><div class="g-nav-section">Grocery Operations</div>' + NAV_ITEMS.map(function (item) {
       const active = item[0] === current || item[2] === PAGE;
       return '<a class="' + (active ? "active" : "") + '" href="' + item[0] + '" data-module="' + item[2] + '">' + escapeHtml(item[1]) + "</a>";
     }).join("");
+    if (nav.innerHTML !== html) nav.innerHTML = html;
   }
 
   function parseScaleBarcode(code) {
@@ -199,11 +200,20 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    const observer = new MutationObserver(function () { runEnhancements(); });
+    let scheduled = false;
+    function scheduleEnhancements() {
+      if (scheduled) return;
+      scheduled = true;
+      window.requestAnimationFrame(function () {
+        scheduled = false;
+        runEnhancements();
+      });
+    }
+    const observer = new MutationObserver(scheduleEnhancements);
     observer.observe(document.body, { childList: true, subtree: true });
     runEnhancements();
-    setTimeout(runEnhancements, 250);
-    setTimeout(runEnhancements, 1000);
+    setTimeout(scheduleEnhancements, 250);
+    setTimeout(scheduleEnhancements, 1000);
   });
 
   window.AxtorGrocery = Object.freeze({ parseScaleBarcode: parseScaleBarcode });
