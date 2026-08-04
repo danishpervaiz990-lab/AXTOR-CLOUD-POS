@@ -1,0 +1,148 @@
+name: Grocery Live Production Certification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [backend]
+    types: [opened, reopened, synchronize]
+    paths:
+      - "backend/scripts/qa-grocery-live-helpers.mjs"
+      - "backend/scripts/qa-grocery-live-preflight.mjs"
+      - "backend/scripts/qa-grocery-browser-preflight.mjs"
+      - "backend/scripts/qa-grocery-full-live-audit.mjs"
+      - "backend/scripts/qa-grocery-full-live-audit-with-payment-reconciliation.mjs"
+      - "backend/scripts/qa-grocery-extended-operations.mjs"
+      - "backend/scripts/qa-grocery-authenticated-browser-audit.mjs"
+      - "backend/tests/grocery-live-certification.test.mjs"
+      - ".github/workflows/grocery-live-certification.yml"
+      - "ops/GROCERY-LIVE-CERTIFICATION-2026-08-04.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grocery-live-certification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  grocery-live-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: G-01 backend, database and gateway preflight
+        id: preflight
+        continue-on-error: true
+        run: node backend/scripts/qa-grocery-live-preflight.mjs
+
+      - name: Install browser runtime
+        run: |
+          mkdir -p /tmp/axtor-playwright
+          npm init -y --prefix /tmp/axtor-playwright >/dev/null
+          npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
+          /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: G-01 live login browser preflight
+        id: browser_preflight
+        continue-on-error: true
+        run: node backend/scripts/qa-grocery-browser-preflight.mjs
+
+      - name: G-02 and G-03 provision tenant, atomic receiving and 100 FEFO invoices
+        id: core_transactions
+        if: always() && steps.preflight.outcome == 'success' && steps.browser_preflight.outcome == 'success'
+        continue-on-error: true
+        run: node backend/scripts/qa-grocery-full-live-audit-with-payment-reconciliation.mjs
+
+      - name: G-03 and G-04 waste, returns, refunds and report reconciliation
+        id: extended_operations
+        if: always() && steps.core_transactions.outcome == 'success'
+        continue-on-error: true
+        run: |
+          test -f grocery-live-runtime.json
+          node backend/scripts/qa-grocery-extended-operations.mjs
+
+      - name: G-05 authenticated routes, reports and print evidence
+        id: authenticated_browser
+        if: always() && steps.core_transactions.outcome == 'success'
+        continue-on-error: true
+        run: |
+          test -f grocery-live-runtime.json
+          node backend/scripts/qa-grocery-authenticated-browser-audit.mjs
+
+      - name: Encrypt Grocery credentials and remove plaintext runtime
+        if: always()
+        run: |
+          if [ -f grocery-live-credentials.json ]; then
+            openssl cms -encrypt -binary -aes-256-cbc \
+              -in grocery-live-credentials.json \
+              -out grocery-live-credentials.p7m \
+              -outform DER \
+              backend/scripts/retail-audit-recipient-cert.pem
+            test -s grocery-live-credentials.p7m
+            shred -u grocery-live-credentials.json
+          fi
+          if [ -f grocery-live-runtime.json ]; then shred -u grocery-live-runtime.json; fi
+
+      - name: Upload complete Grocery certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grocery-live-certification-${{ github.run_id }}
+          path: |
+            grocery-live-preflight-report.json
+            grocery-browser-preflight-report.json
+            grocery-full-live-audit-report.json
+            grocery-extended-operations-report.json
+            grocery-authenticated-browser-report.json
+            grocery-live-credentials.p7m
+            grocery-live-cleanup.sql
+            grocery-browser-evidence/
+            grocery-live-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce G-01 through G-05 production result
+        if: always()
+        env:
+          PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+          BROWSER_PREFLIGHT_OUTCOME: ${{ steps.browser_preflight.outcome }}
+          CORE_OUTCOME: ${{ steps.core_transactions.outcome }}
+          EXTENDED_OUTCOME: ${{ steps.extended_operations.outcome }}
+          AUTH_BROWSER_OUTCOME: ${{ steps.authenticated_browser.outcome }}
+        run: |
+          test "$PREFLIGHT_OUTCOME" = "success"
+          test "$BROWSER_PREFLIGHT_OUTCOME" = "success"
+          test "$CORE_OUTCOME" = "success"
+          test "$EXTENDED_OUTCOME" = "success"
+          test "$AUTH_BROWSER_OUTCOME" = "success"
+          test -s grocery-live-credentials.p7m
+          test -s grocery-live-cleanup.sql
+          node <<'NODE'
+          const fs=require('fs');
+          const required=[
+            ['grocery-live-preflight-report.json',['PASS']],
+            ['grocery-browser-preflight-report.json',['PASS']],
+            ['grocery-full-live-audit-report.json',['PASS_CORE_TRANSACTIONS']],
+            ['grocery-extended-operations-report.json',['PASS']],
+            ['grocery-authenticated-browser-report.json',['PASS']],
+          ];
+          let failed=false;
+          for(const [file,allowed] of required){
+            if(!fs.existsSync(file)){console.error(file,'MISSING');failed=true;continue;}
+            const report=JSON.parse(fs.readFileSync(file,'utf8'));
+            console.log(file,report.overall);
+            if(!allowed.includes(report.overall))failed=true;
+          }
+          const core=JSON.parse(fs.readFileSync('grocery-full-live-audit-report.json','utf8'));
+          if(core.counts?.products!==50||core.counts?.customers!==10||core.counts?.suppliers!==5||core.counts?.batches!==50||core.counts?.invoices!==100)failed=true;
+          const browser=JSON.parse(fs.readFileSync('grocery-authenticated-browser-report.json','utf8'));
+          if((browser.results||[]).length!==14||(browser.results||[]).some(item=>item.pass!==true))failed=true;
+          if(failed)process.exit(1);
+          NODE
