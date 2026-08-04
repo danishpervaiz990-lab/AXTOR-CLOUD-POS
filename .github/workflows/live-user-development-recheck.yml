@@ -1,0 +1,54 @@
+name: Live User Development Recheck
+
+on:
+  pull_request:
+    branches:
+      - backend
+    paths:
+      - backend/scripts/qa-live-user-development-recheck.mjs
+      - .github/workflows/live-user-development-recheck.yml
+
+permissions:
+  contents: read
+
+jobs:
+  live-user-recheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_RECHECK_OUTPUT: live-user-development-recheck.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Install isolated browser runtime
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Run live authenticated recheck
+        run: node backend/scripts/qa-live-user-development-recheck.mjs
+      - name: Validate redacted report
+        if: always()
+        run: |
+          test -s live-user-development-recheck.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('live-user-development-recheck.json', 'utf8'));
+          const raw = JSON.stringify(report);
+          if (/password|axtorAuthToken|authorization/i.test(raw)) {
+            throw new Error('Report contains a credential-shaped field');
+          }
+          console.log('Redacted report validation', { overall: report.overall, industries: Object.keys(report.tenants || {}) });
+          NODE
+      - name: Upload redacted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-user-development-recheck-${{ github.run_id }}
+          path: live-user-development-recheck.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 9
