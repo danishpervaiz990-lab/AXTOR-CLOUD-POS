@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 
+// The fixture stores schema objects only; no tenant or customer records are read.
 const shouldRun = process.env.RUN_DATABASE_INTEGRATION === '1' && Boolean(process.env.DATABASE_URL);
 const diagnosticsModule = shouldRun
   ? await import('../dist/services/business-schema-diagnostics.service.js')
