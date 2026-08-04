@@ -20,11 +20,13 @@ test('Pharmacy live audit preserves the required production dataset and reconcil
 test('Pharmacy canonical-role adapter applies only current role-label migrations', () => {
   assert.match(adapter, /replaceAll\('Pharmacy Manager', 'Manager'\)/);
   assert.match(adapter, /replaceAll\('Salesman', 'Salesperson'\)/);
+  assert.match(adapter, /roleByName\.get\('salesperson'\) \|\| roleByName\.get\('salesman'\)/);
   assert.match(adapter, /could not find the industry transformation marker/);
   assert.match(adapter, /double-patching/);
   assert.match(adapter, /flag: 'wx'/);
   assert.match(adapter, /fs\.unlink\(temporaryUrl\)/);
   assert.match(workflow, /qa-pharmacy-live-audit-with-canonical-roles\.mjs/);
+  assert.doesNotMatch(workflow, /AXTOR_PHARMACY_ROLE_ADAPTER_INSPECT/);
 });
 
 test('Pharmacy browser audit isolates all roles and page navigations', () => {
