@@ -7,6 +7,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-hardware-live-audit.mjs"
+      - "backend/scripts/qa-hardware-live-audit-with-canonical-roles.mjs"
       - "backend/scripts/qa-hardware-payment-finalizer.mjs"
       - "backend/scripts/qa-hardware-operations-audit.mjs"
       - "backend/scripts/qa-hardware-branding-audit.mjs"
@@ -44,7 +45,7 @@ jobs:
       - name: Run Hardware transaction and reports audit
         id: transaction_audit
         continue-on-error: true
-        run: node backend/scripts/qa-hardware-live-audit.mjs
+        run: node backend/scripts/qa-hardware-live-audit-with-canonical-roles.mjs
 
       - name: Settle any remaining audited credit balance
         id: payment_finalizer
