@@ -1,6 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma } from "../db/prisma.js";
 
+// Only schema names, type identifiers, and privilege booleans leave this helper.
+// Defaults, definitions, SQL text, and tenant values always remain server-side.
 const expectedBusinessColumns = new Set([
   "id",
   "name",
