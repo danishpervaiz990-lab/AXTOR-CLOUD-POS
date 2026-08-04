@@ -10,6 +10,7 @@ on:
       - "backend/scripts/qa-grocery-live-preflight.mjs"
       - "backend/scripts/qa-grocery-browser-preflight.mjs"
       - "backend/scripts/qa-grocery-full-live-audit.mjs"
+      - "backend/scripts/qa-grocery-full-live-audit-with-payment-reconciliation.mjs"
       - "backend/scripts/qa-grocery-extended-operations.mjs"
       - "backend/scripts/qa-grocery-authenticated-browser-audit.mjs"
       - "backend/tests/grocery-live-certification.test.mjs"
@@ -55,13 +56,13 @@ jobs:
 
       - name: G-02 and G-03 provision tenant, atomic receiving and 100 FEFO invoices
         id: core_transactions
-        if: always() && steps.preflight.conclusion == 'success' && steps.browser_preflight.conclusion == 'success'
+        if: always() && steps.preflight.outcome == 'success' && steps.browser_preflight.outcome == 'success'
         continue-on-error: true
-        run: node backend/scripts/qa-grocery-full-live-audit.mjs
+        run: node backend/scripts/qa-grocery-full-live-audit-with-payment-reconciliation.mjs
 
       - name: G-03 and G-04 waste, returns, refunds and report reconciliation
         id: extended_operations
-        if: always() && steps.core_transactions.conclusion == 'success'
+        if: always() && steps.core_transactions.outcome == 'success'
         continue-on-error: true
         run: |
           test -f grocery-live-runtime.json
@@ -69,7 +70,7 @@ jobs:
 
       - name: G-05 authenticated routes, reports and print evidence
         id: authenticated_browser
-        if: always() && steps.core_transactions.conclusion == 'success'
+        if: always() && steps.core_transactions.outcome == 'success'
         continue-on-error: true
         run: |
           test -f grocery-live-runtime.json
