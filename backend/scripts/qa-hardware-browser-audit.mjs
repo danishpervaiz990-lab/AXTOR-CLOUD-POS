@@ -29,8 +29,7 @@ function roleName(user) {
 
 function expectedRestricted(user, key) {
   const role = roleName(user);
-  if (role === 'owner') return false;
-  if (role === 'hardware manager') return key === 'settings';
+  if (role === 'owner' || role === 'hardware manager') return false;
   if (role === 'trade salesperson') {
     return ['dashboard', 'deliveries', 'backorders', 'rentals', 'warranties', 'unit-conversions', 'reports', 'settings'].includes(key);
   }
