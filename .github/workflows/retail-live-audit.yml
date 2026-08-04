@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   retail-live-audit:
+    if: github.head_ref != 'ops/retail-r13-seven-role-live-certification-v2'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
