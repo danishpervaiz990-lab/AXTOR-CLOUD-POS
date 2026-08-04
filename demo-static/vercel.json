@@ -62,7 +62,8 @@
       "source": "/apps/(.*)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex" },
-        { "key": "X-Axtor-Gateway-Release", "value": "20260804-strict-industry-development1" }
+        { "key": "X-Axtor-Gateway-Release", "value": "20260804-strict-industry-development1" },
+        { "key": "X-Axtor-Gateway-Patch", "value": "20260804-strict2-trial-label1" }
       ]
     }
   ]
