@@ -34,6 +34,8 @@ async function createDiagnosticSchema() {
         CONSTRAINT "business_name_nonempty" CHECK (char_length("name") > 0)
       )
     `);
+    await client.$executeRawUnsafe(`ALTER TABLE "businesses" ENABLE ROW LEVEL SECURITY`);
+    await client.$executeRawUnsafe(`CREATE POLICY "business_insert_policy" ON "businesses" FOR INSERT WITH CHECK (true)`);
     await client.$executeRawUnsafe(`
       CREATE FUNCTION business_legacy_guard() RETURNS trigger AS $$
       BEGIN
@@ -67,6 +69,9 @@ test('Business insert diagnostics expose schema blockers without reading tenant 
     const result = await diagnosticsModule.collectBusinessInsertCompatibility(runtime.client);
     assert.equal(result.status, 'AVAILABLE');
     assert.equal(result.insertPrivilege, true);
+    assert.equal(result.rowSecurityEnabled, true);
+    assert.equal(result.rowSecurityForced, false);
+    assert.deepEqual(result.policyNames, ['business_insert_policy']);
     assert.equal(result.enumColumnTypes.status, 'BusinessStatus');
     assert.equal(result.enumColumnTypes.onboardingState, 'OnboardingState');
     assert.ok(result.missingModelColumns.includes('default_language'));
@@ -87,4 +92,6 @@ test('registration controller includes only the safe compatibility object on pro
   assert.match(source, /stage === "tenant_provisioning"/);
   assert.doesNotMatch(source, /column_default.*details/);
   assert.doesNotMatch(source, /pg_get_constraintdef/);
+  assert.doesNotMatch(source, /qual.*details/);
+  assert.doesNotMatch(source, /with_check.*details/);
 });
