@@ -11,7 +11,7 @@ assert.ok(js.includes('restricted to authenticated Pharmacy tenants'),'tenant gu
 assert.ok(js.includes('saleableBatches'),'FEFO saleable batch selector missing');
 assert.ok(js.includes('No saleable batch'),'blocked batch UX missing');
 assert.ok(!js.includes('industry.html?module='),'runtime routes to generic workspace');
-for(const token of ['data.pharmacyPage','pharmacist','/api/v1/customers','Promise.resolve({ok:true,data:[]})'])assert.ok(roleAware.includes(token),`role-aware adapter missing ${token}`);
+for(const token of ['dataset?.pharmacyPage','pharmacist','/api/v1/customers','Promise.resolve({ok:true,data:[]})'])assert.ok(roleAware.includes(token),`role-aware adapter missing ${token}`);
 assert.ok(!roleAware.includes('/api/v1/settings'),'role-aware adapter must not suppress settings globally');
 for(const token of ['/api/v1/settings','invoice.settings','defaultPrintSize','showPrescriptionReference','showPharmacist','showBatchExpiry','canReadSettings','pharmacy manager'])assert.ok(printSettings.includes(token),`print settings missing ${token}`);
 for(const token of ['invoice-view.html','thermal-80','thermal-58','prescriptionReference','pharmacist','batchNo','expiryDate','data-pharmacy-document-id','data-pharmacy-print-record'])assert.ok(documents.includes(token),`document routing missing ${token}`);
