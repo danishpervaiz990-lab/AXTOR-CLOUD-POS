@@ -1,0 +1,66 @@
+name: Railway Failure Status Probe
+
+on:
+  pull_request:
+    branches: [backend]
+    types: [opened, reopened, synchronize]
+    paths:
+      - ".github/workflows/railway-failure-status-probe.yml"
+
+permissions:
+  contents: read
+  statuses: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FAILED_BACKEND_COMMIT: 2b7623300bbf33bce6c02fae4b9170fd59629d0d
+      BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Fetch full Railway commit-status payload
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${FAILED_BACKEND_COMMIT}/statuses" > railway-commit-statuses.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const statuses = JSON.parse(fs.readFileSync('railway-commit-statuses.json', 'utf8'));
+          const safe = statuses.map(({ state, context, description, target_url, created_at, updated_at }) => ({
+            state,
+            context,
+            description,
+            target_url,
+            created_at,
+            updated_at,
+          }));
+          console.log(JSON.stringify(safe, null, 2));
+          NODE
+
+      - name: Probe public backend health
+        id: health
+        continue-on-error: true
+        run: |
+          set -x
+          curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 20 \
+            -D health-headers.txt "$BACKEND_ORIGIN/health" -o health.json
+          curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 20 \
+            -D db-health-headers.txt "$BACKEND_ORIGIN/api/v1/health/db" -o db-health.json
+          printf '%s\n' '--- /health ---'
+          cat health.json
+          printf '%s\n' '--- /api/v1/health/db ---'
+          cat db-health.json
+
+      - name: Preserve read-only probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: railway-failure-status-probe-${{ github.run_id }}
+          path: |
+            railway-commit-statuses.json
+            health.json
+            health-headers.txt
+            db-health.json
+            db-health-headers.txt
+          if-no-files-found: warn
+          retention-days: 3
