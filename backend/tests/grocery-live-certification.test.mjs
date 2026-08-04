@@ -52,7 +52,7 @@ test('Grocery payment adapter aligns weighted totals and writes early cleanup ev
   assert.match(result.stdout, /PASS: Grocery weighted-payment reconciliation adapter matches/);
 });
 
-test('Grocery extended audit uses current report IDs and atomic writes', () => {
+test('Grocery extended audit uses current report IDs without overwriting PASS status', () => {
   const extended = source['qa-grocery-extended-operations.mjs'];
   assert.match(extended, /\/api\/v1\/industry\/grocery\/receiving/);
   assert.match(extended, /\/api\/v1\/industry\/grocery\/waste/);
@@ -61,14 +61,22 @@ test('Grocery extended audit uses current report IDs and atomic writes', () => {
   assert.match(extended, /grocery-expiry-risk/);
   assert.match(extended, /grocery-waste-share/);
   assert.match(extended, /grocery-recall-share/);
+  assert.match(extended, /httpStatus: response\.status/);
+  assert.match(extended, /results\.every\(\(entry\) => entry\.status === 'PASS'\)/);
+  assert.doesNotMatch(extended, /pass\(`Read \$\{endpoint\}`, \{ status:/);
   assert.doesNotMatch(extended, /reports\/sales-by-product|reports\/profit-and-loss|\/api\/v1\/dashboard'/);
 });
 
-test('Authenticated browser audit uses stable Grocery shell selectors', () => {
+test('Authenticated browser audit waits for authoritative Grocery readiness', () => {
   const browser = source['qa-grocery-authenticated-browser-audit.mjs'];
   assert.match(browser, /locator\('\.g-shell'\)/);
   assert.match(browser, /locator\('#app'\)/);
   assert.match(browser, /locator\('\.g-hero h1'\)/);
+  assert.match(browser, /#gDashboardStatus\.g-status\.ok/);
+  assert.match(browser, /#gFinanceReports/);
+  assert.match(browser, /#gfStatus\.g-status\.ok/);
+  assert.match(browser, /groceryDocumentReady === 'true'/);
+  assert.match(browser, /selectedProfile === profile/);
   assert.match(browser, /\.g-status\.error/);
   assert.match(browser, /results\.length === 14/);
   assert.doesNotMatch(browser, /\/404\|page not found\|authentication required\/i\.test\(body\) && \/grocery\|sales/);
