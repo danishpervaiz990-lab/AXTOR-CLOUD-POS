@@ -26,6 +26,10 @@ assert.match(printSettings, /Thermal 80 mm|thermal-80/i);
 assert.match(printSettings, /Thermal 58 mm|thermal-58/i);
 assert.match(printSettings, /project|job/i);
 assert.match(printSettings, /LPO/i);
+assert.match(printSettings, /canReadSettings/);
+assert.match(printSettings, /hardware manager/);
+assert.match(printSettings, /if\(!canReadSettings\(\)\)/);
+assert.doesNotMatch(printSettings, /AxtorHardwarePrintSettings\.current\s*=/);
 assert.match(documentRouter, /invoice-view\.html/);
 assert.match(documentRouter, /project/);
 assert.match(documentRouter, /lpo/);
@@ -36,5 +40,6 @@ for (const file of ['hardware-settings.html','hardware-terminal.html','hardware-
   const html = fs.readFileSync(path.join(root, file), 'utf8');
   assert.match(html, /hardware-print-settings-backend\.js/);
   assert.match(html, /hardware-document-router\.js/);
+  assert.match(html, /20260804-role-aware1/);
 }
-console.log(`PASS: ${pages.length} purpose-built Hardware pages with tenant print settings and shared document routing`);
+console.log(`PASS: ${pages.length} purpose-built Hardware pages with role-aware tenant print settings and shared document routing`);
