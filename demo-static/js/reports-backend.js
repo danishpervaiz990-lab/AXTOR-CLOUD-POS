@@ -2,6 +2,16 @@
   "use strict";
 
   const REPORTS_PATH = "/api/v1/reports";
+  const PAYMENT_METHODS = [
+    { id: "cash", name: "Cash" },
+    { id: "online / bank transfer", name: "Online / Bank Transfer" },
+    { id: "pos / card", name: "POS / Card" },
+    { id: "cheque", name: "Cheque" },
+    { id: "debit card", name: "Debit Card" },
+    { id: "credit card", name: "Credit Card" },
+    { id: "mixed", name: "Mixed / Split" },
+    { id: "unspecified", name: "Unspecified" }
+  ];
   const REPORTS = [
     { id: "daily-sales", label: "Daily Sales", filter: "customer", basis: "Paid amount ÷ invoice total" },
     { id: "sale-products", label: "Sales by Product", filter: "product", basis: "Gross profit ÷ product sales" },
@@ -14,13 +24,14 @@
     { id: "profit-loss", label: "Profit & Loss", filter: "none", basis: "Each line ÷ net sales; Gross Profit is the gross margin" },
     { id: "trial-balance", label: "Trial Balance", filter: "none", basis: "Account value ÷ total debit or credit side" },
     { id: "balance-sheet", label: "Balance Sheet", filter: "none", basis: "Line amount ÷ total assets" },
-    { id: "general-ledger", label: "General Ledger", filter: "none", basis: "Row movement ÷ total ledger movement" },
+    { id: "transaction-ledger", label: "Debit / Credit Transaction Ledger", filter: "paymentMethod", basis: "Every tenant-scoped money movement with running balance" },
+    { id: "payment-receipt-methods", label: "Payments / Receipts by Method", filter: "paymentMethod", basis: "Cash, online, POS/card, cheque, debit and credit movements" },
     { id: "salesman-commission", label: "Salesman Commission", filter: "salesman", basis: "Payout ÷ salesman sales; Achievement % is also shown" },
     { id: "customer-profit-loss", label: "Customer Profit / Loss", filter: "customer", basis: "Customer profit ÷ customer sales" }
   ];
 
-  const MONEY_KEYS = new Set(["total", "paid", "balance", "sales", "cost", "profit", "amount", "stockValue", "retailValue", "subtotal", "tax", "cogs", "outstanding", "debit", "credit", "commission", "bonus", "payout"]);
-  const COUNT_LABEL = /invoices|customers|entries|products|returns|count/i;
+  const MONEY_KEYS = new Set(["total", "paid", "balance", "sales", "cost", "profit", "amount", "stockValue", "retailValue", "subtotal", "tax", "cogs", "outstanding", "debit", "credit", "commission", "bonus", "payout", "received", "net", "runningBalance"]);
+  const COUNT_LABEL = /invoices|customers|entries|products|returns|count|transactions/i;
   let reportOptions = {};
   let lastReport = null;
 
@@ -40,6 +51,8 @@
   }
 
   function money(value) {
+    const locale = window.AxtorLocale;
+    if (locale && typeof locale.money === "function") return locale.money(number(value));
     return "QAR " + number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
@@ -56,10 +69,7 @@
 
   function qatarDate(date) {
     const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Qatar",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
+      timeZone: "Asia/Qatar", year: "numeric", month: "2-digit", day: "2-digit"
     }).formatToParts(date);
     const values = Object.fromEntries(parts.filter(function (part) { return part.type !== "literal"; }).map(function (part) { return [part.type, part.value]; }));
     return values.year + "-" + values.month + "-" + values.day;
@@ -84,6 +94,7 @@
     if (filter === "supplier") return reportOptions.suppliers || [];
     if (filter === "salesman") return reportOptions.salesmen || [];
     if (filter === "warehouse") return reportOptions.warehouses || [];
+    if (filter === "paymentMethod") return PAYMENT_METHODS;
     return [];
   }
 
@@ -92,7 +103,8 @@
     const target = document.getElementById("reportEntityFilter");
     const rows = listForFilter(definition.filter);
     target.disabled = definition.filter === "none";
-    target.innerHTML = '<option value="">All records</option>' + rows.map(function (row) {
+    const allLabel = definition.filter === "paymentMethod" ? "All payment methods" : "All records";
+    target.innerHTML = '<option value="">' + allLabel + "</option>" + rows.map(function (row) {
       const name = definition.filter === "product" && row.sku ? row.sku + " — " + row.name : row.name;
       return '<option value="' + esc(row.id) + '">' + esc(name || row.id) + "</option>";
     }).join("");
@@ -110,7 +122,7 @@
       if (from) params.set("from", from);
       if (to) params.set("to", to);
     }
-    if (entity && definition.filter !== "none") params.set(definition.filter + "Id", entity);
+    if (entity && definition.filter !== "none") params.set(definition.filter + (definition.filter === "paymentMethod" ? "" : "Id"), entity);
     return REPORTS_PATH + "/" + encodeURIComponent(definition.id) + "?" + params.toString();
   }
 
