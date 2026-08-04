@@ -1,6 +1,7 @@
 name: Pharmacy Live Production Audit
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [backend]
     types: [opened, reopened, synchronize]
@@ -8,10 +9,15 @@ on:
       - "backend/scripts/qa-pharmacy-live-audit.mjs"
       - "backend/scripts/qa-pharmacy-browser-audit.mjs"
       - "backend/scripts/qa-retail-live-audit.payload.*"
+      - "backend/tests/pharmacy-live-certification.test.mjs"
       - ".github/workflows/pharmacy-live-audit.yml"
 
 permissions:
   contents: read
+
+concurrency:
+  group: pharmacy-live-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pharmacy-live-audit:
@@ -37,7 +43,7 @@ jobs:
         run: node backend/scripts/qa-pharmacy-live-audit.mjs
 
       - name: Install browser runtime
-        if: always() && steps.transaction_audit.conclusion == 'success'
+        if: always() && steps.transaction_audit.outcome == 'success'
         run: |
           test -f pharmacy-live-audit-runtime.json
           mkdir -p /tmp/axtor-playwright
@@ -47,23 +53,32 @@ jobs:
 
       - name: Test five users and Pharmacy workflows through Vercel
         id: browser_audit
-        if: always() && steps.transaction_audit.conclusion == 'success'
+        if: always() && steps.transaction_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-pharmacy-browser-audit.mjs
 
-      - name: Remove temporary Pharmacy credentials
+      - name: Encrypt Pharmacy credentials and remove plaintext runtime
         if: always()
         run: |
-          if [ -f pharmacy-live-audit-credentials.json ]; then shred -u pharmacy-live-audit-credentials.json; fi
+          if [ -f pharmacy-live-audit-credentials.json ]; then
+            openssl cms -encrypt -binary -aes-256-cbc \
+              -in pharmacy-live-audit-credentials.json \
+              -out pharmacy-live-audit-credentials.p7m \
+              -outform DER \
+              backend/scripts/retail-audit-recipient-cert.pem
+            test -s pharmacy-live-audit-credentials.p7m
+            shred -u pharmacy-live-audit-credentials.json
+          fi
           if [ -f pharmacy-live-audit-runtime.json ]; then shred -u pharmacy-live-audit-runtime.json; fi
 
-      - name: Upload sanitized Pharmacy audit evidence
+      - name: Upload complete Pharmacy audit evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pharmacy-live-audit-${{ github.run_id }}
           path: |
             pharmacy-live-audit-report.json
+            pharmacy-live-audit-credentials.p7m
             pharmacy-live-audit-cleanup.sql
             pharmacy-browser-evidence/
           if-no-files-found: warn
@@ -72,10 +87,22 @@ jobs:
       - name: Enforce Pharmacy launch-readiness result
         if: always()
         env:
-          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.conclusion }}
-          BROWSER_OUTCOME: ${{ steps.browser_audit.conclusion }}
+          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser_audit.outcome }}
         run: |
           test "$TRANSACTION_OUTCOME" = "success"
           test "$BROWSER_OUTCOME" = "success"
           test -s pharmacy-live-audit-report.json
-          node -e "const r=require('./pharmacy-live-audit-report.json'); console.log('Pharmacy audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
+          test -s pharmacy-live-audit-credentials.p7m
+          test -s pharmacy-live-audit-cleanup.sql
+          node <<'NODE'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('pharmacy-live-audit-report.json', 'utf8'));
+          console.log('Pharmacy audit result:', report.overall);
+          if (report.overall !== 'PASS') process.exit(1);
+          if (report.counts?.productCount !== 100) process.exit(1);
+          if (report.counts?.customerCount !== 200) process.exit(1);
+          if (report.counts?.invoiceCount !== 500) process.exit(1);
+          const users = report.browser?.users || [];
+          if (users.length !== 5 || users.some((user) => user.pass !== true || user.pages?.length !== 8)) process.exit(1);
+          NODE
