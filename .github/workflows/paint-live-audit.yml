@@ -19,13 +19,17 @@ on:
       - ".github/workflows/paint-live-audit.yml"
   workflow_dispatch:
 
+concurrency:
+  group: paint-live-production-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   paint-live-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     env:
       AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
       AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
@@ -94,6 +98,7 @@ jobs:
         id: browser_audit
         if: always() && steps.branding_audit.outcome == 'success'
         continue-on-error: true
+        timeout-minutes: 10
         run: node backend/scripts/qa-paint-browser-audit.mjs
 
       - name: Protect and remove Paint credentials
