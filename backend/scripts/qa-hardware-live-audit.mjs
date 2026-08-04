@@ -9,6 +9,10 @@ const chunks = [1, 2, 3].map((index) =>
 let source = zlib.gunzipSync(Buffer.from(chunks, 'base64')).toString('utf8');
 source = source.replace(/Retail/g, 'Hardware').replace(/retail/g, 'hardware').replace(/RETAIL/g, 'HARDWARE');
 
+const roleMapLine = "const roleByName = new Map(access.roles.map((role) => [role.name.toLowerCase(), role]));";
+if (!source.includes(roleMapLine)) throw new Error('Hardware audit transformer could not locate role catalogue mapping');
+source = source.replace(roleMapLine, `console.log('HARDWARE_ACCESS_ROLE_NAMES', access.roles.map((role) => role.name));\n  ${roleMapLine}`);
+
 const exact = (from, to, label) => {
   if (!source.includes(from)) throw new Error(`Hardware audit transformer could not find ${label}`);
   source = source.replace(from, to);
