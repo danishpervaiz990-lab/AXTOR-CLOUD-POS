@@ -69,29 +69,120 @@ function shouldInjectGroceryRepair(pathname, html) {
   return !GROCERY_REPAIR_EXCLUDED_PAGES.test(pathname) && !html.includes("grocery-sidebar-repair.js");
 }
 
+function developmentRuntime(industry) {
+  const expectedIndustry = JSON.stringify(industry);
+  return `<script data-axtor-development-runtime="20260804-strict1">
+(function(){
+  "use strict";
+  var EXPECTED=${expectedIndustry};
+  var API="https://axtor-cloud-pos-production.up.railway.app";
+  window.AXTOR_DEVELOPMENT_MODE=true;
+
+  function normalized(value){
+    var code=String(value||"").trim().toLowerCase();
+    var aliases={general_retail:"retail",supermarket:"grocery",education:"school",garage:"workshop",distribution:"wholesale"};
+    return aliases[code]||code;
+  }
+
+  function removeCommercialBlocks(){
+    document.querySelectorAll(".axtor-plan-block").forEach(function(node){node.remove();});
+    document.querySelectorAll("[data-plan-gate],[data-subscription-gate]").forEach(function(node){node.hidden=true;node.setAttribute("aria-hidden","true");});
+    document.querySelectorAll("body *").forEach(function(node){
+      if(node.children.length>0)return;
+      var text=String(node.textContent||"").trim();
+      if(/^Trial:\s*\d+\s*day\(s\) remaining/i.test(text)||/^Plans\s*&\s*Subscription$/i.test(text))node.hidden=true;
+    });
+  }
+
+  function patchCommercialRuntime(){
+    var platform=window.AxtorPlatform;
+    if(!platform||platform.__axtorDevelopmentAccess)return;
+    if(typeof platform.hasFeature==="function"){
+      var original=platform.hasFeature.bind(platform);
+      platform.hasFeature=function(key){
+        if(window.AXTOR_DEVELOPMENT_MODE===true)return true;
+        return original(key);
+      };
+    }
+    platform.__axtorDevelopmentAccess=true;
+  }
+
+  function patchChart(){
+    var Current=window.Chart;
+    if(!Current||Current.__axtorCanvasGuard)return;
+    try{
+      var Guarded=new Proxy(Current,{
+        construct:function(target,args,newTarget){
+          var canvas=args&&args[0];
+          try{var prior=typeof target.getChart==="function"?target.getChart(canvas):null;if(prior&&typeof prior.destroy==="function")prior.destroy();}catch(_){}
+          return Reflect.construct(target,args,newTarget===Guarded?target:newTarget);
+        }
+      });
+      Guarded.__axtorCanvasGuard=true;
+      window.Chart=Guarded;
+    }catch(_){}
+  }
+
+  async function enforceIndustry(){
+    var token=String(localStorage.getItem("axtorAuthToken")||"").trim();
+    if(!token)return;
+    try{
+      var response=await fetch(API+"/api/v1/industry/registry",{cache:"no-store",headers:{Accept:"application/json",Authorization:"Bearer "+token}});
+      if(response.status===401)return;
+      if(!response.ok)throw new Error("Industry verification failed");
+      var payload=await response.json();
+      var data=payload&&Object.prototype.hasOwnProperty.call(payload,"data")?payload.data:payload;
+      var actual=normalized(data?.selection?.code||data?.selected?.code);
+      if(actual&&actual!==EXPECTED){
+        sessionStorage.removeItem("axtorAuthReturnUrl");
+        sessionStorage.removeItem("axtorAuthRedirectInProgress");
+        location.replace("/router.html?reason=industry-correction");
+      }
+    }catch(error){console.warn("Axtor industry verification deferred",error);}
+  }
+
+  var observer=new MutationObserver(function(){removeCommercialBlocks();patchCommercialRuntime();patchChart();});
+  function start(){
+    removeCommercialBlocks();patchCommercialRuntime();patchChart();enforceIndustry();
+    if(document.documentElement)observer.observe(document.documentElement,{childList:true,subtree:true});
+    var attempts=0,timer=setInterval(function(){attempts+=1;removeCommercialBlocks();patchCommercialRuntime();patchChart();if(attempts>=40)clearInterval(timer);},100);
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",start,{once:true});else start();
+})();
+</script>`;
+}
+
 function injectIndustryRuntime(industry, pathname, bytes, type) {
   if (!type.startsWith("text/html")) return bytes;
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let html = decoder.decode(bytes);
-  const scripts = [];
+  const headScripts = [];
+  const bodyScripts = [];
+
+  if (!html.includes("data-axtor-development-runtime")) headScripts.push(developmentRuntime(industry));
 
   if (industry === "grocery" && shouldInjectGroceryRepair(pathname, html)) {
-    scripts.push('<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>');
+    bodyScripts.push('<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>');
   }
 
   if (industry === "retail") {
     if (/(^|\/)terminal\.html$/i.test(pathname) && !html.includes("retail-terminal-certification.js")) {
-      scripts.push('<script src="js/retail-terminal-certification.js?v=20260803-retail-cert1"></script>');
+      bodyScripts.push('<script src="js/retail-terminal-certification.js?v=20260803-retail-cert1"></script>');
     }
     if (!html.includes("retail-sales-finance-certification.js")) {
-      scripts.push('<script src="js/retail-sales-finance-certification.js?v=20260803-retail-finance1"></script>');
+      bodyScripts.push('<script src="js/retail-sales-finance-certification.js?v=20260803-retail-finance1"></script>');
     }
   }
 
-  if (!scripts.length) return bytes;
-  const injection = scripts.join("");
-  html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, injection + "</body>") : html + injection;
+  if (headScripts.length) {
+    const injection = headScripts.join("");
+    html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${injection}`) : injection + html;
+  }
+  if (bodyScripts.length) {
+    const injection = bodyScripts.join("");
+    html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, injection + "</body>") : html + injection;
+  }
   return encoder.encode(html);
 }
 
@@ -112,7 +203,7 @@ export default async function industryAsset(request) {
   try {
     const upstream = await fetch(source, {
       method: request.method,
-      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.4" },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.5" },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
@@ -132,7 +223,8 @@ export default async function industryAsset(request) {
       "X-Robots-Tag": "noindex",
       "X-Axtor-Industry": industry,
       "X-Axtor-Frontend-Branch": release.branch,
-      "Cache-Control": isDocument ? "public, max-age=0, s-maxage=30, stale-while-revalidate=60" : "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+      "X-Axtor-Development-Mode": "open-plans-role-enforced",
+      "Cache-Control": isDocument ? "public, max-age=0, s-maxage=15, stale-while-revalidate=30" : "public, max-age=300, s-maxage=1800, stale-while-revalidate=3600"
     });
 
     const etag = upstream.headers.get("etag");
