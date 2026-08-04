@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-paint-transform-runner.mjs"
+      - "backend/scripts/qa-paint-transaction-gate.mjs"
       - "backend/scripts/qa-paint-units-audit.mjs"
       - "backend/scripts/qa-paint-role-formula-certification.mjs"
       - "backend/scripts/qa-hardware-live-audit.mjs"
@@ -16,6 +17,7 @@ on:
       - "backend/scripts/qa-retail-live-audit.payload.*"
       - "backend/scripts/retail-audit-recipient-cert.pem"
       - ".github/workflows/paint-live-audit.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -39,62 +41,79 @@ jobs:
           node-version: "22.x"
 
       - name: Run Paint transaction and reports audit
+        id: transaction_audit
         continue-on-error: true
         run: node backend/scripts/qa-paint-transform-runner.mjs live
 
+      - name: Enforce stored Paint transaction evidence
+        id: transaction_gate
+        if: always()
+        continue-on-error: true
+        run: node backend/scripts/qa-paint-transaction-gate.mjs
+
       - name: Settle any remaining audited credit balance
-        if: hashFiles('paint-live-audit-runtime.json') != ''
+        id: payment_finalizer
+        if: always() && steps.transaction_gate.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-paint-transform-runner.mjs payment
 
       - name: Configure and verify Paint units
-        if: hashFiles('paint-live-audit-runtime.json') != ''
+        id: units_audit
+        if: always() && steps.payment_finalizer.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-paint-units-audit.mjs
 
       - name: Run Paint warehouse, branches, staffing and operations audit
-        if: hashFiles('paint-live-audit-runtime.json') != ''
+        id: operations_audit
+        if: always() && steps.units_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-paint-transform-runner.mjs operations
 
       - name: Certify Paint roles, custom formulas and mixing lab
-        if: hashFiles('paint-live-audit-runtime.json') != ''
+        id: formula_audit
+        if: always() && steps.operations_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-paint-role-formula-certification.mjs
 
       - name: Register Paint company and invoice branding
-        if: hashFiles('paint-live-audit-runtime.json') != ''
+        id: branding_audit
+        if: always() && steps.formula_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-paint-transform-runner.mjs branding
 
       - name: Install browser runtime
-        if: hashFiles('paint-live-audit-runtime.json') != ''
+        if: always() && steps.branding_audit.outcome == 'success'
         run: |
+          test -f paint-live-audit-runtime.json
           mkdir -p /tmp/axtor-playwright
           npm init -y --prefix /tmp/axtor-playwright >/dev/null
           npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
           /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
 
       - name: Test five users, settings and Paint pages through Vercel
-        if: hashFiles('paint-live-audit-runtime.json') != ''
+        id: browser_audit
+        if: always() && steps.branding_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-paint-transform-runner.mjs browser
 
       - name: Protect and remove Paint credentials
-        if: hashFiles('paint-live-audit-credentials.json') != ''
+        if: always()
         run: |
-          if [ -s backend/scripts/retail-audit-recipient-cert.pem ]; then
-            openssl cms -encrypt -binary -aes-256-cbc \
-              -in paint-live-audit-credentials.json \
-              -out paint-live-audit-credentials.p7m \
-              -outform DER \
-              backend/scripts/retail-audit-recipient-cert.pem
-            test -s paint-live-audit-credentials.p7m
-          else
-            sha256sum paint-live-audit-credentials.json | cut -d' ' -f1 > paint-live-audit-credentials.sha256
+          if [ -f paint-live-audit-credentials.json ]; then
+            if [ -s backend/scripts/retail-audit-recipient-cert.pem ]; then
+              openssl cms -encrypt -binary -aes-256-cbc \
+                -in paint-live-audit-credentials.json \
+                -out paint-live-audit-credentials.p7m \
+                -outform DER \
+                backend/scripts/retail-audit-recipient-cert.pem
+              test -s paint-live-audit-credentials.p7m
+            else
+              sha256sum paint-live-audit-credentials.json | cut -d' ' -f1 > paint-live-audit-credentials.sha256
+            fi
+            shred -u paint-live-audit-credentials.json
           fi
-          shred -u paint-live-audit-credentials.json
-          rm -f paint-live-audit-runtime.json
+          if [ -f paint-live-audit-runtime.json ]; then shred -u paint-live-audit-runtime.json; fi
+          rm -f backend/scripts/.qa-paint-*.generated.mjs
 
       - name: Upload protected Paint audit evidence
         if: always()
@@ -112,6 +131,21 @@ jobs:
 
       - name: Enforce Paint launch-readiness result
         if: always()
+        env:
+          TRANSACTION_OUTCOME: ${{ steps.transaction_gate.outcome }}
+          PAYMENT_OUTCOME: ${{ steps.payment_finalizer.outcome }}
+          UNITS_OUTCOME: ${{ steps.units_audit.outcome }}
+          OPERATIONS_OUTCOME: ${{ steps.operations_audit.outcome }}
+          FORMULA_OUTCOME: ${{ steps.formula_audit.outcome }}
+          BRANDING_OUTCOME: ${{ steps.branding_audit.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser_audit.outcome }}
         run: |
+          test "$TRANSACTION_OUTCOME" = "success"
+          test "$PAYMENT_OUTCOME" = "success"
+          test "$UNITS_OUTCOME" = "success"
+          test "$OPERATIONS_OUTCOME" = "success"
+          test "$FORMULA_OUTCOME" = "success"
+          test "$BRANDING_OUTCOME" = "success"
+          test "$BROWSER_OUTCOME" = "success"
           test -s paint-live-audit-report.json
           node -e "const r=require('./paint-live-audit-report.json'); console.log('Paint audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
