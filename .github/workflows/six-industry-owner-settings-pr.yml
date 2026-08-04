@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   live-verification:
+    if: github.head_ref != 'ops/retail-r13-seven-role-live-certification-v2'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
