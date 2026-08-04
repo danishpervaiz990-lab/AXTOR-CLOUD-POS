@@ -7,6 +7,7 @@ on:
       - "demo-static/pharmacy*.html"
       - "demo-static/css/pharmacy-app.css"
       - "demo-static/js/pharmacy-app.js"
+      - "demo-static/js/pharmacy-role-aware-api.js"
       - "demo-static/js/pharmacy-print-settings-backend.js"
       - "demo-static/js/pharmacy-document-routing.js"
       - "demo-static/js/axtor-api.js"
@@ -18,6 +19,7 @@ on:
       - "demo-static/pharmacy*.html"
       - "demo-static/css/pharmacy-app.css"
       - "demo-static/js/pharmacy-app.js"
+      - "demo-static/js/pharmacy-role-aware-api.js"
       - "demo-static/js/pharmacy-print-settings-backend.js"
       - "demo-static/js/pharmacy-document-routing.js"
       - "demo-static/js/axtor-api.js"
@@ -39,6 +41,7 @@ jobs:
         run: |
           node --check demo-static/js/axtor-api.js
           node --check demo-static/js/pharmacy-app.js
+          node --check demo-static/js/pharmacy-role-aware-api.js
           node --check demo-static/js/pharmacy-print-settings-backend.js
           node --check demo-static/js/pharmacy-document-routing.js
       - name: Pharmacy release suite
