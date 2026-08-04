@@ -5,6 +5,8 @@ const require = createRequire('/tmp/axtor-playwright/package.json');
 const { chromium } = require('playwright');
 const runtime = JSON.parse(await fs.readFile('hardware-live-audit-runtime.json', 'utf8'));
 const report = JSON.parse(await fs.readFile('hardware-live-audit-report.json', 'utf8'));
+const backendOrigin = runtime.backendOrigin || report.backendOrigin || process.env.AXTOR_BACKEND_ORIGIN;
+if (!backendOrigin) throw new Error('Hardware browser audit cannot resolve the backend origin');
 const evidenceDir = 'hardware-browser-evidence';
 await fs.mkdir(evidenceDir, { recursive: true });
 
@@ -74,7 +76,7 @@ async function probeTradeSalesRestrictions(token) {
     let status = 0;
     let responseBody = null;
     try {
-      const response = await fetch(`${runtime.backendOrigin}${path}`, {
+      const response = await fetch(`${backendOrigin}${path}`, {
         method,
         headers: {
           Accept: 'application/json',
@@ -89,7 +91,10 @@ async function probeTradeSalesRestrictions(token) {
     } catch (error) {
       responseBody = { error: error?.message || String(error) };
     }
-    results.push({ name, method, path, expected: 403, actual: status, pass: status === 403, response: responseBody?.error?.message || responseBody?.message || null });
+    const responseMessage = typeof responseBody?.error === 'string'
+      ? responseBody.error
+      : responseBody?.error?.message || responseBody?.message || null;
+    results.push({ name, method, path, expected: 403, actual: status, pass: status === 403, response: responseMessage });
   }
   return results;
 }
