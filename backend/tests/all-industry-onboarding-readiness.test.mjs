@@ -11,7 +11,6 @@ const seed = fs.readFileSync(new URL("../src/scripts/seed-commercial-catalog.ts"
 const releaseC = fs.readFileSync(new URL("../src/routes/release-c.routes.ts", import.meta.url), "utf8");
 const releaseD = fs.readFileSync(new URL("../src/routes/release-d.routes.ts", import.meta.url), "utf8");
 const manufacturing = fs.readFileSync(new URL("../src/routes/manufacturing.routes.ts", import.meta.url), "utf8");
-const prismaClient = fs.readFileSync(new URL("../src/db/prisma.ts", import.meta.url), "utf8");
 
 const expectedCodes = [
   "retail", "grocery", "pharmacy", "hardware", "paint", "gym", "clinic",
@@ -62,20 +61,23 @@ test("new tenants receive operational roles and persisted launch configuration",
   assert.match(launchService, /rolePresetCount/);
   assert.match(launchService, /formSchemaCount/);
   assert.match(launchService, /tenant\.provisioned/);
-  assert.match(launchService, /prisma\.\$transaction/);
+  assert.match(launchService, /cleanupProvisioningBusiness/);
+  assert.match(launchService, /status: "SUSPENDED"/);
+  assert.match(launchService, /onboardingState: "IN_PROGRESS"/);
+  assert.match(launchService, /status: "TRIAL"/);
+  assert.doesNotMatch(launchService, /prisma\.\$transaction\s*\(\s*async/);
   assert.match(launchService, /Idempotency-Key/);
 });
 
-test("registration keeps CPU work outside queued database transactions", () => {
+test("registration hashes credentials before the first database write", () => {
   const hashIndex = launchService.indexOf("const ownerPasswordHash = hashPassword(password)");
-  const transactionIndex = launchService.indexOf("return await prisma.$transaction");
+  const firstWriteIndex = launchService.indexOf("let business = await prisma.business.create");
   assert.ok(hashIndex >= 0, "owner password hash must be derived");
-  assert.ok(transactionIndex > hashIndex, "password hashing must finish before the transaction starts");
+  assert.ok(firstWriteIndex > hashIndex, "password hashing must finish before provisioning starts");
   assert.match(launchService, /passwordHash: ownerPasswordHash/);
   assert.doesNotMatch(launchService, /passwordHash: hashPassword\(password\)/);
-  assert.match(prismaClient, /transactionOptions/);
-  assert.match(prismaClient, /PRISMA_TRANSACTION_MAX_WAIT_MS/);
-  assert.match(prismaClient, /PRISMA_TRANSACTION_TIMEOUT_MS/);
+  assert.match(launchService, /createdBusinessId = business\.id/);
+  assert.match(launchService, /cleanupSucceeded/);
 });
 
 test("catalogue seeding activates all industry rows and feature contracts", () => {
