@@ -60,6 +60,25 @@ if (mode === 'browser') {
   const pagesPattern = /const pages = \[[\s\S]*?\n\];/;
   if (!pagesPattern.test(source)) throw new Error('Paint audit transformer could not locate browser pages list');
   source = source.replace(pagesPattern, deployedPaintPages);
+
+  const paintSalesWriteProbes = `const paintSalesWriteProbes = [
+  ['Tenant settings update', 'PUT', '/api/v1/settings/appearance.paint', { value: { theme: 'denied' } }],
+  ['Paint bootstrap', 'POST', '/api/v1/paint/bootstrap', {}],
+  ['Component stock update', 'PUT', '/api/v1/paint/component-stock', { componentCode: 'DENIED', componentName: 'Denied Tinter', quantityOnHand: 1, averageCost: 1 }],
+  ['Formula revision create', 'POST', '/api/v1/paint/formulas/denied/revisions', { expectedRevision: 1, notes: 'denied', components: [] }],
+  ['Mix job create', 'POST', '/api/v1/paint/mix-jobs', { formulaId: 'denied', quantity: 1, unit: 'ltr', nonReturnableAccepted: true }],
+  ['Quality approval', 'POST', '/api/v1/paint/mix-jobs/denied/quality-checks', { result: 'passed', notes: 'denied' }],
+];`;
+  const probesPattern = /const tradeSalesWriteProbes = \[[\s\S]*?\n\];/;
+  if (!probesPattern.test(source)) throw new Error('Paint audit transformer could not locate inherited sales restriction probes');
+  source = source.replace(probesPattern, paintSalesWriteProbes);
+  source = source
+    .replaceAll('tradeSalesWriteProbes', 'paintSalesWriteProbes')
+    .replaceAll('probeTradeSalesRestrictions', 'probePaintSalesRestrictions')
+    .replaceAll('tradeSalesResult', 'paintSalesResult')
+    .replaceAll('tradeSalesWriteRestrictionsPass', 'paintSalesWriteRestrictionsPass')
+    .replaceAll("'trade salesperson'", "'paint salesperson'")
+    .replaceAll('Trade Salesperson', 'Paint Salesperson');
   source = source.replace("dedicatedPaintPagesPass: results.every((item) => item.pages.every((entry) => entry.ok)),", "dedicatedPaintPagesPass: results.every((item) => item.pages.length === 4 && item.pages.every((entry) => entry.ok)),");
 }
 
