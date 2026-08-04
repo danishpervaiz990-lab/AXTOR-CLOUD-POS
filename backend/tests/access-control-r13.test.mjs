@@ -193,3 +193,29 @@ test("permission evaluation honors owner, admin, exact and wildcard access", () 
   assert.equal(hasPermission(access({ permissions: new Set(["inventory.*"]) }), "inventory.transfer"), true);
   assert.equal(hasPermission(access({ permissions: new Set(["inventory.view"]) }), "inventory.transfer"), false);
 });
+
+test("sales wildcards do not grant sensitive overrides without an exact permission", () => {
+  const broadSales = access({ permissions: new Set(["sales_documents.*"]) });
+  assert.equal(hasPermission(broadSales, "sales_documents.view"), true);
+  assert.equal(hasPermission(broadSales, "sales_documents.create"), true);
+  assert.equal(hasPermission(broadSales, "sales_documents.post"), true);
+  assert.equal(hasPermission(broadSales, "sales_documents.return"), true);
+
+  for (const permission of [
+    "sales_documents.change_salesperson",
+    "sales_documents.cross_branch",
+    "sales_documents.backdate",
+    "sales_documents.override_credit_limit",
+    "sales_documents.allow_negative_stock",
+    "sales_documents.edit_posted",
+    "sales_documents.edit_paid",
+    "sales_documents.edit_returned",
+    "sales_documents.edit_refunded",
+    "sales_documents.override_financials",
+    "sales_documents.override_stock",
+  ]) {
+    assert.equal(hasPermission(broadSales, permission), false, `${permission} must require an exact grant`);
+    assert.equal(hasPermission(access({ permissions: new Set([permission]) }), permission), true, `${permission} exact grant must work`);
+    assert.equal(hasPermission(access({ permissions: new Set(["*"]) }), permission), true, `${permission} global wildcard must work`);
+  }
+});
