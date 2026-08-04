@@ -1,6 +1,7 @@
 name: Hardware Live Production Audit
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [backend]
     types: [opened, reopened, synchronize]
@@ -12,10 +13,15 @@ on:
       - "backend/scripts/qa-hardware-browser-audit.mjs"
       - "backend/scripts/qa-retail-live-audit.payload.*"
       - "backend/scripts/retail-audit-recipient-cert.pem"
+      - "backend/tests/hardware-live-certification.test.mjs"
       - ".github/workflows/hardware-live-audit.yml"
 
 permissions:
   contents: read
+
+concurrency:
+  group: hardware-live-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   hardware-live-audit:
@@ -36,53 +42,59 @@ jobs:
           node-version: "22.x"
 
       - name: Run Hardware transaction and reports audit
+        id: transaction_audit
         continue-on-error: true
         run: node backend/scripts/qa-hardware-live-audit.mjs
 
       - name: Settle any remaining audited credit balance
-        if: hashFiles('hardware-live-audit-runtime.json') != ''
+        id: payment_finalizer
+        if: always() && steps.transaction_audit.outcome == 'success' && hashFiles('hardware-live-audit-runtime.json') != ''
         continue-on-error: true
         run: node backend/scripts/qa-hardware-payment-finalizer.mjs
 
       - name: Run branches, staffing, expenses, supplier and percentage reports audit
-        if: hashFiles('hardware-live-audit-runtime.json') != ''
+        id: operations_audit
+        if: always() && steps.transaction_audit.outcome == 'success' && steps.payment_finalizer.outcome == 'success' && hashFiles('hardware-live-audit-runtime.json') != ''
         continue-on-error: true
         run: node backend/scripts/qa-hardware-operations-audit.mjs
 
       - name: Register dummy company and persist invoice logo
-        if: hashFiles('hardware-live-audit-runtime.json') != ''
+        id: branding_audit
+        if: always() && steps.transaction_audit.outcome == 'success' && steps.payment_finalizer.outcome == 'success' && steps.operations_audit.outcome == 'success' && hashFiles('hardware-live-audit-runtime.json') != ''
         continue-on-error: true
         run: node backend/scripts/qa-hardware-branding-audit.mjs
 
       - name: Install browser runtime
-        if: hashFiles('hardware-live-audit-runtime.json') != ''
+        if: always() && steps.transaction_audit.outcome == 'success' && steps.payment_finalizer.outcome == 'success' && steps.operations_audit.outcome == 'success' && steps.branding_audit.outcome == 'success' && hashFiles('hardware-live-audit-runtime.json') != ''
         run: |
           mkdir -p /tmp/axtor-playwright
           npm init -y --prefix /tmp/axtor-playwright >/dev/null
           npm install --prefix /tmp/axtor-playwright playwright@1.55.0 --no-audit --no-fund
           /tmp/axtor-playwright/node_modules/.bin/playwright install --with-deps chromium
 
-      - name: Test five users, settings and Hardware pages through Vercel
-        if: hashFiles('hardware-live-audit-runtime.json') != ''
+      - name: Test five users and all Hardware pages through Vercel
+        id: browser_audit
+        if: always() && steps.transaction_audit.outcome == 'success' && steps.payment_finalizer.outcome == 'success' && steps.operations_audit.outcome == 'success' && steps.branding_audit.outcome == 'success' && hashFiles('hardware-live-audit-runtime.json') != ''
         continue-on-error: true
         run: node backend/scripts/qa-hardware-browser-audit.mjs
 
       - name: Protect and remove Hardware credentials
-        if: hashFiles('hardware-live-audit-credentials.json') != ''
+        if: always()
         run: |
-          if [ -s backend/scripts/retail-audit-recipient-cert.pem ]; then
-            openssl cms -encrypt -binary -aes-256-cbc \
-              -in hardware-live-audit-credentials.json \
-              -out hardware-live-audit-credentials.p7m \
-              -outform DER \
-              backend/scripts/retail-audit-recipient-cert.pem
-            test -s hardware-live-audit-credentials.p7m
-          else
-            echo "Recipient certificate is absent; no plaintext credentials will be uploaded."
-            sha256sum hardware-live-audit-credentials.json | cut -d' ' -f1 > hardware-live-audit-credentials.sha256
+          if [ -f hardware-live-audit-credentials.json ]; then
+            if [ -s backend/scripts/retail-audit-recipient-cert.pem ]; then
+              openssl cms -encrypt -binary -aes-256-cbc \
+                -in hardware-live-audit-credentials.json \
+                -out hardware-live-audit-credentials.p7m \
+                -outform DER \
+                backend/scripts/retail-audit-recipient-cert.pem
+              test -s hardware-live-audit-credentials.p7m
+            else
+              sha256sum hardware-live-audit-credentials.json | cut -d' ' -f1 > hardware-live-audit-credentials.sha256
+            fi
+            shred -u hardware-live-audit-credentials.json
           fi
-          shred -u hardware-live-audit-credentials.json
-          rm -f hardware-live-audit-runtime.json
+          if [ -f hardware-live-audit-runtime.json ]; then shred -u hardware-live-audit-runtime.json; fi
 
       - name: Upload protected Hardware audit evidence
         if: always()
@@ -100,6 +112,31 @@ jobs:
 
       - name: Enforce Hardware launch-readiness result
         if: always()
+        env:
+          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.outcome }}
+          PAYMENT_OUTCOME: ${{ steps.payment_finalizer.outcome }}
+          OPERATIONS_OUTCOME: ${{ steps.operations_audit.outcome }}
+          BRANDING_OUTCOME: ${{ steps.branding_audit.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser_audit.outcome }}
         run: |
+          test "$TRANSACTION_OUTCOME" = "success"
+          test "$PAYMENT_OUTCOME" = "success"
+          test "$OPERATIONS_OUTCOME" = "success"
+          test "$BRANDING_OUTCOME" = "success"
+          test "$BROWSER_OUTCOME" = "success"
           test -s hardware-live-audit-report.json
-          node -e "const r=require('./hardware-live-audit-report.json'); console.log('Hardware audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
+          test -s hardware-live-audit-cleanup.sql
+          node <<'NODE'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('hardware-live-audit-report.json', 'utf8'));
+          console.log('Hardware audit result:', report.overall);
+          if (report.overall !== 'PASS') process.exit(1);
+          if (report.counts?.productCount !== 100) process.exit(1);
+          if (report.counts?.customerCount !== 200) process.exit(1);
+          if (report.counts?.invoiceCount !== 500) process.exit(1);
+          if (report.companyUserAudit?.checks?.exactlyFiveCompanyUsers !== true) process.exit(1);
+          if (report.companyUserAudit?.checks?.oneDisposableBusiness !== true) process.exit(1);
+          const users = report.browser?.users || [];
+          if (users.length !== 5 || users.some((user) => user.pass !== true || user.pages?.length !== 12)) process.exit(1);
+          if (report.browser?.checks?.expectedRestrictionDataIsolationPass !== true) process.exit(1);
+          NODE
