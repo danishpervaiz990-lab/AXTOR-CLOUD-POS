@@ -84,12 +84,14 @@ test('Business insert diagnostics expose schema blockers without reading tenant 
   }
 });
 
-test('registration controller includes only the safe compatibility object on provisioning failures', async () => {
+test('registration controller lazy-loads only the safe compatibility object on provisioning failures', async () => {
   const fs = await import('node:fs');
   const source = fs.readFileSync(new URL('../src/controllers/public-catalog.controller.ts', import.meta.url), 'utf8');
+  assert.match(source, /await import\("\.\.\/services\/business-schema-diagnostics\.service\.js"\)/);
   assert.match(source, /collectBusinessInsertCompatibility/);
   assert.match(source, /businessInsertCompatibility/);
-  assert.match(source, /stage === "tenant_provisioning"/);
+  assert.match(source, /stage !== "tenant_provisioning"/);
+  assert.doesNotMatch(source, /^import \{ collectBusinessInsertCompatibility \}/m);
   assert.doesNotMatch(source, /column_default.*details/);
   assert.doesNotMatch(source, /pg_get_constraintdef/);
   assert.doesNotMatch(source, /qual.*details/);
