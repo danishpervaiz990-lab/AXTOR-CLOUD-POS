@@ -61,7 +61,8 @@
     {
       "source": "/apps/(.*)",
       "headers": [
-        { "key": "X-Robots-Tag", "value": "noindex" }
+        { "key": "X-Robots-Tag", "value": "noindex" },
+        { "key": "X-Axtor-Gateway-Release", "value": "20260804-grocery-shim-exclusion1" }
       ]
     }
   ]
