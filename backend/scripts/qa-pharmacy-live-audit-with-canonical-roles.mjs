@@ -4,7 +4,7 @@ import zlib from 'node:zlib';
 const sourceUrl = new URL('./qa-pharmacy-live-audit.mjs', import.meta.url);
 const temporaryUrl = new URL('./.qa-pharmacy-live-audit-canonical.tmp.mjs', import.meta.url);
 const marker = "source = source.replace(/Retail/g, 'Pharmacy').replace(/retail/g, 'pharmacy').replace(/RETAIL/g, 'PHARMACY');";
-const canonicalRolePatch = `${marker}\nsource = source\n  .replaceAll('Pharmacy Manager', 'Manager')\n  .replaceAll('Salesman', 'Salesperson')\n  .replace(\"const salesmanRole = roleByName.get('salesman');\", \"const salesmanRole = roleByName.get('salesperson') || roleByName.get('salesman');\");`;
+const canonicalRolePatch = `${marker}\nsource = source\n  .replaceAll('Pharmacy Manager', 'Manager')\n  .replaceAll('Salesman', 'Salesperson')\n  .replace(\"const roleByName = new Map(access.roles.map((role) => [role.name.toLowerCase(), role]));\", \"console.log('PHARMACY_ACCESS_ROLE_NAMES', access.roles.map((role) => role.name));\\n  const roleByName = new Map(access.roles.map((role) => [role.name.toLowerCase(), role]));\")\n  .replace(\"const salesmanRole = roleByName.get('salesman');\", \"const salesmanRole = roleByName.get('salesperson') || roleByName.get('salesman');\");`;
 
 if (process.env.AXTOR_PHARMACY_ROLE_ADAPTER_INSPECT === '1') {
   const chunks = await Promise.all([1, 2, 3].map((index) =>
