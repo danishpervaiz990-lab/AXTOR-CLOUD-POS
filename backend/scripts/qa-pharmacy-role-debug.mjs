@@ -16,8 +16,8 @@ source = source
 const needle = 'Required Pharmacy Manager/Cashier/Pharmacist roles are unavailable';
 const index = source.indexOf(needle);
 if (index < 0) throw new Error('Role failure source could not be located');
-const start = Math.max(0, index - 2200);
-const end = Math.min(source.length, index + needle.length + 400);
+const start = Math.max(0, index - 800);
+const end = Math.min(source.length, index + needle.length + 4200);
 console.log('BEGIN PHARMACY ROLE LOOKUP SOURCE');
 console.log(source.slice(start, end));
 console.log('END PHARMACY ROLE LOOKUP SOURCE');
