@@ -34,10 +34,13 @@ if (mode === 'live') {
     .replaceAll("roleShape: 'Owner + 3 Paint Managers + Paint Salesperson'", "roleShape: 'Owner + 3 Paint Shop Managers + Paint Salesperson'")
     .replace("roleCounts['paint manager'] === 3 && roleCounts['trade salesperson'] === 1", "roleCounts['paint shop manager'] === 3 && roleCounts['paint salesperson'] === 1");
 
-  const cashierExact = `exact("const cashierRole = roleByName.get('cashier');", "const cashierRole = roleByName.get('paint shop manager') || roleByName.get('manager');", 'Paint transaction operator role');`;
-  if (!source.includes(cashierExact)) throw new Error('Paint audit transformer could not locate the cashier-role transformation');
-  const managerExact = `exact("const managerRole = roleByName.get('paint manager') || roleByName.get('manager');", "const managerRole = roleByName.get('paint shop manager') || roleByName.get('manager');", 'Paint Shop Manager role');`;
-  source = source.replace(cashierExact, `${managerExact}\n${cashierExact}`);
+  const payloadTransformMarker = "source = source.replace(/Retail/g, 'Paint').replace(/retail/g, 'paint').replace(/RETAIL/g, 'PAINT');";
+  if (!source.includes(payloadTransformMarker)) throw new Error('Paint audit transformer could not locate the payload industry conversion');
+  source = source.replace(payloadTransformMarker, `${payloadTransformMarker}
+const __paintRoleBlockIndex = source.indexOf('const managerRole');
+console.log('BEGIN GENERATED PAINT ROLE BLOCK');
+console.log(__paintRoleBlockIndex >= 0 ? source.slice(__paintRoleBlockIndex, __paintRoleBlockIndex + 1200) : 'managerRole source not found');
+console.log('END GENERATED PAINT ROLE BLOCK');`);
 }
 
 if (mode === 'operations') {
