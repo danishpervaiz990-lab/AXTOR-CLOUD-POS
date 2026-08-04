@@ -56,11 +56,22 @@
     return role;
   }
 
-  function canViewFinancialReports(session) {
+  function roleFamilies(session) {
     const user = session?.user || {};
-    const roles = [user.role].concat(Array.isArray(user.roles) ? user.roles : []).filter(Boolean);
-    return roles.some(function (role) {
-      return ["owner", "admin", "manager", "accountant", "auditor"].includes(roleFamily(role));
+    return [user.role].concat(Array.isArray(user.roles) ? user.roles : [])
+      .filter(Boolean)
+      .map(roleFamily);
+  }
+
+  function canViewFinancialReports(session) {
+    return roleFamilies(session).some(function (role) {
+      return ["owner", "admin", "manager", "accountant", "auditor"].includes(role);
+    });
+  }
+
+  function canViewCustomers(session) {
+    return roleFamilies(session).some(function (role) {
+      return ["owner", "admin", "manager", "accountant", "auditor", "cashier", "salesperson"].includes(role);
     });
   }
 
@@ -71,6 +82,13 @@
 
   function setReportVisibility(allowed) {
     document.querySelectorAll("[data-report-access='required']").forEach(function (element) {
+      element.hidden = !allowed;
+      element.setAttribute("aria-hidden", allowed ? "false" : "true");
+    });
+  }
+
+  function setCustomerVisibility(allowed) {
+    document.querySelectorAll("[data-customer-access='required']").forEach(function (element) {
       element.hidden = !allowed;
       element.setAttribute("aria-hidden", allowed ? "false" : "true");
     });
@@ -102,22 +120,27 @@
     if (code && code !== "retail") throw new Error("This application is available only to General Retail tenants.");
   }
 
-  async function loadOperationalDashboard() {
+  async function loadOperationalDashboard(session) {
+    const customerAccess = canViewCustomers(session);
     const values = await Promise.all([
       window.AxtorAPI.apiGet("/api/v1/dashboard/summary"),
       window.AxtorAPI.apiGet("/api/v1/products?active=true"),
-      window.AxtorAPI.apiGet("/api/v1/customers?active=true")
+      customerAccess
+        ? window.AxtorAPI.apiGet("/api/v1/customers?active=true")
+        : Promise.resolve({ customers: [] })
     ]);
     return {
       summary: unwrap(values[0]) || {},
       products: values[1]?.products || unwrap(values[1]) || [],
-      customers: values[2]?.customers || unwrap(values[2]) || []
+      customers: values[2]?.customers || unwrap(values[2]) || [],
+      customerAccess: customerAccess
     };
   }
 
   function renderOperationalValues(operational) {
     setText("productCount", String(operational.products.length));
-    setText("customerCount", String(operational.customers.length));
+    setCustomerVisibility(operational.customerAccess);
+    if (operational.customerAccess) setText("customerCount", String(operational.customers.length));
     setText("lowStock", String(operational.summary.inventory?.lowStockCount || 0));
   }
 
@@ -128,7 +151,7 @@
     setText("topProductCount", "Restricted");
     setText("dashboardSyncText", "Operational dashboard loaded · Financial reports restricted");
     const status = document.getElementById("retailStatus");
-    status.textContent = currentRoleLabel(session) + " can use permitted Retail operations. Financial report requests were not sent.";
+    status.textContent = currentRoleLabel(session) + " can use permitted Retail operations. Requests outside this role's permissions were not sent.";
     status.className = "retail-status success";
   }
 
@@ -173,7 +196,7 @@
       if (!window.AxtorAPI || typeof window.AxtorAPI.apiGet !== "function") throw new Error("Axtor API helper is unavailable.");
       await verifyTenant();
       const session = unwrap(await window.AxtorAPI.apiGet("/api/v1/auth/me")) || {};
-      const operational = await loadOperationalDashboard();
+      const operational = await loadOperationalDashboard(session);
       if (canViewFinancialReports(session)) {
         await renderReportDashboard(operational);
       } else {
