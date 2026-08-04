@@ -71,7 +71,7 @@ function shouldInjectGroceryRepair(pathname, html) {
 
 function developmentRuntime(industry) {
   const expectedIndustry = JSON.stringify(industry);
-  return `<script data-axtor-development-runtime="20260804-strict1">
+  return `<script data-axtor-development-runtime="20260804-strict2">
 (function(){
   "use strict";
   var EXPECTED=${expectedIndustry};
@@ -90,7 +90,10 @@ function developmentRuntime(industry) {
     document.querySelectorAll("body *").forEach(function(node){
       if(node.children.length>0)return;
       var text=String(node.textContent||"").trim();
-      if(/^Trial:\s*\d+\s*day\(s\) remaining/i.test(text)||/^Plans\s*&\s*Subscription$/i.test(text))node.hidden=true;
+      var lower=text.toLowerCase();
+      var isTrial=lower.indexOf("trial:")===0&&lower.indexOf("day(s) remaining")>0;
+      var isPlans=lower.replace(/\s+/g," ")==="plans & subscription";
+      if(isTrial||isPlans)node.hidden=true;
     });
   }
 
@@ -203,7 +206,7 @@ export default async function industryAsset(request) {
   try {
     const upstream = await fetch(source, {
       method: request.method,
-      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.5" },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.6" },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
