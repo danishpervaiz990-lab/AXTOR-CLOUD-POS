@@ -91,6 +91,11 @@ try {
     let tenantResolved = false;
     let dedicatedRetailRoute = false;
     let dashboardLoaded = false;
+    let dashboardShellVisible = false;
+    let dashboardTitle = '';
+    let dashboardSyncText = '';
+    let dashboardStatusText = '';
+    let dashboardStatusClass = '';
     let finalUrl = '';
     let observedRoles = [];
     let sidebarLabels = [];
@@ -128,12 +133,28 @@ try {
         waitUntil: 'domcontentloaded',
         timeout: 45000,
       });
-      await page.waitForTimeout(3500);
+      await page.waitForFunction(() => {
+        const sync = String(document.querySelector('#dashboardSyncText')?.textContent || '').trim();
+        const status = document.querySelector('#retailStatus');
+        return Boolean(sync)
+          && !/^loading/i.test(sync)
+          && Boolean(status?.classList.contains('success') || status?.classList.contains('error'));
+      }, null, { timeout: 15000 }).catch(() => {});
+
       finalUrl = page.url();
       const parsed = new URL(finalUrl);
       dedicatedRetailRoute = parsed.pathname === '/apps/retail/retail-dashboard.html';
-      const body = await page.locator('body').innerText().catch(() => '');
-      dashboardLoaded = /dashboard/i.test(body) && !/page not found|404|unauthorized|forbidden/i.test(body);
+      dashboardShellVisible = await page.locator('main.page').isVisible().catch(() => false);
+      dashboardTitle = String(await page.locator('.page-title h2').innerText().catch(() => '')).trim();
+      dashboardSyncText = String(await page.locator('#dashboardSyncText').innerText().catch(() => '')).trim();
+      dashboardStatusText = String(await page.locator('#retailStatus').innerText().catch(() => '')).trim();
+      dashboardStatusClass = String(await page.locator('#retailStatus').getAttribute('class').catch(() => '') || '');
+      dashboardLoaded = dashboardShellVisible
+        && /retail dashboard/i.test(dashboardTitle)
+        && Boolean(dashboardSyncText)
+        && !/^loading/i.test(dashboardSyncText)
+        && !/\berror\b/i.test(dashboardStatusClass)
+        && !/permission denied|unauthorized|forbidden/i.test(dashboardStatusText);
       sidebarLabels = await page.locator('aside a, nav a, .sidebar a').allInnerTexts().catch(() => []);
       await page.screenshot({
         path: `${evidenceDir}/${user.key}-${roleFamily(user.role)}-retail-dashboard.png`,
@@ -173,6 +194,11 @@ try {
       tenantResolved,
       dedicatedRetailRoute,
       dashboardLoaded,
+      dashboardShellVisible,
+      dashboardTitle,
+      dashboardSyncText,
+      dashboardStatusText,
+      dashboardStatusClass,
       finalUrl,
       sidebarLabels,
       httpFailures: responses,
