@@ -8,6 +8,9 @@
   const SETTINGS_WRITE_ROLES = new Set([
     "owner", "admin", "administrator", "manager", "paint manager", "paint shop manager", "accountant"
   ]);
+  const SETTINGS_RESTRICTED_ROLES = new Set([
+    "paint salesperson", "salesperson", "colorist", "colourist", "paint storekeeper", "storekeeper", "paint quality inspector", "quality inspector"
+  ]);
 
   function normalizeRole(value) {
     if (value && typeof value === "object") return String(value.name || value.role || value.code || "").trim().toLowerCase();
@@ -34,8 +37,9 @@
     return roles().some(function (role) { return allowed.has(role); });
   }
 
-  function canReadSettings() { return hasRole(SETTINGS_READ_ROLES); }
-  function canWriteSettings() { return hasRole(SETTINGS_WRITE_ROLES); }
+  function isExplicitlyRestricted() { return hasRole(SETTINGS_RESTRICTED_ROLES); }
+  function canReadSettings() { return !isExplicitlyRestricted() && hasRole(SETTINGS_READ_ROLES); }
+  function canWriteSettings() { return !isExplicitlyRestricted() && hasRole(SETTINGS_WRITE_ROLES); }
 
   function permissionError() {
     const error = new Error("Permission denied: settings access is not assigned to this Paint role.");
@@ -110,5 +114,5 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
 
-  window.AxtorPaintRoleAwareSettings = { roles, canReadSettings, canWriteSettings };
+  window.AxtorPaintRoleAwareSettings = { roles, canReadSettings, canWriteSettings, isExplicitlyRestricted };
 })();
