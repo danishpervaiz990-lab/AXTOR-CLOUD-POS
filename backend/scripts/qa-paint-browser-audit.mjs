@@ -1,6 +1,11 @@
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
+const hardTimer = setTimeout(() => {
+  console.error('Paint browser certification exceeded its eight-minute hard limit');
+  process.exit(124);
+}, 8 * 60 * 1000);
+
 const require = createRequire('/tmp/axtor-playwright/package.json');
 const { chromium } = require('playwright');
 const runtime = JSON.parse(await fs.readFile('paint-live-audit-runtime.json', 'utf8'));
@@ -32,6 +37,7 @@ const unwrap = (value) => value?.data ?? value;
 const roleValue = (value) => String(value && typeof value === 'object' ? value.name || value.role || value.code || '' : value || '').trim().toLowerCase();
 const expectedRole = (user) => roleValue(user?.role);
 const observedRoles = (user) => [user?.role, ...(Array.isArray(user?.roles) ? user.roles : [])].map(roleValue).filter(Boolean);
+const timeoutResult = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
 async function jsonRequest(path, { method = 'GET', token, body, expected = [200] } = {}) {
   const response = await fetch(`${backendOrigin}${path}`, {
@@ -43,7 +49,7 @@ async function jsonRequest(path, { method = 'GET', token, body, expected = [200]
       ...(body !== undefined ? { 'Idempotency-Key': `paint-browser:${businessSlug}:${method}:${path}` } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(15000),
   });
   const payload = await response.json().catch(() => null);
   if (!expected.includes(response.status)) throw new Error(`${method} ${path} -> ${response.status}: ${payload?.error?.message || payload?.message || 'request failed'}`);
@@ -74,25 +80,20 @@ function relevantErrors(errors) {
 }
 
 async function inspectPaintPage(page, key, terms) {
-  await page.waitForFunction(() => {
-    const app = document.querySelector('#app');
-    return Boolean(app) && String(document.body?.innerText || '').trim().length > 20;
-  }, null, { timeout: 20000 });
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(4000);
   return page.evaluate(({ key, terms }) => {
     const body = String(document.body?.innerText || '');
-    const appText = String(document.querySelector('#app')?.innerText || '').trim();
+    const app = document.querySelector('#app');
+    const appText = String(app?.innerText || '').trim();
     const heading = String(document.querySelector('h1')?.textContent || '');
     const lower = `${body}\n${heading}`.toLowerCase();
     const hasTerms = terms.every((term) => lower.includes(String(term).toLowerCase()));
-    const restrictedNotice = Boolean(document.querySelector('#paintSettingsRoleNotice'));
-    const restrictedEditors = document.querySelectorAll('#paintPrintSettings,#paintBrandingPanel').length;
     return {
-      ok: hasTerms && Boolean(document.querySelector('#app')) && !/page not found|404/i.test(body) && !/permission denied|forbidden|access denied/i.test(appText),
-      restrictedNotice,
-      restrictedEditors,
-      appText: appText.slice(0, 500),
       key,
+      ok: hasTerms && Boolean(app) && body.trim().length > 20 && !/page not found|404/i.test(body) && !/permission denied|forbidden|access denied/i.test(appText),
+      restrictedNotice: Boolean(document.querySelector('#paintSettingsRoleNotice')),
+      restrictedEditors: document.querySelectorAll('#paintPrintSettings,#paintBrandingPanel').length,
+      appText: appText.slice(0, 500),
     };
   }, { key, terms });
 }
@@ -112,7 +113,7 @@ async function probePaintSalesRestrictions(token) {
           ...(body !== undefined ? { 'Content-Type': 'application/json', 'Idempotency-Key': `paint-browser-deny:${businessSlug}:${index}` } : {}),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(12000),
       });
       status = response.status;
       const payload = await response.json().catch(() => null);
@@ -125,11 +126,15 @@ async function probePaintSalesRestrictions(token) {
   return results;
 }
 
+async function closeContext(context) {
+  await Promise.race([context.close().catch(() => undefined), timeoutResult(5000, undefined)]);
+}
+
 const roleOrder = new Map([['cashier1', 1], ['cashier2', 2], ['van', 3], ['manager', 4], ['owner', 5]]);
 const auditUsers = [...(runtime.users || [])].sort((a, b) => (roleOrder.get(a.key) || 99) - (roleOrder.get(b.key) || 99));
 if (auditUsers.length !== 5) throw new Error(`Paint browser certification requires exactly five users, received ${auditUsers.length}`);
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, timeout: 30000 });
 const results = [];
 try {
   for (const user of auditUsers) {
@@ -137,7 +142,17 @@ try {
     const roleOk = observedRoles(session.user).includes(expectedRole(user));
     const businessOk = String(session.business?.slug || '').toLowerCase() === String(businessSlug).toLowerCase();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
+    await context.addInitScript(({ token, sessionUser, business }) => {
+      localStorage.setItem('axtorAuthToken', token);
+      localStorage.setItem('currentUser', JSON.stringify(sessionUser));
+      localStorage.setItem('axtorCurrentUser', JSON.stringify(sessionUser));
+      localStorage.setItem('axtorBusiness', JSON.stringify(business));
+      sessionStorage.removeItem('axtorAuthReturnUrl');
+      sessionStorage.removeItem('axtorAuthRedirectInProgress');
+    }, { token: session.token, sessionUser: session.user, business: session.business });
     const page = await context.newPage();
+    page.setDefaultTimeout(12000);
+    page.setDefaultNavigationTimeout(15000);
     const consoleErrors = [];
     const httpEvents = [];
     page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(`console: ${message.text()}`); });
@@ -147,23 +162,13 @@ try {
     const pageResults = [];
     let permissionChecks = [];
     try {
-      await page.goto(`${publicOrigin}/login.html`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await page.evaluate(({ token, sessionUser, business }) => {
-        localStorage.setItem('axtorAuthToken', token);
-        localStorage.setItem('currentUser', JSON.stringify(sessionUser));
-        localStorage.setItem('axtorCurrentUser', JSON.stringify(sessionUser));
-        localStorage.setItem('axtorBusiness', JSON.stringify(business));
-        sessionStorage.removeItem('axtorAuthReturnUrl');
-        sessionStorage.removeItem('axtorAuthRedirectInProgress');
-      }, { token: session.token, sessionUser: session.user, business: session.business });
-
       for (const [key, route, terms] of pages) {
         const httpStart = httpEvents.length;
         let response = null;
         let verification = { ok: false, appText: '', restrictedNotice: false, restrictedEditors: -1 };
         let error = null;
         try {
-          response = await page.goto(`${publicOrigin}${route}?audit=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          response = await page.goto(`${publicOrigin}${route}?audit=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
           verification = await inspectPaintPage(page, key, terms);
         } catch (failure) {
           error = failure?.message || String(failure);
@@ -176,12 +181,16 @@ try {
         const ok = Boolean(response?.ok?.()) && verification.ok && routeHttp.length === 0 && branchOk && industryOk && restrictedSettingsOk;
         pageResults.push({ key, route, ok, finalUrl: page.url(), http: routeHttp, branchOk, industryOk, restrictedSettingsOk, ...(error ? { error } : {}) });
         console.log('Paint browser page', { user: user.key, role: user.role, key, ok, http: routeHttp.length });
-        if (user.key === 'owner') await page.screenshot({ path: `${evidenceDir}/owner-${key}.png`, fullPage: true }).catch(() => null);
+        if (user.key === 'owner' && key === 'dashboard') {
+          await Promise.race([
+            page.screenshot({ path: `${evidenceDir}/owner-dashboard.png`, fullPage: false }).catch(() => undefined),
+            timeoutResult(10000, undefined),
+          ]);
+        }
       }
-
       if (expectedRole(user) === 'paint salesperson') permissionChecks = await probePaintSalesRestrictions(session.token);
     } finally {
-      await context.close();
+      await closeContext(context);
     }
 
     const errors = relevantErrors(consoleErrors);
@@ -198,7 +207,7 @@ try {
     });
   }
 } finally {
-  await browser.close();
+  await Promise.race([browser.close().catch(() => undefined), timeoutResult(10000, undefined)]);
 }
 
 const paintSalesResult = results.find((item) => expectedRole(item) === 'paint salesperson');
@@ -217,5 +226,6 @@ report.browser = {
 };
 report.overall = report.overall === 'PASS' && Object.values(report.browser.checks).every(Boolean) ? 'PASS' : 'FAIL';
 await fs.writeFile('paint-live-audit-report.json', JSON.stringify(report, null, 2));
+clearTimeout(hardTimer);
 console.log(JSON.stringify(report.browser, null, 2));
 if (report.overall !== 'PASS') process.exitCode = 1;
