@@ -2,7 +2,21 @@
 set -euo pipefail
 
 MIGRATIONS_DIR="prisma/migrations"
-BUSINESS_ENUM_COMPATIBILITY_MIGRATION="20260804012000_business_enum_column_compatibility"
+BUSINESS_ENUM_COMPATIBILITY_MIGRATIONS=(
+  "20260804012000_business_enum_column_compatibility"
+  "20260804013000_business_enum_alias_recovery"
+)
+KNOWN_BUSINESS_REPAIR_MIGRATIONS=(
+  "20260804010000_business_schema_reconciliation"
+  "20260804011000_business_column_reconciliation"
+  "20260804012000_business_enum_column_compatibility"
+  "20260804013000_business_enum_alias_recovery"
+)
+BUSINESS_REPAIR_EXECUTION_ORDER=(
+  "20260804010000_business_schema_reconciliation"
+  "20260804011000_business_column_reconciliation"
+  "20260804013000_business_enum_alias_recovery"
+)
 BASELINE_MIGRATIONS=(
   "20260709000000_initial_full_schema"
   "20260710120000_sales_production_upgrade"
@@ -27,10 +41,68 @@ verify_business_schema() {
   node scripts/verify-production-business-schema.mjs
 }
 
-echo "Applying pending Prisma migrations..."
-if run_migrate_deploy; then
-  echo "Prisma migrations applied successfully."
+is_business_enum_compatibility_migration() {
+  local candidate="$1"
+  local allowed
+  for allowed in "${BUSINESS_ENUM_COMPATIBILITY_MIGRATIONS[@]}"; do
+    if [ "$candidate" = "$allowed" ]; then return 0; fi
+  done
+  return 1
+}
+
+recover_known_business_schema_failure() {
+  local failed_output="$DEPLOY_OUTPUT"
+  local matched=0
+  local migration_name
+
+  if ! printf '%s' "$failed_output" | grep -Eiq 'P3009|P3018'; then
+    return 1
+  fi
+
+  for migration_name in "${KNOWN_BUSINESS_REPAIR_MIGRATIONS[@]}"; do
+    if printf '%s' "$failed_output" | grep -Fq "$migration_name"; then
+      matched=1
+    fi
+  done
+  if [ "$matched" -ne 1 ]; then return 1; fi
+
+  echo "A known idempotent Business schema repair migration is marked failed."
+  echo "Executing the reviewed repair SQL before resolving that failed migration..."
+  for migration_name in "${BUSINESS_REPAIR_EXECUTION_ORDER[@]}"; do
+    npx prisma db execute \
+      --file "$MIGRATIONS_DIR/$migration_name/migration.sql" \
+      --schema prisma/schema.prisma
+  done
   verify_business_schema
+
+  matched=0
+  for migration_name in "${KNOWN_BUSINESS_REPAIR_MIGRATIONS[@]}"; do
+    if printf '%s' "$failed_output" | grep -Fq "$migration_name"; then
+      npx prisma migrate resolve --rolled-back "$migration_name"
+      matched=1
+    fi
+  done
+  [ "$matched" -eq 1 ]
+}
+
+migrate_with_known_recovery() {
+  if run_migrate_deploy; then
+    verify_business_schema
+    return 0
+  fi
+
+  if recover_known_business_schema_failure; then
+    echo "Known Business schema failure repaired; retrying normal Prisma migration deployment..."
+    run_migrate_deploy
+    verify_business_schema
+    return 0
+  fi
+  return "$DEPLOY_CODE"
+}
+
+echo "Applying pending Prisma migrations..."
+if migrate_with_known_recovery; then
+  echo "Prisma migrations and Business schema verification completed successfully."
   exit 0
 fi
 
@@ -51,7 +123,7 @@ for migration_dir in "$MIGRATIONS_DIR"/*; do
   if [ "$BASELINE_COMPLETE" -eq 1 ]; then
     migration_sql="$migration_dir/migration.sql"
     RELEASE_MIGRATION_SQL+=("$migration_sql")
-    if [ "$migration_name" != "$BUSINESS_ENUM_COMPATIBILITY_MIGRATION" ]; then
+    if ! is_business_enum_compatibility_migration "$migration_name"; then
       STANDARD_RELEASE_MIGRATION_SQL+=("$migration_sql")
     fi
   elif [ "$migration_name" = "20260726090000_industry_catalogue_provisioning" ]; then
@@ -73,9 +145,9 @@ if grep -Eiq \
   exit 1
 fi
 
-# Type rewrites remain blocked globally. The one named compatibility migration
-# is reviewed separately and validates every stored value before converting only
-# businesses.status and businesses.onboarding_state to their Prisma enum types.
+# Type rewrites remain blocked globally. Only the two reviewed Business enum
+# compatibility migrations may convert status/onboarding_state after validating
+# all stored values.
 if [ "${#STANDARD_RELEASE_MIGRATION_SQL[@]}" -gt 0 ] && grep -Eiq \
   'ALTER[[:space:]]+COLUMN[^;]*TYPE' \
   "${STANDARD_RELEASE_MIGRATION_SQL[@]}"; then
@@ -93,6 +165,8 @@ for migration_name in "${BASELINE_MIGRATIONS[@]}"; do
   npx prisma migrate resolve --applied "$migration_name"
 done
 
-echo "Legacy baseline complete. Applying pending additive migrations..."
-npx prisma migrate deploy
-verify_business_schema
+echo "Legacy baseline complete. Applying pending migrations..."
+if ! migrate_with_known_recovery; then
+  echo "Post-baseline Prisma migration deployment failed."
+  exit "$DEPLOY_CODE"
+fi

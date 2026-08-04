@@ -6,7 +6,8 @@ import { spawnSync } from 'node:child_process';
 const enumMigration = fs.readFileSync(new URL('../prisma/migrations/20260804010000_business_schema_reconciliation/migration.sql', import.meta.url), 'utf8');
 const columnMigration = fs.readFileSync(new URL('../prisma/migrations/20260804011000_business_column_reconciliation/migration.sql', import.meta.url), 'utf8');
 const compatibilityMigration = fs.readFileSync(new URL('../prisma/migrations/20260804012000_business_enum_column_compatibility/migration.sql', import.meta.url), 'utf8');
-const combinedMigrations = `${enumMigration}\n${columnMigration}\n${compatibilityMigration}`;
+const recoveryMigration = fs.readFileSync(new URL('../prisma/migrations/20260804013000_business_enum_alias_recovery/migration.sql', import.meta.url), 'utf8');
+const combinedMigrations = `${enumMigration}\n${columnMigration}\n${compatibilityMigration}\n${recoveryMigration}`;
 const predeploy = fs.readFileSync(new URL('../scripts/railway-predeploy.sh', import.meta.url), 'utf8');
 const verifierPath = new URL('../scripts/verify-production-business-schema.mjs', import.meta.url);
 const verifier = fs.readFileSync(verifierPath, 'utf8');
@@ -32,28 +33,51 @@ test('Business reconciliation migrations are ordered, additive, and cover the cu
   assert.doesNotMatch(combinedMigrations, /ALTER\s+COLUMN[\s\S]*SET\s+NOT\s+NULL/i);
 });
 
-test('Business enum compatibility validates data before two exact type conversions', () => {
-  const statusValidation = compatibilityMigration.indexOf('invalid_status_values');
-  const statusConversion = compatibilityMigration.indexOf('ALTER COLUMN "status" TYPE');
-  const onboardingValidation = compatibilityMigration.indexOf('invalid_onboarding_values');
-  const onboardingConversion = compatibilityMigration.indexOf('ALTER COLUMN "onboarding_state" TYPE');
-  assert.ok(statusValidation >= 0 && statusConversion > statusValidation);
-  assert.ok(onboardingValidation >= 0 && onboardingConversion > onboardingValidation);
+test('Business enum migrations validate data before two exact type conversions', () => {
+  for (const source of [compatibilityMigration, recoveryMigration]) {
+    const statusValidation = source.indexOf('invalid_status_values');
+    const statusConversion = source.indexOf('ALTER COLUMN "status" TYPE');
+    const onboardingValidation = source.indexOf('invalid_onboarding_values');
+    const onboardingConversion = source.indexOf('ALTER COLUMN "onboarding_state" TYPE');
+    assert.ok(statusValidation >= 0 && statusConversion > statusValidation);
+    assert.ok(onboardingValidation >= 0 && onboardingConversion > onboardingValidation);
+    const typeConversions = source.match(/ALTER COLUMN \"(?:status|onboarding_state)\" TYPE/g) || [];
+    assert.equal(typeConversions.length, 2);
+    assert.doesNotMatch(source, /ALTER COLUMN \"(?!status|onboarding_state)/);
+  }
   assert.match(compatibilityMigration, /ARRAY\['ACTIVE','TRIAL','SUSPENDED','CANCELLED'\]/);
-  assert.match(compatibilityMigration, /ARRAY\['NOT_STARTED','IN_PROGRESS','COMPLETED'\]/);
-  assert.match(compatibilityMigration, /unsupported values/);
-  const typeConversions = compatibilityMigration.match(/ALTER COLUMN \"(?:status|onboarding_state)\" TYPE/g) || [];
-  assert.equal(typeConversions.length, 2);
-  assert.doesNotMatch(compatibilityMigration, /ALTER COLUMN \"(?!status|onboarding_state)/);
+  assert.match(recoveryMigration, /'CANCELED'/);
+  assert.match(recoveryMigration, /'COMPLETE'/);
+  assert.match(recoveryMigration, /regexp_replace\(upper\(btrim/);
+  assert.match(recoveryMigration, /unsupported values/);
 });
 
-test('Railway allows only the named compatibility type rewrite and verifies afterward', () => {
-  assert.match(predeploy, /BUSINESS_ENUM_COMPATIBILITY_MIGRATION="20260804012000_business_enum_column_compatibility"/);
+test('Railway recovery is limited to named idempotent Business repair migrations', () => {
+  for (const migration of [
+    '20260804010000_business_schema_reconciliation',
+    '20260804011000_business_column_reconciliation',
+    '20260804012000_business_enum_column_compatibility',
+    '20260804013000_business_enum_alias_recovery',
+  ]) {
+    assert.match(predeploy, new RegExp(migration));
+  }
+  assert.match(predeploy, /P3009\|P3018/);
+  assert.match(predeploy, /npx prisma db execute/);
+  assert.match(predeploy, /npx prisma migrate resolve --rolled-back/);
   assert.match(predeploy, /STANDARD_RELEASE_MIGRATION_SQL/);
   assert.match(predeploy, /unapproved column type rewrite/);
+  assert.doesNotMatch(predeploy, /--accept-data-loss/);
+
+  const repairIndex = predeploy.indexOf('npx prisma db execute');
+  const verifyIndex = predeploy.indexOf('verify_business_schema', repairIndex);
+  const resolveIndex = predeploy.indexOf('npx prisma migrate resolve --rolled-back');
+  assert.ok(repairIndex >= 0 && verifyIndex > repairIndex && resolveIndex > verifyIndex, 'repair SQL must verify before failed migration history is resolved');
+});
+
+test('Railway verifies the Business contract after every migration path', () => {
   assert.match(predeploy, /verify_business_schema\(\)/);
   const invocations = predeploy.match(/verify_business_schema/g) || [];
-  assert.ok(invocations.length >= 3, 'function plus both deployment paths must reference verification');
+  assert.ok(invocations.length >= 4, 'normal, recovery, and baseline paths must verify the schema');
   assert.match(predeploy, /node scripts\/verify-production-business-schema\.mjs/);
 });
 

@@ -6,7 +6,7 @@ import { PrismaClient } from '@prisma/client';
 
 const shouldRun = process.env.RUN_DATABASE_INTEGRATION === '1' && Boolean(process.env.DATABASE_URL);
 const migration = fs.readFileSync(
-  new URL('../prisma/migrations/20260804012000_business_enum_column_compatibility/migration.sql', import.meta.url),
+  new URL('../prisma/migrations/20260804013000_business_enum_alias_recovery/migration.sql', import.meta.url),
   'utf8',
 );
 
@@ -17,7 +17,7 @@ function schemaUrl(schema) {
 }
 
 async function createLegacySchema({ invalidStatus = false } = {}) {
-  const schema = `business_enum_compat_${crypto.randomBytes(6).toString('hex')}`;
+  const schema = `business_enum_recovery_${crypto.randomBytes(6).toString('hex')}`;
   const admin = new PrismaClient();
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
   const client = new PrismaClient({ datasources: { db: { url: schemaUrl(schema) } } });
@@ -34,9 +34,11 @@ async function createLegacySchema({ invalidStatus = false } = {}) {
     `);
     await client.$executeRawUnsafe(
       `INSERT INTO "businesses" ("id", "status", "onboarding_state") VALUES
-       ('one', 'TRIAL', 'NOT_STARTED'),
-       ('two', 'ACTIVE', 'COMPLETED'),
-       ('three', ${invalidStatus ? "'LEGACY_UNKNOWN'" : 'NULL'}, NULL)`,
+       ('one', ' trial ', 'not started'),
+       ('two', 'ACTIVE', 'Completed'),
+       ('three', 'canceled', 'in-progress'),
+       ('four', NULL, NULL)
+       ${invalidStatus ? ", ('invalid', 'LEGACY_UNKNOWN', 'NOT_STARTED')" : ''}`,
     );
     return { admin, client, schema };
   } catch (error) {
@@ -53,7 +55,7 @@ async function cleanup({ admin, client, schema }) {
   await admin.$disconnect();
 }
 
-test('legacy text Business enum columns convert without changing valid values', { skip: !shouldRun }, async () => {
+test('legacy Business aliases convert to canonical enums without losing rows', { skip: !shouldRun }, async () => {
   const runtime = await createLegacySchema();
   try {
     await runtime.client.$executeRawUnsafe(migration);
@@ -77,8 +79,9 @@ test('legacy text Business enum columns convert without changing valid values', 
       ORDER BY id
     `);
     assert.deepEqual(rows, [
+      { id: 'four', status: 'TRIAL', onboarding_state: 'NOT_STARTED' },
       { id: 'one', status: 'TRIAL', onboarding_state: 'NOT_STARTED' },
-      { id: 'three', status: 'TRIAL', onboarding_state: 'NOT_STARTED' },
+      { id: 'three', status: 'CANCELLED', onboarding_state: 'IN_PROGRESS' },
       { id: 'two', status: 'ACTIVE', onboarding_state: 'COMPLETED' },
     ]);
   } finally {
@@ -86,12 +89,12 @@ test('legacy text Business enum columns convert without changing valid values', 
   }
 });
 
-test('unsupported legacy Business status aborts before either column is converted', { skip: !shouldRun }, async () => {
+test('unsupported legacy Business status aborts the alias recovery atomically', { skip: !shouldRun }, async () => {
   const runtime = await createLegacySchema({ invalidStatus: true });
   try {
     await assert.rejects(
       runtime.client.$executeRawUnsafe(migration),
-      /unsupported values|conversion blocked/i,
+      /unsupported values|recovery blocked/i,
     );
 
     const columns = await runtime.client.$queryRawUnsafe(`
@@ -106,7 +109,7 @@ test('unsupported legacy Business status aborts before either column is converte
       columns.map((row) => [String(row.column_name), String(row.udt_name)]),
       [['onboarding_state', 'varchar'], ['status', 'text']],
     );
-    const rows = await runtime.client.$queryRawUnsafe(`SELECT id, status FROM "businesses" WHERE id = 'three'`);
+    const rows = await runtime.client.$queryRawUnsafe(`SELECT id, status FROM "businesses" WHERE id = 'invalid'`);
     assert.equal(rows[0]?.status, 'LEGACY_UNKNOWN');
   } finally {
     await cleanup(runtime);
