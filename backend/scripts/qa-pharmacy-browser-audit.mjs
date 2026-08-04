@@ -19,17 +19,22 @@ const pages = [
   ['reports', '/apps/pharmacy/pharmacy-reports.html', ['Reports']],
 ];
 
+function isPharmacyCashier(user) {
+  return ['cashier', 'pharmacy cashier'].includes(String(user?.role || '').trim().toLowerCase());
+}
+
 function cleanErrors(errors, user) {
-  const restrictedRole = ['cashier', 'pharmacy cashier'].includes(String(user.role || '').toLowerCase());
+  const restrictedRole = isPharmacyCashier(user);
   return errors.filter((message) => {
     if (/^(?:console|http):.*(?:favicon|Failed to load resource.*404)/i.test(message)) return false;
     if (/^console:.*ERR_ABORTED/i.test(message)) return false;
-    if (restrictedRole && /(?:http 403: .*\/api\/v1\/industry\/(?:records|batches)|Failed to load resource: the server responded with a status of 403)/i.test(message)) return false;
+    if (restrictedRole && /^http 403: .*\/api\/v1\/(?:industry\/(?:records|batches)|suppliers)(?:\?|$)/i.test(message)) return false;
+    if (restrictedRole && /^console:.*Failed to load resource: the server responded with a status of 403/i.test(message)) return false;
     return true;
   });
 }
 
-async function verifyPage(page, key, required) {
+async function verifyPage(page, key, required, user) {
   if (key === 'billing') {
     await page.waitForFunction(() => {
       const heading = String(document.querySelector('.rx-hero h2')?.textContent || '').trim();
@@ -41,7 +46,34 @@ async function verifyPage(page, key, required) {
       rows: document.querySelectorAll('#pharmacyContent .rx-table tbody tr').length,
       errorVisible: !document.querySelector('#pharmacyError')?.hidden,
     }));
-    return /pharmacy billing/i.test(state.heading) && state.rows > 0 && !state.errorVisible;
+    return {
+      ok: /pharmacy billing/i.test(state.heading) && state.rows > 0 && !state.errorVisible,
+      restricted: false,
+      dataRows: state.rows,
+    };
+  }
+
+  if (key === 'suppliers' && isPharmacyCashier(user)) {
+    await page.waitForFunction(() => {
+      const body = String(document.body?.innerText || '').toLowerCase();
+      return body.includes('suppliers') && !/loading pharmacy|loading…|saving…/i.test(body);
+    }, null, { timeout: 45000 }).catch(() => null);
+    const state = await page.evaluate(() => {
+      const body = String(document.body?.innerText || '');
+      const rows = [...document.querySelectorAll('#pharmacyContent .rx-table tbody tr')];
+      const dataRows = rows.filter((row) => row.querySelectorAll('td').length > 1).length;
+      return {
+        body,
+        dataRows,
+        errorVisible: !document.querySelector('#pharmacyError')?.hidden,
+      };
+    });
+    return {
+      ok: /suppliers/i.test(state.body) && state.dataRows === 0 && !/page not found|404/i.test(state.body),
+      restricted: true,
+      dataRows: state.dataRows,
+      restrictionMessageVisible: state.errorVisible,
+    };
   }
 
   await page.waitForFunction((terms) => {
@@ -50,7 +82,10 @@ async function verifyPage(page, key, required) {
     return !loading && terms.every((term) => body.includes(String(term).toLowerCase()));
   }, required, { timeout: 45000 }).catch(() => null);
   const body = await page.locator('body').innerText().catch(() => '');
-  return required.every((term) => body.toLowerCase().includes(term.toLowerCase())) && !/page not found|404/i.test(body);
+  return {
+    ok: required.every((term) => body.toLowerCase().includes(term.toLowerCase())) && !/page not found|404/i.test(body),
+    restricted: false,
+  };
 }
 
 const roleOrder = new Map([['cashier1', 1], ['cashier2', 2], ['van', 3], ['manager', 4], ['owner', 5]]);
@@ -99,22 +134,31 @@ try {
       roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === String(user.role).toLowerCase());
 
       for (const [key, route, required] of pages) {
-        let ok = false;
+        let verification = { ok: false, restricted: false };
         let finalUrl = '';
         let lastError = '';
-        for (let attempt = 1; attempt <= 3 && !ok; attempt += 1) {
+        for (let attempt = 1; attempt <= 3 && !verification.ok; attempt += 1) {
           try {
             await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-            ok = await verifyPage(page, key, required);
+            verification = await verifyPage(page, key, required, user);
             finalUrl = page.url();
           } catch (error) {
             lastError = error?.message || String(error) || 'unknown navigation error';
             finalUrl = page.url();
           }
-          if (!ok && attempt < 3) await page.waitForTimeout(1500 * attempt);
+          if (!verification.ok && attempt < 3) await page.waitForTimeout(1500 * attempt);
         }
-        if (!ok && lastError) errors.push(`route ${key}: ${lastError}`);
-        pageResults.push({ key, route, ok, finalUrl, ...(lastError && !ok ? { error: lastError } : {}) });
+        if (!verification.ok && lastError) errors.push(`route ${key}: ${lastError}`);
+        pageResults.push({
+          key,
+          route,
+          ok: verification.ok,
+          finalUrl,
+          restricted: Boolean(verification.restricted),
+          ...(Number.isFinite(verification.dataRows) ? { dataRows: verification.dataRows } : {}),
+          ...(verification.restrictionMessageVisible !== undefined ? { restrictionMessageVisible: verification.restrictionMessageVisible } : {}),
+          ...(lastError && !verification.ok ? { error: lastError } : {}),
+        });
         if (user.key === 'owner') await page.screenshot({ path: `${evidenceDir}/owner-${key}.png`, fullPage: true }).catch(() => null);
       }
     } catch (error) {
@@ -138,6 +182,7 @@ try {
   await browser.close();
 }
 
+const cashierResults = results.filter((item) => isPharmacyCashier(item));
 report.browser = {
   users: results,
   checks: {
@@ -146,7 +191,11 @@ report.browser = {
     allRolesPass: results.every((item) => item.roleOk),
     allRolesCheckedEveryPage: results.every((item) => item.pages.length === pages.length),
     dedicatedPharmacyPagesPass: results.every((item) => item.pages.length === pages.length && item.pages.every((entry) => entry.ok)),
-    expectedRoleRestrictionsPass: results.filter((item) => ['cashier', 'pharmacy cashier'].includes(String(item.role || '').toLowerCase())).every((item) => item.errors.length === 0),
+    cashierSupplierRestrictionPass: cashierResults.length === 2 && cashierResults.every((item) => {
+      const supplierPage = item.pages.find((page) => page.key === 'suppliers');
+      return supplierPage?.ok === true && supplierPage?.restricted === true && supplierPage?.dataRows === 0;
+    }),
+    expectedRoleRestrictionsPass: cashierResults.every((item) => item.errors.length === 0),
     noUnexpectedBrowserErrors: results.every((item) => item.errors.length === 0),
   },
 };
