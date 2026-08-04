@@ -17,9 +17,10 @@ test('Pharmacy live audit preserves the required production dataset and reconcil
   assert.match(live, /Idempotency-Key/);
 });
 
-test('Pharmacy canonical-role adapter applies only current role-label migrations', () => {
-  assert.match(adapter, /replaceAll\('Pharmacy Manager', 'Manager'\)/);
-  assert.match(adapter, /replaceAll\('Salesman', 'Salesperson'\)/);
+test('Pharmacy role adapter preserves the actual industry role catalog', () => {
+  assert.doesNotMatch(adapter, /replaceAll\('Pharmacy Manager', 'Manager'\)/);
+  assert.match(adapter, /roleByName\.get\('pharmacy manager'\) \|\| roleByName\.get\('manager'\)/);
+  assert.match(adapter, /roleByName\.get\('pharmacy cashier'\) \|\| roleByName\.get\('cashier'\)/);
   assert.match(adapter, /roleByName\.get\('salesperson'\) \|\| roleByName\.get\('salesman'\)/);
   assert.match(adapter, /could not find the industry transformation marker/);
   assert.match(adapter, /double-patching/);
