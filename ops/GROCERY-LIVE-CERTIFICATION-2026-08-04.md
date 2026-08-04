@@ -4,6 +4,19 @@
 
 Grocery is not tenant-ready merely because its dedicated pages and APIs exist. This gate must pass against the live Vercel gateway, Railway backend and PostgreSQL database before a Grocery release can be claimed.
 
+## Deployed frontend dependency
+
+The final run is pinned to Grocery frontend commit `3eb9c0fcb1539d1882ea0fb37e01b056df97e0a7`, promoted through the main Vercel gateway from `frontend-grocery`.
+
+That release establishes one owner for each critical workspace:
+
+- `grocery-report-shell.js` owns only the authenticated shell and navigation for Dashboard and Reports;
+- `grocery-report-sync.js` is the sole Dashboard and core Reports renderer;
+- Quick Actions, analytics, operational and finance modules are extensions rather than competing page renderers;
+- the dedicated invoice page renders persisted documents without the generic application bootstrap.
+
+The final browser gate must reject any regression that reintroduces competing Dashboard or Reports renderers.
+
 ## Isolated production dataset
 
 The workflow creates one uniquely named QA Grocery tenant through the public registration API and verifies:
