@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "npx prisma validate && npx prisma generate && npm run build && npm run verify:start"
 
 [deploy]
-preDeployCommand = ["bash scripts/railway-predeploy.sh"]
+preDeployCommand = ["bash scripts/railway-diagnostic-predeploy.sh"]
 startCommand = "npm run start"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
