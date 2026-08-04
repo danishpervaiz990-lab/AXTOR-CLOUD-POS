@@ -5,7 +5,8 @@ import { spawnSync } from 'node:child_process';
 
 const enumMigration = fs.readFileSync(new URL('../prisma/migrations/20260804010000_business_schema_reconciliation/migration.sql', import.meta.url), 'utf8');
 const columnMigration = fs.readFileSync(new URL('../prisma/migrations/20260804011000_business_column_reconciliation/migration.sql', import.meta.url), 'utf8');
-const combinedMigrations = `${enumMigration}\n${columnMigration}`;
+const compatibilityMigration = fs.readFileSync(new URL('../prisma/migrations/20260804012000_business_enum_column_compatibility/migration.sql', import.meta.url), 'utf8');
+const combinedMigrations = `${enumMigration}\n${columnMigration}\n${compatibilityMigration}`;
 const predeploy = fs.readFileSync(new URL('../scripts/railway-predeploy.sh', import.meta.url), 'utf8');
 const verifierPath = new URL('../scripts/verify-production-business-schema.mjs', import.meta.url);
 const verifier = fs.readFileSync(verifierPath, 'utf8');
@@ -31,7 +32,25 @@ test('Business reconciliation migrations are ordered, additive, and cover the cu
   assert.doesNotMatch(combinedMigrations, /ALTER\s+COLUMN[\s\S]*SET\s+NOT\s+NULL/i);
 });
 
-test('Railway verifies the Business contract after every migration path', () => {
+test('Business enum compatibility validates data before two exact type conversions', () => {
+  const statusValidation = compatibilityMigration.indexOf('invalid_status_values');
+  const statusConversion = compatibilityMigration.indexOf('ALTER COLUMN "status" TYPE');
+  const onboardingValidation = compatibilityMigration.indexOf('invalid_onboarding_values');
+  const onboardingConversion = compatibilityMigration.indexOf('ALTER COLUMN "onboarding_state" TYPE');
+  assert.ok(statusValidation >= 0 && statusConversion > statusValidation);
+  assert.ok(onboardingValidation >= 0 && onboardingConversion > onboardingValidation);
+  assert.match(compatibilityMigration, /ARRAY\['ACTIVE','TRIAL','SUSPENDED','CANCELLED'\]/);
+  assert.match(compatibilityMigration, /ARRAY\['NOT_STARTED','IN_PROGRESS','COMPLETED'\]/);
+  assert.match(compatibilityMigration, /unsupported values/);
+  const typeConversions = compatibilityMigration.match(/ALTER COLUMN \"(?:status|onboarding_state)\" TYPE/g) || [];
+  assert.equal(typeConversions.length, 2);
+  assert.doesNotMatch(compatibilityMigration, /ALTER COLUMN \"(?!status|onboarding_state)/);
+});
+
+test('Railway allows only the named compatibility type rewrite and verifies afterward', () => {
+  assert.match(predeploy, /BUSINESS_ENUM_COMPATIBILITY_MIGRATION="20260804012000_business_enum_column_compatibility"/);
+  assert.match(predeploy, /STANDARD_RELEASE_MIGRATION_SQL/);
+  assert.match(predeploy, /unapproved column type rewrite/);
   assert.match(predeploy, /verify_business_schema\(\)/);
   const invocations = predeploy.match(/verify_business_schema/g) || [];
   assert.ok(invocations.length >= 3, 'function plus both deployment paths must reference verification');

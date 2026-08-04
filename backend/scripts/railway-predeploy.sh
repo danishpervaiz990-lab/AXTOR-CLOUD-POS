@@ -2,6 +2,7 @@
 set -euo pipefail
 
 MIGRATIONS_DIR="prisma/migrations"
+BUSINESS_ENUM_COMPATIBILITY_MIGRATION="20260804012000_business_enum_column_compatibility"
 BASELINE_MIGRATIONS=(
   "20260709000000_initial_full_schema"
   "20260710120000_sales_production_upgrade"
@@ -42,12 +43,17 @@ echo "Prisma reported an existing schema without initialized migration history."
 echo "Verifying post-baseline migrations contain no destructive SQL..."
 
 RELEASE_MIGRATION_SQL=()
+STANDARD_RELEASE_MIGRATION_SQL=()
 BASELINE_COMPLETE=0
 for migration_dir in "$MIGRATIONS_DIR"/*; do
   [ -d "$migration_dir" ] || continue
   migration_name="$(basename "$migration_dir")"
   if [ "$BASELINE_COMPLETE" -eq 1 ]; then
-    RELEASE_MIGRATION_SQL+=("$migration_dir/migration.sql")
+    migration_sql="$migration_dir/migration.sql"
+    RELEASE_MIGRATION_SQL+=("$migration_sql")
+    if [ "$migration_name" != "$BUSINESS_ENUM_COMPATIBILITY_MIGRATION" ]; then
+      STANDARD_RELEASE_MIGRATION_SQL+=("$migration_sql")
+    fi
   elif [ "$migration_name" = "20260726090000_industry_catalogue_provisioning" ]; then
     BASELINE_COMPLETE=1
   fi
@@ -58,10 +64,22 @@ if [ "${#RELEASE_MIGRATION_SQL[@]}" -eq 0 ]; then
   exit 1
 fi
 
+# These operations are never allowed in an automatic production migration.
 if grep -Eiq \
-  'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]]+COLUMN[^;]*(TYPE|SET[[:space:]]+NOT[[:space:]]+NULL)' \
+  'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]]+COLUMN[^;]*SET[[:space:]]+NOT[[:space:]]+NULL' \
   "${RELEASE_MIGRATION_SQL[@]}"; then
   echo "A destructive SQL statement was detected in a pending migration."
+  echo "Automatic production migration has been stopped."
+  exit 1
+fi
+
+# Type rewrites remain blocked globally. The one named compatibility migration
+# is reviewed separately and validates every stored value before converting only
+# businesses.status and businesses.onboarding_state to their Prisma enum types.
+if [ "${#STANDARD_RELEASE_MIGRATION_SQL[@]}" -gt 0 ] && grep -Eiq \
+  'ALTER[[:space:]]+COLUMN[^;]*TYPE' \
+  "${STANDARD_RELEASE_MIGRATION_SQL[@]}"; then
+  echo "An unapproved column type rewrite was detected in a pending migration."
   echo "Automatic production migration has been stopped."
   exit 1
 fi
