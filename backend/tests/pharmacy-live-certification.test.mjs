@@ -30,7 +30,14 @@ test('Pharmacy role adapter preserves the actual industry role catalog', () => {
   assert.doesNotMatch(workflow, /AXTOR_PHARMACY_ROLE_ADAPTER_INSPECT/);
 });
 
-test('Pharmacy browser audit isolates all roles and page navigations', () => {
+test('Pharmacy browser audit isolates roles, routes and evidence origins', () => {
+  assert.match(browser, /const publicOrigin = runtime\.publicOrigin/);
+  assert.match(browser, /report\.environment\?\.frontendUrl/);
+  assert.match(browser, /process\.env\.AXTOR_PUBLIC_ORIGIN/);
+  assert.match(browser, /const backendOrigin = runtime\.backendOrigin/);
+  assert.match(browser, /report\.environment\?\.backendUrl/);
+  assert.match(browser, /process\.env\.AXTOR_BACKEND_ORIGIN/);
+  assert.match(browser, /requires resolved frontend and backend origins/);
   assert.match(browser, /const pages = \[/);
   assert.match(browser, /pages\.length/);
   assert.match(browser, /async function verifyRoute/);
