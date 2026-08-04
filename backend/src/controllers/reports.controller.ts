@@ -3,6 +3,7 @@ import * as reports from "../services/reports.service.js";
 import { isGroceryOperationalReport, runGroceryOperationalReport } from "../services/grocery-reports.service.js";
 import { isGrocerySalesAnalyticsReport, runGrocerySalesAnalyticsReport } from "../services/grocery-sales-analytics.service.js";
 import { isGroceryFinanceReport, runGroceryFinanceReport } from "../services/grocery-finance-reports.service.js";
+import { isFinancialMovementReport, runFinancialMovementReport } from "../services/financial-movement-reports.service.js";
 import { handleError, tenant } from "../utils/http.js";
 
 export async function options(req: Request, res: Response) {
@@ -19,7 +20,9 @@ export async function run(req: Request, res: Response) {
     const context = tenant(req);
     const reportId = req.params.reportId;
     let data;
-    if (isGroceryOperationalReport(reportId)) {
+    if (isFinancialMovementReport(reportId)) {
+      data = await runFinancialMovementReport(context.businessId, reportId, req.query);
+    } else if (isGroceryOperationalReport(reportId)) {
       data = await runGroceryOperationalReport(context.businessId, reportId, req.query);
     } else if (isGrocerySalesAnalyticsReport(reportId)) {
       data = await runGrocerySalesAnalyticsReport(context.businessId, reportId, req.query);
