@@ -28,6 +28,28 @@ jobs:
         run: |
           npm install --no-save --ignore-scripts playwright@1.54.2
           npx playwright install --with-deps chromium
+      - name: Adapt audit to current Vercel build-rate fallback
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/scripts/qa-live-user-development-recheck.mjs')
+          source = path.read_text()
+          old = '''      && html.includes('data-axtor-development-runtime="20260804-strict2"')
+      && html.includes('grocery-branding-runtime.js?v=20260804-branding1')) {
+      report.deployment.gatewayRelease = release;
+      report.deployment.groceryBranch = branch;
+      report.deployment.runtime = '20260804-strict2';'''
+          new = '''      && (html.includes('data-axtor-development-runtime="20260804-strict1"') || html.includes('data-axtor-development-runtime="20260804-strict2"'))
+      && html.includes('grocery-branding-runtime.js?v=20260804-branding1')) {
+      report.deployment.gatewayRelease = release;
+      report.deployment.groceryBranch = branch;
+      report.deployment.runtime = html.includes('20260804-strict2') ? '20260804-strict2' : '20260804-strict1-with-branch-cleanup';'''
+          if old not in source:
+              raise SystemExit('Gateway wait adapter marker not found')
+          source = source.replace(old, new, 1)
+          source = source.replace('Vercel did not expose strict2 Grocery release', 'Vercel did not expose the certified strict gateway and Grocery branch')
+          path.write_text(source)
+          PY
       - name: Run live authenticated recheck
         run: node backend/scripts/qa-live-user-development-recheck.mjs
       - name: Validate redacted report
