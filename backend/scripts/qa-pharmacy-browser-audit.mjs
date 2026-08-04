@@ -20,7 +20,7 @@ const pages = [
 ];
 
 function cleanErrors(errors, user) {
-  const restrictedRole = ['cashier', 'salesman'].includes(String(user.role || '').toLowerCase());
+  const restrictedRole = ['cashier', 'pharmacy cashier'].includes(String(user.role || '').toLowerCase());
   return errors.filter((message) => {
     if (/^(?:console|http):.*(?:favicon|Failed to load resource.*404)/i.test(message)) return false;
     if (/^console:.*ERR_ABORTED/i.test(message)) return false;
@@ -71,9 +71,15 @@ try {
     let roleOk = false;
     const pageResults = [];
     try {
-      await page.goto(`${runtime.publicOrigin}/login.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.locator('#businessSlug').fill(runtime.ids.businessSlug || report.environment.businessSlug);
+      const loginUrl = new URL('/login.html', runtime.publicOrigin);
+      loginUrl.searchParams.set('email', user.email);
+      await page.goto(loginUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.locator('#loginEmail').fill(user.email);
+      await page.waitForFunction((expectedEmail) => {
+        const email = String(document.querySelector('#loginEmail')?.value || '').trim().toLowerCase();
+        const workspace = String(document.querySelector('#businessSlug')?.value || '').trim().toLowerCase();
+        return email === expectedEmail && workspace === expectedEmail;
+      }, String(user.email).trim().toLowerCase(), { timeout: 10000 });
       await page.locator('#loginPassword').fill(user.password);
       await Promise.all([
         page.waitForURL((url) => !url.pathname.endsWith('/login.html'), { timeout: 30000 }).catch(() => null),
@@ -140,7 +146,7 @@ report.browser = {
     allRolesPass: results.every((item) => item.roleOk),
     allRolesCheckedEveryPage: results.every((item) => item.pages.length === pages.length),
     dedicatedPharmacyPagesPass: results.every((item) => item.pages.length === pages.length && item.pages.every((entry) => entry.ok)),
-    expectedRoleRestrictionsPass: results.filter((item) => ['Cashier', 'Salesman'].includes(item.role)).every((item) => item.errors.length === 0),
+    expectedRoleRestrictionsPass: results.filter((item) => ['cashier', 'pharmacy cashier'].includes(String(item.role || '').toLowerCase())).every((item) => item.errors.length === 0),
     noUnexpectedBrowserErrors: results.every((item) => item.errors.length === 0),
   },
 };
