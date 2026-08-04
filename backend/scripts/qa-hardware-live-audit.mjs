@@ -52,6 +52,10 @@ exact(
   'sales idempotency header',
 );
 
+const unavailableStockBlock = `// Negative/unavailable stock rejection.\n  let unavailableRejected = false;\n  try {\n    await request('/api/v1/sales-documents', {\n      method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0,\n      body: { documentType: 'invoice', postingMode: 'post', idempotencyKey: \`\${RUN_ID}:unavailable-stock\`, branchId: runtime.ids.branchId, warehouseId: runtime.ids.mainWarehouseId, customerName: 'Walk-in Customer', salesmanId: runtime.ids.salesmanCounterId, paymentMethod: 'cash', paidAmount: 1000, items: [{ productId: runtime.products[30].id, qty: 1, unitPrice: 1000 }] },\n    });\n  } catch (error) { unavailableRejected = /Insufficient|stock/i.test(error.message); }\n  check(unavailableRejected, 'Unavailable stock rejection', 'Out-of-stock sale was rejected');`;
+const hardwareUnavailableStockBlock = `// Force two QA products to zero through the real stock-adjustment API, then prove an oversized sale cannot post.\n  for (const product of [runtime.products[30], runtime.products[31]]) {\n    await request('/api/v1/inventory/adjustments', {\n      method: 'POST', token: ownerToken, expected: [200],\n      body: { productId: product.id, warehouseId: runtime.ids.mainWarehouseId, type: 'set', qty: 0, reason: 'Hardware zero-stock certification', referenceNo: \`\${RUN_ID}:zero-stock:\${product.id}\` },\n    });\n  }\n  let unavailableRejected = false;\n  try {\n    await request('/api/v1/sales-documents', {\n      method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0,\n      body: { documentType: 'invoice', postingMode: 'post', idempotencyKey: \`\${RUN_ID}:unavailable-stock\`, branchId: runtime.ids.branchId, warehouseId: runtime.ids.mainWarehouseId, customerName: 'Walk-in Customer', salesmanId: runtime.ids.salesmanCounterId, paymentMethod: 'cash', paidAmount: 1000, items: [{ productId: runtime.products[30].id, qty: 999999, unitPrice: 1000 }] },\n    });\n  } catch (error) { unavailableRejected = /Insufficient|stock/i.test(error.message); }\n  check(unavailableRejected, 'Unavailable stock rejection', 'Zero-stock Hardware sale was rejected without creating an invoice');`;
+exact(unavailableStockBlock, hardwareUnavailableStockBlock, 'authoritative unavailable stock probe');
+
 const requestHelperPattern = /async\s+function\s+request\s*\([^)]*\)\s*\{/;
 if (!requestHelperPattern.test(source)) throw new Error('Hardware audit transformer could not locate request helper');
 source = source.replace(requestHelperPattern, (signature) => `${signature}
@@ -99,7 +103,7 @@ process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 process.env.AXTOR_AUDIT_CASH_CREDIT_MIX = 'true';
 process.env.AXTOR_AUDIT_INDUSTRY = 'hardware';
-console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, roleShape: 'Owner + 3 Hardware Managers + Trade Salesperson', creditDueDateNormalization: true, customerVerification: 'individual' });
+console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, roleShape: 'Owner + 3 Hardware Managers + Trade Salesperson', creditDueDateNormalization: true, customerVerification: 'individual', zeroStockProducts: 2 });
 
 const executablePath = '.hardware-live-audit.generated.mjs';
 fs.writeFileSync(executablePath, source);
