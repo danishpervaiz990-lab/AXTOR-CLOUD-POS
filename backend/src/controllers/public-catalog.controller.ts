@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
 import * as service from "../services/public-catalog-launch.service.js";
+import { collectBusinessInsertCompatibility } from "../services/business-schema-diagnostics.service.js";
 import { createAuthToken, hashAuthToken } from "../utils/auth-token.js";
 import { verifyPassword } from "../utils/password.js";
 
@@ -52,7 +53,7 @@ function safeModelName(error: unknown): string | null {
   return /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(model) ? model : null;
 }
 
-function failRegistration(res: Response, error: unknown, stage: RegistrationStage) {
+async function failRegistration(res: Response, error: unknown, stage: RegistrationStage) {
   if (error instanceof service.PublicCatalogError) {
     fail(res, error);
     return;
@@ -69,6 +70,9 @@ function failRegistration(res: Response, error: unknown, stage: RegistrationStag
   const message = stage === "owner_session"
     ? "Workspace provisioning completed, but owner session setup could not complete"
     : "Workspace provisioning could not complete";
+  const businessInsertCompatibility = stage === "tenant_provisioning"
+    ? await collectBusinessInsertCompatibility()
+    : null;
 
   console.error("Public registration failed", {
     referenceId: res.locals.requestId,
@@ -78,6 +82,7 @@ function failRegistration(res: Response, error: unknown, stage: RegistrationStag
     sourceLocation,
     modelName,
     retryable,
+    businessInsertCompatibility,
     error,
   });
 
@@ -94,6 +99,7 @@ function failRegistration(res: Response, error: unknown, stage: RegistrationStag
         ...(sourceLocation ? { sourceLocation } : {}),
         ...(modelName ? { modelName } : {}),
         ...(databaseCode ? { databaseCode } : {}),
+        ...(businessInsertCompatibility ? { businessInsertCompatibility } : {}),
       },
       referenceId: res.locals.requestId,
     },
@@ -172,6 +178,6 @@ export async function register(req: Request, res: Response) {
     const auth = await createProvisionedOwnerSession(req, result, String(req.body?.password || ""));
     res.status(201).json({ ok: true, data: { ...result, auth } });
   } catch (error) {
-    failRegistration(res, error, stage);
+    await failRegistration(res, error, stage);
   }
 }
