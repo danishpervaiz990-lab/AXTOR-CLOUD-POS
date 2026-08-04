@@ -33,6 +33,18 @@ if (mode === 'live') {
     .replaceAll('Trade Salesperson', 'Paint Salesperson')
     .replaceAll("roleShape: 'Owner + 3 Paint Managers + Paint Salesperson'", "roleShape: 'Owner + 3 Paint Shop Managers + Paint Salesperson'")
     .replace("roleCounts['paint manager'] === 3 && roleCounts['paint salesperson'] === 1", "roleCounts['paint shop manager'] === 3 && roleCounts['paint salesperson'] === 1");
+
+  const roleFailure = "if (!managerRole || !cashierRole || !salesmanRole) throw new Error('Required Paint Shop Manager and Paint Salesperson roles are unavailable');";
+  if (!source.includes(roleFailure)) throw new Error('Paint audit transformer could not locate the combined role failure check');
+  source = source.replace(roleFailure, `if (!managerRole || !cashierRole || !salesmanRole) {
+    console.log('Paint provisioned roles', [...roleByName.keys()].sort());
+    console.log('Paint role lookup status', {
+      managerRole: managerRole?.name || null,
+      cashierRole: cashierRole?.name || null,
+      salesmanRole: salesmanRole?.name || null,
+    });
+    throw new Error('Required Paint Shop Manager and Paint Salesperson roles are unavailable');
+  }`);
 }
 
 if (mode === 'operations') {
