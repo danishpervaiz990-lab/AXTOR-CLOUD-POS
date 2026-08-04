@@ -37,19 +37,25 @@ jobs:
           console.log(JSON.stringify(safe, null, 2));
           NODE
 
-      - name: Probe public backend health
+      - name: Probe public backend routes
         id: health
         continue-on-error: true
         run: |
-          set -x
-          curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 20 \
-            -D health-headers.txt "$BACKEND_ORIGIN/health" -o health.json
-          curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 20 \
-            -D db-health-headers.txt "$BACKEND_ORIGIN/api/v1/health/db" -o db-health.json
-          printf '%s\n' '--- /health ---'
-          cat health.json
-          printf '%s\n' '--- /api/v1/health/db ---'
-          cat db-health.json
+          probe() {
+            local name="$1"
+            local path="$2"
+            local code
+            code="$(curl --silent --show-error --connect-timeout 10 --max-time 20 \
+              -D "${name}-headers.txt" -o "${name}.json" -w '%{http_code}' \
+              "$BACKEND_ORIGIN$path" || true)"
+            printf '%s %s -> HTTP %s\n' "$name" "$path" "$code"
+            test -f "${name}.json" && cat "${name}.json" || true
+            printf '\n'
+          }
+          probe health /health
+          probe db-health /api/v1/health/db
+          probe public-industry /api/v1/public/industries/retail
+          probe public-catalog /api/v1/public/catalog
 
       - name: Preserve read-only probe evidence
         if: always()
@@ -62,5 +68,9 @@ jobs:
             health-headers.txt
             db-health.json
             db-health-headers.txt
+            public-industry.json
+            public-industry-headers.txt
+            public-catalog.json
+            public-catalog-headers.txt
           if-no-files-found: warn
           retention-days: 3
