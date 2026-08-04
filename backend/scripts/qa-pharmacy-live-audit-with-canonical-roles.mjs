@@ -1,9 +1,30 @@
 import fs from 'node:fs/promises';
+import zlib from 'node:zlib';
 
 const sourceUrl = new URL('./qa-pharmacy-live-audit.mjs', import.meta.url);
 const temporaryUrl = new URL('./.qa-pharmacy-live-audit-canonical.tmp.mjs', import.meta.url);
 const marker = "source = source.replace(/Retail/g, 'Pharmacy').replace(/retail/g, 'pharmacy').replace(/RETAIL/g, 'PHARMACY');";
 const canonicalRolePatch = `${marker}\nsource = source\n  .replaceAll('Pharmacy Manager', 'Manager')\n  .replaceAll('Salesman', 'Salesperson');`;
+
+if (process.env.AXTOR_PHARMACY_ROLE_ADAPTER_INSPECT === '1') {
+  const chunks = await Promise.all([1, 2, 3].map((index) =>
+    fs.readFile(new URL(`./qa-retail-live-audit.payload.${index}`, import.meta.url), 'utf8'),
+  ));
+  const transformed = zlib.gunzipSync(Buffer.from(chunks.join('').replace(/\s+/g, ''), 'base64'))
+    .toString('utf8')
+    .replace(/Retail/g, 'Pharmacy')
+    .replace(/retail/g, 'pharmacy')
+    .replace(/RETAIL/g, 'PHARMACY')
+    .replaceAll('Pharmacy Manager', 'Manager')
+    .replaceAll('Salesman', 'Salesperson');
+  const needle = 'Required Manager/Cashier/Salesperson roles are unavailable';
+  const index = transformed.indexOf(needle);
+  if (index < 0) throw new Error('Pharmacy role inspection could not find the canonical role block');
+  console.log('PHARMACY_ROLE_LOOKUP_BEGIN');
+  console.log(transformed.slice(Math.max(0, index - 2200), Math.min(transformed.length, index + 700)));
+  console.log('PHARMACY_ROLE_LOOKUP_END');
+  process.exit(0);
+}
 
 let source = await fs.readFile(sourceUrl, 'utf8');
 if (!source.includes(marker)) {
