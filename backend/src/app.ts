@@ -3,8 +3,8 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import { prisma } from "./db/prisma.js";
 import { env } from "./config/env.js";
+import { checkDatabaseReadiness } from "./utils/database-readiness.js";
 import { loginRateLimit, requestId } from "./middleware/security.middleware.js";
 import authRoutes from "./routes/auth.routes.js";
 import customersRoutes from "./routes/customers.routes.js";
@@ -82,14 +82,36 @@ export function createApp() {
   app.get("/", (_req: Request, res: Response) => res.json({ ok: true, service: "Axtor POS Cloud API", message: "Backend is running", version: env.appVersion, routes: routeMap }));
   app.get("/health", (_req: Request, res: Response) => res.json({ ok: true, service: "Axtor POS Cloud API", version: env.appVersion, environment: process.env.NODE_ENV || "development", timestamp: new Date().toISOString() }));
   app.get("/api/v1/health/db", async (_req: Request, res: Response) => {
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      const rows = await prisma.$queryRaw<Array<{ count: number }>>`SELECT COUNT(*)::int AS count FROM businesses`;
-      return res.json({ ok: true, service: "Axtor POS Cloud API", environment: process.env.NODE_ENV || "development", database: "ok", checks: { prismaConnection: true, postgresQuery: true, businessesTable: true }, businessCount: rows[0]?.count ?? 0, timestamp: new Date().toISOString() });
-    } catch (error) {
-      console.error("DB health check failed:", error);
-      return res.status(500).json({ ok: false, service: "Axtor POS Cloud API", environment: process.env.NODE_ENV || "development", database: "error", error: { message: "Database health check failed" }, timestamp: new Date().toISOString() });
+    const readiness = await checkDatabaseReadiness();
+    if (readiness.ok) {
+      return res.json({
+        ok: true,
+        service: "Axtor POS Cloud API",
+        environment: process.env.NODE_ENV || "development",
+        database: "ok",
+        stage: readiness.stage,
+        checks: readiness.checks,
+        businessCount: readiness.businessCount,
+        timestamp: new Date().toISOString(),
+      });
     }
+
+    console.error("DB readiness check failed", {
+      stage: readiness.stage,
+      checks: readiness.checks,
+      error: readiness.error,
+    });
+    return res.status(503).json({
+      ok: false,
+      service: "Axtor POS Cloud API",
+      environment: process.env.NODE_ENV || "development",
+      database: "error",
+      stage: readiness.stage,
+      checks: readiness.checks,
+      businessCount: null,
+      error: readiness.error,
+      timestamp: new Date().toISOString(),
+    });
   });
 
   app.use("/api/v1/auth", authRoutes);
