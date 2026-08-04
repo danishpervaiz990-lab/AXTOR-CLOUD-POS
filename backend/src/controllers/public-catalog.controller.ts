@@ -52,18 +52,7 @@ function safeModelName(error: unknown): string | null {
   return /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(model) ? model : null;
 }
 
-async function collectRegistrationCompatibility(stage: RegistrationStage) {
-  if (stage !== "tenant_provisioning") return null;
-  try {
-    const diagnostics = await import("../services/business-schema-diagnostics.service.js");
-    return await diagnostics.collectBusinessInsertCompatibility();
-  } catch (diagnosticError) {
-    console.error("Registration schema diagnostics could not load", { diagnosticError });
-    return null;
-  }
-}
-
-async function failRegistration(res: Response, error: unknown, stage: RegistrationStage) {
+function failRegistration(res: Response, error: unknown, stage: RegistrationStage) {
   if (error instanceof service.PublicCatalogError) {
     fail(res, error);
     return;
@@ -80,7 +69,6 @@ async function failRegistration(res: Response, error: unknown, stage: Registrati
   const message = stage === "owner_session"
     ? "Workspace provisioning completed, but owner session setup could not complete"
     : "Workspace provisioning could not complete";
-  const businessInsertCompatibility = await collectRegistrationCompatibility(stage);
 
   console.error("Public registration failed", {
     referenceId: res.locals.requestId,
@@ -90,7 +78,6 @@ async function failRegistration(res: Response, error: unknown, stage: Registrati
     sourceLocation,
     modelName,
     retryable,
-    businessInsertCompatibility,
     error,
   });
 
@@ -107,7 +94,6 @@ async function failRegistration(res: Response, error: unknown, stage: Registrati
         ...(sourceLocation ? { sourceLocation } : {}),
         ...(modelName ? { modelName } : {}),
         ...(databaseCode ? { databaseCode } : {}),
-        ...(businessInsertCompatibility ? { businessInsertCompatibility } : {}),
       },
       referenceId: res.locals.requestId,
     },
@@ -186,6 +172,6 @@ export async function register(req: Request, res: Response) {
     const auth = await createProvisionedOwnerSession(req, result, String(req.body?.password || ""));
     res.status(201).json({ ok: true, data: { ...result, auth } });
   } catch (error) {
-    await failRegistration(res, error, stage);
+    failRegistration(res, error, stage);
   }
 }
