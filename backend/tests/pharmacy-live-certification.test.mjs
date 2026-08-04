@@ -4,6 +4,7 @@ import fs from 'node:fs';
 
 const live = fs.readFileSync(new URL('../scripts/qa-pharmacy-live-audit.mjs', import.meta.url), 'utf8');
 const adapter = fs.readFileSync(new URL('../scripts/qa-pharmacy-live-audit-with-canonical-roles.mjs', import.meta.url), 'utf8');
+const finalizer = fs.readFileSync(new URL('../scripts/qa-pharmacy-live-audit-finalize.mjs', import.meta.url), 'utf8');
 const browser = fs.readFileSync(new URL('../scripts/qa-pharmacy-browser-audit.mjs', import.meta.url), 'utf8');
 const workflow = fs.readFileSync(new URL('../../.github/workflows/pharmacy-live-audit.yml', import.meta.url), 'utf8');
 
@@ -30,6 +31,21 @@ test('Pharmacy role adapter preserves the actual industry role catalog', () => {
   assert.doesNotMatch(workflow, /AXTOR_PHARMACY_ROLE_ADAPTER_INSPECT/);
 });
 
+test('Pharmacy finalizer verifies every persisted customer and invoice page', () => {
+  assert.match(finalizer, /waitForFile\(runtimePath\)/);
+  assert.match(finalizer, /waitForFile\(reportPath\)/);
+  assert.match(finalizer, /page=\$\{page\}&limit=100/);
+  assert.match(finalizer, /fetchAll\('\/api\/v1\/customers\?active=true'\)/);
+  assert.match(finalizer, /fetchAll\('\/api\/v1\/sales-documents\?documentType=invoice'\)/);
+  assert.match(finalizer, /uniqueCustomerIds\.size === 200/);
+  assert.match(finalizer, /uniqueInvoiceIds\.size === 500/);
+  assert.match(finalizer, /uniqueDocumentNumbers\.size === 500/);
+  assert.match(finalizer, /customerReceivables/);
+  assert.match(finalizer, /expectedReceivables/);
+  assert.match(finalizer, /report\.overall = acceptancePass && reconciliationPass && modulePass && securityPass/);
+  assert.match(workflow, /qa-pharmacy-live-audit-finalize\.mjs/);
+});
+
 test('Pharmacy browser audit isolates roles, routes and evidence origins', () => {
   assert.match(browser, /const publicOrigin = runtime\.publicOrigin/);
   assert.match(browser, /report\.environment\?\.frontendUrl/);
@@ -53,12 +69,13 @@ test('Pharmacy browser audit isolates roles, routes and evidence origins', () =>
 test('Pharmacy workflow fails closed and protects credentials', () => {
   assert.match(workflow, /steps\.transaction_audit\.outcome/);
   assert.match(workflow, /steps\.browser_audit\.outcome/);
+  assert.match(workflow, /Base Pharmacy audit exit status/);
   assert.match(workflow, /openssl cms -encrypt/);
   assert.match(workflow, /pharmacy-live-audit-credentials\.p7m/);
   assert.match(workflow, /shred -u pharmacy-live-audit-credentials\.json/);
   assert.match(workflow, /report\.counts\?\.productCount !== 100/);
-  assert.match(workflow, /report\.counts\?\.customerCount !== 200/);
-  assert.match(workflow, /report\.counts\?\.invoiceCount !== 500/);
+  assert.match(workflow, /report\.counts\?\.customerCount !== 200 \|\| report\.counts\?\.uniqueCustomerIds !== 200/);
+  assert.match(workflow, /report\.counts\?\.invoiceCount !== 500 \|\| report\.counts\?\.uniqueInvoiceIds !== 500 \|\| report\.counts\?\.uniqueDocumentNumbers !== 500/);
   assert.match(workflow, /users\.length !== 5/);
   assert.match(workflow, /user\.pages\?\.length !== 8/);
 });
