@@ -17,6 +17,8 @@ test('Retail live registration respects the five-attempt limiter and preserves s
   assert.match(adapter, /safeDetails\.sourceLocation/);
   assert.match(adapter, /safeDetails\.modelName/);
   assert.match(adapter, /safeDetails\.databaseCode/);
+  assert.match(adapter, /safeDetails\.businessInsertCompatibility/);
+  assert.match(adapter, /JSON\.stringify\(safeDetails\.businessInsertCompatibility\)/);
   assert.match(adapter, /public API error diagnostics/);
   assert.match(adapter, /rate-limit-safe tenant-registration retries/);
   assert.match(workflow, /qa-retail-live-audit-with-registration-resilience\.mjs/);
