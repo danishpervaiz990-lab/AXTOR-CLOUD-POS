@@ -3,6 +3,9 @@
   var U = window.AxtorPage;
   var values = {};
   var printProfiles = [];
+  var pendingImages = {};
+  var IMAGE_MAX_BYTES = 1024 * 1024;
+  var ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 
   function collect(selector, attribute) {
     var output = {};
@@ -39,6 +42,58 @@
       output[key] = element.type === "checkbox" ? element.checked : element.value;
     });
     return output;
+  }
+
+  function readImage(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file) return reject(new Error("Choose an image from this device"));
+      if (!ALLOWED_IMAGE_TYPES.has(String(file.type || "").toLowerCase())) return reject(new Error("Use PNG, JPG, WebP or SVG image"));
+      if (file.size > IMAGE_MAX_BYTES) return reject(new Error("Image must be 1 MB or smaller"));
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = String(reader.result || "");
+        if (!dataUrl.startsWith("data:image/")) return reject(new Error("Selected file is not a valid image"));
+        resolve(dataUrl);
+      };
+      reader.onerror = function () { reject(new Error("Image could not be read from this device")); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function showImage(key, value) {
+    var preview = U.q('[data-company-preview="' + key + '"]');
+    if (!preview) return;
+    preview.src = value || "";
+    preview.hidden = !value;
+    preview.alt = key === "logoData" ? "Company logo preview" : key + " preview";
+    preview.style.maxHeight = "100px";
+    preview.style.maxWidth = "100%";
+    preview.style.objectFit = "contain";
+  }
+
+  function bindCloudImages(profile) {
+    U.qa("[data-image-upload]").forEach(function (input) {
+      var key = input.dataset.imageUpload;
+      var label = input.closest("div")?.querySelector("label");
+      if (label) label.textContent = key === "logoData" ? "Upload company / invoice logo from this device" : label.textContent.replace(/\s+demo$/i, "");
+      showImage(key, profile && profile[key]);
+      if (input.dataset.cloudImageBound === "1") return;
+      input.dataset.cloudImageBound = "1";
+      input.addEventListener("change", async function () {
+        try {
+          var dataUrl = await readImage(input.files && input.files[0]);
+          pendingImages[key] = dataUrl;
+          showImage(key, dataUrl);
+          var merged = Object.assign({}, values["company.profile"] || {}, collect("[data-company-setting]", "data-company-setting"), pendingImages);
+          await save("company.profile", merged);
+          pendingImages = {};
+          U.toast(key === "logoData" ? "Company and invoice logo uploaded" : "Image uploaded to cloud");
+        } catch (error) {
+          input.value = "";
+          U.error(error);
+        }
+      });
+    });
   }
 
   function printProfileCard() {
@@ -96,12 +151,9 @@
     try {
       var payload = Object.assign({}, selected, {
         name: U.value("#printProfileName"),
-        marginTopMm: U.num(U.value("#printMarginTop")),
-        marginRightMm: U.num(U.value("#printMarginRight")),
-        marginBottomMm: U.num(U.value("#printMarginBottom")),
-        marginLeftMm: U.num(U.value("#printMarginLeft")),
-        fontScale: U.num(U.value("#printFontScale")),
-        bilingual: U.q("#printBilingual").checked,
+        marginTopMm: U.num(U.value("#printMarginTop")), marginRightMm: U.num(U.value("#printMarginRight")),
+        marginBottomMm: U.num(U.value("#printMarginBottom")), marginLeftMm: U.num(U.value("#printMarginLeft")),
+        fontScale: U.num(U.value("#printFontScale")), bilingual: U.q("#printBilingual").checked,
         isDefault: U.q("#printIsDefault").checked,
       });
       await U.api().apiPatch("/api/v1/industry/print-profiles/" + encodeURIComponent(selected.id), payload);
@@ -118,11 +170,17 @@
     apply("[data-company-setting]", "data-company-setting", values["company.profile"]);
     apply("[data-invoice-setting]", "data-invoice-setting", values["invoice.settings"]);
     apply("#tax-settings input,#tax-settings select", "id", values["tax.settings"]);
+    bindCloudImages(values["company.profile"] || {});
     loadPrintProfiles().catch(function (error) { console.error("Print profiles unavailable", error); });
 
     U.bind("#saveCompanySettingsBtn", "click", async function (event) {
       var done = U.loading(event.currentTarget);
-      try { await save("company.profile", collect("[data-company-setting]", "data-company-setting")); } catch (error) { U.error(error); } finally { done(); }
+      try {
+        var profile = Object.assign({}, values["company.profile"] || {}, collect("[data-company-setting]", "data-company-setting"), pendingImages);
+        await save("company.profile", profile);
+        pendingImages = {};
+        bindCloudImages(profile);
+      } catch (error) { U.error(error); } finally { done(); }
     });
     U.bind("#saveInvoiceSettingsBtn", "click", async function (event) {
       var done = U.loading(event.currentTarget);
