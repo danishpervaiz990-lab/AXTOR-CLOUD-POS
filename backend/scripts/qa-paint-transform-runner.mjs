@@ -34,10 +34,12 @@ if (mode === 'live') {
     .replaceAll("roleShape: 'Owner + 3 Paint Managers + Paint Salesperson'", "roleShape: 'Owner + 3 Paint Shop Managers + Paint Salesperson'")
     .replace("roleCounts['paint manager'] === 3 && roleCounts['trade salesperson'] === 1", "roleCounts['paint shop manager'] === 3 && roleCounts['paint salesperson'] === 1");
 
-  const payloadTransformMarker = "source = source.replace(/Retail/g, 'Paint').replace(/retail/g, 'paint').replace(/RETAIL/g, 'PAINT');";
-  if (!source.includes(payloadTransformMarker)) throw new Error('Paint audit transformer could not locate the payload industry conversion');
-  source = source.replace(payloadTransformMarker, `${payloadTransformMarker}
-exact("const paintManagerRole = roleByName.get('paint manager') || roleByName.get('manager');", "const paintManagerRole = roleByName.get('paint shop manager') || roleByName.get('manager');", 'Paint Shop Manager role');`);
+  const exactHelperStart = source.indexOf("const exact = (from, to, label) => {");
+  if (exactHelperStart < 0) throw new Error('Paint audit transformer could not locate the payload exact helper');
+  const exactHelperEnd = source.indexOf('\n};', exactHelperStart);
+  if (exactHelperEnd < 0) throw new Error('Paint audit transformer could not locate the end of the payload exact helper');
+  const payloadRolePatch = `\nexact("const paintManagerRole = roleByName.get('paint manager') || roleByName.get('manager');", "const paintManagerRole = roleByName.get('paint shop manager') || roleByName.get('manager');", 'Paint Shop Manager role');`;
+  source = source.slice(0, exactHelperEnd + 3) + payloadRolePatch + source.slice(exactHelperEnd + 3);
 }
 
 if (mode === 'operations') {
