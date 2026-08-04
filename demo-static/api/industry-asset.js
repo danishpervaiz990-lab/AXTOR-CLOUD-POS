@@ -38,6 +38,8 @@ const CONTENT_TYPES = Object.freeze({
   ".pdf": "application/pdf"
 });
 
+const GROCERY_REPAIR_EXCLUDED_PAGES = /(^|\/)(grocery-dashboard|grocery-reports|invoice-view)\.html$/i;
+
 function safePath(value, fallback) {
   let decoded;
   try { decoded = decodeURIComponent(String(value || "")).replace(/^\/+/, ""); }
@@ -63,6 +65,10 @@ function textResponse(message, status, extraHeaders = {}) {
   return new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff", ...extraHeaders } });
 }
 
+function shouldInjectGroceryRepair(pathname, html) {
+  return !GROCERY_REPAIR_EXCLUDED_PAGES.test(pathname) && !html.includes("grocery-sidebar-repair.js");
+}
+
 function injectIndustryRuntime(industry, pathname, bytes, type) {
   if (!type.startsWith("text/html")) return bytes;
   const decoder = new TextDecoder();
@@ -70,7 +76,7 @@ function injectIndustryRuntime(industry, pathname, bytes, type) {
   let html = decoder.decode(bytes);
   const scripts = [];
 
-  if (industry === "grocery" && !html.includes("grocery-sidebar-repair.js")) {
+  if (industry === "grocery" && shouldInjectGroceryRepair(pathname, html)) {
     scripts.push('<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>');
   }
 
@@ -106,7 +112,7 @@ export default async function industryAsset(request) {
   try {
     const upstream = await fetch(source, {
       method: request.method,
-      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.3" },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.4" },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });

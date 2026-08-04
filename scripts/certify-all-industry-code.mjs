@@ -9,9 +9,14 @@ const base='https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-P
 
 async function fetchText(ref,path){
  const url=`${base}/${encodeURIComponent(ref).replaceAll('%2F','/')}/demo-static/${path.split('/').map(encodeURIComponent).join('/')}`;
- const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.0'},signal:AbortSignal.timeout(20000)});
+ const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.1'},signal:AbortSignal.timeout(20000)});
  assert.equal(response.status,200,`${ref}:${path} returned HTTP ${response.status}`);
  return await response.text();
+}
+
+function runtimeFilesFor(industry){
+ if(industry==='grocery')return ['grocery-report-shell.js','grocery-report-sync.js'];
+ return [`${industry}-app.js`];
 }
 
 assert.deepEqual(manifest.projects.map(item=>item.industry).sort(),expected.slice().sort());
@@ -19,25 +24,33 @@ assert.deepEqual(manifest.unreleased,[]);
 const results=[];
 for(const project of manifest.projects){
  const ref=releaseRefs[project.industry]||project.branch;
- const runtimeFile=`${project.industry}-app.js`;
+ const runtimeFiles=runtimeFilesFor(project.industry);
  console.log(`CERTIFY ${project.industry} from ${ref}`);
- const [dashboard,runtime,vercelText]=await Promise.all([
+ const [dashboard,vercelText,...runtimes]=await Promise.all([
    fetchText(ref,project.dashboard),
-   fetchText(ref,`js/${runtimeFile}`),
-   fetchText(ref,'vercel.json')
+   fetchText(ref,'vercel.json'),
+   ...runtimeFiles.map(file=>fetchText(ref,`js/${file}`))
  ]);
- new vm.Script(runtime,{filename:`${ref}/demo-static/js/${runtimeFile}`});
+ runtimeFiles.forEach((file,index)=>new vm.Script(runtimes[index],{filename:`${ref}/demo-static/js/${file}`}));
+ const combinedRuntime=runtimes.join('\n');
  const vercel=JSON.parse(vercelText);
- assert.match(dashboard,new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`${project.industry} dashboard does not load ${runtimeFile}`);
+ for(const runtimeFile of runtimeFiles){
+   assert.match(dashboard,new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`${project.industry} dashboard does not load ${runtimeFile}`);
+ }
+ if(project.industry==='grocery'){
+   assert.doesNotMatch(dashboard,/grocery-app\.js/i,'Grocery dashboard must not reload the competing generic renderer');
+   assert.match(combinedRuntime,/groceryReportShell/,'Grocery shell runtime is missing its ownership marker');
+   assert.match(combinedRuntime,/daily-sales/,'Grocery report runtime is missing PostgreSQL report integration');
+ }
  assert.doesNotMatch(dashboard,/industry\.html\?module=/,`${project.industry} dashboard still uses generic industry routing`);
- assert.match(runtime,/\/api\/v1\//,`${project.industry} runtime has no backend API integration`);
- assert.match(runtime,/industry\/registry|verifyTenant|tenant|available only/i,`${project.industry} runtime has no tenant-industry guard`);
- assert.doesNotMatch(runtime,/industry\.html\?module=/,`${project.industry} runtime links to generic workspace`);
+ assert.match(combinedRuntime,/\/api\/v1\//,`${project.industry} runtime has no backend API integration`);
+ assert.match(combinedRuntime,/industry\/registry|verifyTenant|tenant|available only/i,`${project.industry} runtime has no tenant-industry guard`);
+ assert.doesNotMatch(combinedRuntime,/industry\.html\?module=/,`${project.industry} runtime links to generic workspace`);
  assert.ok(Array.isArray(vercel.rewrites)&&vercel.rewrites.some(row=>row.source==='/'),`${project.industry} has no branch root route`);
  assert.equal(project.branch,`frontend-${project.industry}`);
  assert.equal(project.dashboard,`${project.industry}-dashboard.html`);
  assert.equal(project.status,'code_complete_not_deployed');
- results.push({industry:project.industry,ref,dashboard:project.dashboard,runtime:runtimeFile,status:'PASS'});
+ results.push({industry:project.industry,ref,dashboard:project.dashboard,runtime:runtimeFiles.join(','),status:'PASS'});
  console.log(`PASS ${project.industry}`);
 }
 assert.equal(results.length,13);
