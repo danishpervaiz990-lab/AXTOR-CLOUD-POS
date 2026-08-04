@@ -22,23 +22,25 @@ source = source
   .replaceAll('HWB', 'PTB');
 
 if (mode === 'live') {
+  const managerLookup = "roleByName.get('paint manager') || roleByName.get('manager')";
+  if (!source.includes(managerLookup)) throw new Error('Paint audit transformer could not locate inherited manager-role lookup');
   source = source
-    .replace("const cashierRole = roleByName.get('paint manager') || roleByName.get('manager');", "const cashierRole = roleByName.get('cashier');")
-    .replace("const salesmanRole = roleByName.get('trade salesperson') || roleByName.get('salesperson');", "const salesmanRole = roleByName.get('salesperson') || roleByName.get('salesman');")
-    .replace('Required Paint Manager and Trade Salesperson roles are unavailable', 'Required Paint Cashier and Salesperson roles are unavailable')
-    .replaceAll('Paint Transaction Manager One', 'Paint Cashier One')
-    .replaceAll('Paint Transaction Manager Two', 'Paint Cashier Two')
-    .replaceAll('Trade Salesperson', 'Salesperson')
-    .replaceAll("roleShape: 'Owner + 3 Paint Managers + Salesperson'", "roleShape: 'Owner + 3 Cashiers + Salesperson'")
-    .replace("roleCounts['paint manager'] === 3 && roleCounts['salesperson'] === 1", "roleCounts.cashier === 3 && roleCounts.salesperson === 1");
+    .replaceAll(managerLookup, "roleByName.get('paint shop manager') || roleByName.get('manager')")
+    .replace("const salesmanRole = roleByName.get('trade salesperson') || roleByName.get('salesperson');", "const salesmanRole = roleByName.get('paint salesperson') || roleByName.get('salesperson');")
+    .replace('Required Paint Manager and Trade Salesperson roles are unavailable', 'Required Paint Shop Manager and Paint Salesperson roles are unavailable')
+    .replaceAll('Paint Transaction Manager One', 'Paint Shop Manager One')
+    .replaceAll('Paint Transaction Manager Two', 'Paint Shop Manager Two')
+    .replaceAll('Trade Salesperson', 'Paint Salesperson')
+    .replaceAll("roleShape: 'Owner + 3 Paint Managers + Paint Salesperson'", "roleShape: 'Owner + 3 Paint Shop Managers + Paint Salesperson'")
+    .replace("roleCounts['paint manager'] === 3 && roleCounts['paint salesperson'] === 1", "roleCounts['paint shop manager'] === 3 && roleCounts['paint salesperson'] === 1");
 }
 
 if (mode === 'operations') {
   source = source
-    .replaceAll('Trade Salesperson', 'Salesperson')
-    .replaceAll('trade salesperson', 'salesperson')
-    .replaceAll('tradeSalesUsers', 'salesUsers')
-    .replaceAll('trade sales users', 'sales users');
+    .replaceAll('Trade Salesperson', 'Paint Salesperson')
+    .replaceAll('trade salesperson', 'paint salesperson')
+    .replaceAll('tradeSalesUsers', 'paintSalesUsers')
+    .replaceAll('trade sales users', 'Paint sales users');
 }
 
 if (mode === 'browser') {
