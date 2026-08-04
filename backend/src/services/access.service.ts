@@ -13,6 +13,20 @@ export type UserAccess = {
   isManager: boolean;
 };
 
+const exactOnlyPermissions = new Set([
+  "sales_documents.change_salesperson",
+  "sales_documents.cross_branch",
+  "sales_documents.backdate",
+  "sales_documents.override_credit_limit",
+  "sales_documents.allow_negative_stock",
+  "sales_documents.edit_posted",
+  "sales_documents.edit_paid",
+  "sales_documents.edit_returned",
+  "sales_documents.edit_refunded",
+  "sales_documents.override_financials",
+  "sales_documents.override_stock",
+]);
+
 export async function loadUserAccess(tx: any, businessId: string, userId?: string | null): Promise<UserAccess> {
   if (!userId) throw new Error("Authenticated user context is required");
 
@@ -50,6 +64,11 @@ export async function loadUserAccess(tx: any, businessId: string, userId?: strin
 export function hasPermission(access: UserAccess, permission: string, legacyDefault = false): boolean {
   if (access.isOwner || access.isAdmin) return true;
   if (access.permissions.has("*") || access.permissions.has(permission)) return true;
+
+  // Sensitive sales controls must be granted explicitly. A broad industry role such
+  // as `sales_documents.*` may perform normal sales work, but it must not silently
+  // inherit negative-stock, backdating, cross-branch or posted-financial overrides.
+  if (exactOnlyPermissions.has(permission)) return false;
 
   const segments = permission.split(".");
   for (let index = segments.length - 1; index > 0; index -= 1) {
