@@ -159,13 +159,13 @@ try {
   for (const endpoint of reportEndpoints) {
     try {
       const response = await request(backend, endpoint, { token, expected: [200], retries: 1 });
-      pass(`Read ${endpoint}`, { status: response.status });
+      pass(`Read ${endpoint}`, { httpStatus: response.status });
     } catch (error) {
-      fail(`Read ${endpoint}`, error, { status: error?.status || null });
+      fail(`Read ${endpoint}`, error, { httpStatus: error?.status || null });
     }
   }
 } catch (error) {
-  fail('Extended Grocery operations', error, { status: error?.status || null, details: error?.details || null });
+  fail('Extended Grocery operations', error, { httpStatus: error?.status || null, details: error?.details || null });
 }
 
 const report = {
