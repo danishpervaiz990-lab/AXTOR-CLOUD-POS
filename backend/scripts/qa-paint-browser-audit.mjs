@@ -90,8 +90,34 @@ function relevantErrors(errors) {
   return errors.filter((message) => !/favicon|ERR_ABORTED|Failed to load resource.*404/i.test(message));
 }
 
+async function waitForRoleSurface(page, user, key) {
+  const isPaintSalesperson = expectedRole(user) === 'paint salesperson';
+  let selector = '#app';
+  if (key === 'reports') selector = isPaintSalesperson ? '#paintReportsRoleNotice' : '#reportForm';
+  if (key === 'settings') selector = isPaintSalesperson ? '#paintSettingsRoleNotice' : '#ruleForm';
+  if (key === 'dashboard') selector = '#app';
+  if (key === 'deliveries') selector = '#app';
+  await page.waitForSelector(selector, { state: 'attached', timeout: 18000 });
+  await page.waitForFunction(({ key, isPaintSalesperson }) => {
+    const body = String(document.body?.innerText || '').trim();
+    const app = document.querySelector('#app');
+    if (!app || body.length < 20) return false;
+    if (key === 'reports') {
+      return isPaintSalesperson
+        ? Boolean(document.querySelector('#paintReportsRoleNotice'))
+        : Boolean(document.querySelector('#reportForm') && document.querySelector('#reportOutput'));
+    }
+    if (key === 'settings') {
+      return isPaintSalesperson
+        ? Boolean(document.querySelector('#paintSettingsRoleNotice'))
+        : Boolean(document.querySelector('#ruleForm'));
+    }
+    return String(app.innerText || '').trim().length > 0;
+  }, { key, isPaintSalesperson }, { timeout: 18000 });
+  await page.waitForTimeout(500);
+}
+
 async function inspectPaintPage(page, key, terms) {
-  await page.waitForTimeout(3000);
   return page.evaluate(({ key, terms }) => {
     const body = String(document.body?.innerText || '');
     const app = document.querySelector('#app');
@@ -105,7 +131,8 @@ async function inspectPaintPage(page, key, terms) {
       restrictedSettingsNotice: Boolean(document.querySelector('#paintSettingsRoleNotice')),
       restrictedReportsNotice: Boolean(document.querySelector('#paintReportsRoleNotice')),
       restrictedEditors: document.querySelectorAll('#paintPrintSettings,#paintBrandingPanel').length,
-      appText: appText.slice(0, 500),
+      appText: appText.slice(0, 800),
+      bodyText: body.slice(0, 800),
     };
   }, { key, terms });
 }
@@ -124,6 +151,7 @@ async function auditPage(context, user, key, route, terms) {
   let verification = {
     ok: false,
     appText: '',
+    bodyText: '',
     restrictedSettingsNotice: false,
     restrictedReportsNotice: false,
     restrictedEditors: -1,
@@ -132,10 +160,11 @@ async function auditPage(context, user, key, route, terms) {
   try {
     const task = (async () => {
       response = await page.goto(`${publicOrigin}${route}?audit=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await waitForRoleSurface(page, user, key);
       verification = await inspectPaintPage(page, key, terms);
     })();
-    const bounded = await Promise.race([task.then(() => true), delay(25000, false)]);
-    if (!bounded) error = 'Page audit exceeded 25 seconds';
+    const bounded = await Promise.race([task.then(() => true), delay(28000, false)]);
+    if (!bounded) error = 'Page audit exceeded 28 seconds';
   } catch (failure) {
     error = failure?.message || String(failure);
   }
@@ -179,6 +208,10 @@ async function auditPage(context, user, key, route, terms) {
     industryOk,
     restrictedSettingsOk,
     restrictedReportsOk,
+    restrictedSettingsNotice: verification.restrictedSettingsNotice,
+    restrictedReportsNotice: verification.restrictedReportsNotice,
+    appText: verification.appText,
+    bodyText: verification.bodyText,
     ...(error ? { error } : {}),
   };
 }
@@ -240,7 +273,7 @@ try {
       for (const [key, route, terms] of pages) {
         const entry = await auditPage(context, user, key, route, terms);
         pageResults.push(entry);
-        console.log('Paint browser page', { user: user.key, role: user.role, key, ok: entry.ok, http: entry.http });
+        console.log('Paint browser page', { user: user.key, role: user.role, key, ok: entry.ok, http: entry.http, error: entry.error || null });
         await persistProgress(results, { user: user.key, role: user.role, pages: pageResults });
       }
       if (expectedRole(user) === 'paint salesperson') permissionChecks = await probePaintSalesRestrictions(session.token);
