@@ -38,6 +38,11 @@ jobs:
         with:
           node-version: "22.x"
 
+      - name: Inspect Pharmacy canonical role lookup
+        env:
+          AXTOR_PHARMACY_ROLE_ADAPTER_INSPECT: "1"
+        run: node backend/scripts/qa-pharmacy-live-audit-with-canonical-roles.mjs
+
       - name: Run Pharmacy transaction and data audit
         id: transaction_audit
         continue-on-error: true
