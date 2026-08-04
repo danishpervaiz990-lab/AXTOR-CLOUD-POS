@@ -32,13 +32,12 @@ if (mode === 'live') {
     .replaceAll('Paint Transaction Manager Two', 'Paint Shop Manager Two')
     .replaceAll('Trade Salesperson', 'Paint Salesperson')
     .replaceAll("roleShape: 'Owner + 3 Paint Managers + Paint Salesperson'", "roleShape: 'Owner + 3 Paint Shop Managers + Paint Salesperson'")
-    .replace("roleCounts['paint manager'] === 3 && roleCounts['paint salesperson'] === 1", "roleCounts['paint shop manager'] === 3 && roleCounts['paint salesperson'] === 1");
+    .replace("roleCounts['paint manager'] === 3 && roleCounts['trade salesperson'] === 1", "roleCounts['paint shop manager'] === 3 && roleCounts['paint salesperson'] === 1");
 
-  const roleMapStart = source.indexOf('const roleByName = new Map');
-  if (roleMapStart < 0) throw new Error('Paint audit transformer could not locate roleByName construction');
-  const roleMapEnd = source.indexOf(';', roleMapStart);
-  if (roleMapEnd < 0) throw new Error('Paint audit transformer could not locate roleByName terminator');
-  source = `${source.slice(0, roleMapEnd + 1)}\n  console.log('Paint provisioned roles', [...roleByName.keys()].sort());${source.slice(roleMapEnd + 1)}`;
+  const cashierExact = `exact("const cashierRole = roleByName.get('cashier');", "const cashierRole = roleByName.get('paint shop manager') || roleByName.get('manager');", 'Paint transaction operator role');`;
+  if (!source.includes(cashierExact)) throw new Error('Paint audit transformer could not locate the cashier-role transformation');
+  const managerExact = `exact("const managerRole = roleByName.get('paint manager') || roleByName.get('manager');", "const managerRole = roleByName.get('paint shop manager') || roleByName.get('manager');", 'Paint Shop Manager role');`;
+  source = source.replace(cashierExact, `${managerExact}\n${cashierExact}`);
 }
 
 if (mode === 'operations') {
