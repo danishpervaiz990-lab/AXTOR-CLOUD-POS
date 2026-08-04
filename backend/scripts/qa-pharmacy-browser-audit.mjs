@@ -5,6 +5,20 @@ const require = createRequire('/tmp/axtor-playwright/package.json');
 const { chromium } = require('playwright');
 const runtime = JSON.parse(await fs.readFile('pharmacy-live-audit-runtime.json', 'utf8'));
 const report = JSON.parse(await fs.readFile('pharmacy-live-audit-report.json', 'utf8'));
+const publicOrigin = runtime.publicOrigin
+  || report.publicOrigin
+  || report.frontendOrigin
+  || report.environment?.frontendUrl
+  || process.env.AXTOR_PUBLIC_ORIGIN;
+const backendOrigin = runtime.backendOrigin
+  || report.backendOrigin
+  || report.environment?.backendUrl
+  || process.env.AXTOR_BACKEND_ORIGIN;
+if (!publicOrigin || !backendOrigin) {
+  throw new Error('Pharmacy browser audit requires resolved frontend and backend origins');
+}
+new URL(publicOrigin);
+new URL(backendOrigin);
 const evidenceDir = 'pharmacy-browser-evidence';
 await fs.mkdir(evidenceDir, { recursive: true });
 
@@ -64,7 +78,7 @@ async function prepareLoginIdentity(page, email, businessSlug) {
 }
 
 async function backendSession(token) {
-  const response = await fetch(`${runtime.backendOrigin}/api/v1/auth/me`, {
+  const response = await fetch(`${backendOrigin}/api/v1/auth/me`, {
     cache: 'no-store',
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
   });
@@ -80,7 +94,7 @@ async function verifyRoute(context, user, key, route, required) {
     const page = await context.newPage();
     attachDiagnostics(page, pageErrors);
     try {
-      await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.goto(`${publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForFunction((terms) => {
         const body = String(document.body?.innerText || '');
         const lower = body.toLowerCase();
@@ -131,7 +145,7 @@ try {
     try {
       const loginPage = await context.newPage();
       attachDiagnostics(loginPage, loginErrors);
-      await loginPage.goto(`${runtime.publicOrigin}/login.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await loginPage.goto(`${publicOrigin}/login.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
       await prepareLoginIdentity(loginPage, user.email, businessSlug);
       await loginPage.locator('#loginPassword').fill(user.password);
       await Promise.all([
@@ -141,7 +155,7 @@ try {
       await loginPage.waitForTimeout(900);
 
       const state = await context.storageState();
-      const origin = state.origins.find((entry) => entry.origin === runtime.publicOrigin);
+      const origin = state.origins.find((entry) => entry.origin === publicOrigin);
       const values = Object.fromEntries((origin?.localStorage || []).map((entry) => [entry.name, entry.value]));
       const token = values.axtorAuthToken || '';
       loginOk = Boolean(token);
