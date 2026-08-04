@@ -21,6 +21,33 @@ source = source
   .replaceAll('qa-hw-', 'qa-paint-')
   .replaceAll('HWB', 'PTB');
 
+if (mode === 'live') {
+  const managerLookup = "roleByName.get('paint manager') || roleByName.get('manager')";
+  if (!source.includes(managerLookup)) throw new Error('Paint audit transformer could not locate inherited manager-role lookup');
+  source = source
+    .replaceAll(managerLookup, "roleByName.get('paint shop manager') || roleByName.get('manager')")
+    .replace("const salesmanRole = roleByName.get('trade salesperson') || roleByName.get('salesperson');", "const salesmanRole = roleByName.get('paint salesperson') || roleByName.get('salesperson');")
+    .replace('Required Paint Manager and Trade Salesperson roles are unavailable', 'Required Paint Shop Manager and Paint Salesperson roles are unavailable')
+    .replaceAll('Paint Transaction Manager One', 'Paint Shop Manager One')
+    .replaceAll('Paint Transaction Manager Two', 'Paint Shop Manager Two')
+    .replaceAll('Trade Salesperson', 'Paint Salesperson')
+    .replaceAll("roleShape: 'Owner + 3 Paint Managers + Paint Salesperson'", "roleShape: 'Owner + 3 Paint Shop Managers + Paint Salesperson'")
+    .replace("roleCounts['paint manager'] === 3 && roleCounts['trade salesperson'] === 1", "roleCounts['paint shop manager'] === 3 && roleCounts['paint salesperson'] === 1");
+
+  const payloadTransformMarker = "source = source.replace(/Retail/g, 'Paint').replace(/retail/g, 'paint').replace(/RETAIL/g, 'PAINT');";
+  if (!source.includes(payloadTransformMarker)) throw new Error('Paint audit transformer could not locate the payload industry conversion');
+  source = source.replace(payloadTransformMarker, `${payloadTransformMarker}
+exact("const paintManagerRole = roleByName.get('paint manager') || roleByName.get('manager');", "const paintManagerRole = roleByName.get('paint shop manager') || roleByName.get('manager');", 'Paint Shop Manager role');`);
+}
+
+if (mode === 'operations') {
+  source = source
+    .replaceAll('Trade Salesperson', 'Paint Salesperson')
+    .replaceAll('trade salesperson', 'paint salesperson')
+    .replaceAll('tradeSalesUsers', 'paintSalesUsers')
+    .replaceAll('trade sales users', 'Paint sales users');
+}
+
 if (mode === 'browser') {
   const deployedPaintPages = `const pages = [
   ['dashboard', '/apps/paint/paint-dashboard.html', ['Paint']],
