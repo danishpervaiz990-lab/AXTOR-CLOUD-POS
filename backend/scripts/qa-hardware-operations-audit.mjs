@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 
 const runtime = JSON.parse(await fs.readFile('hardware-live-audit-runtime.json', 'utf8'));
@@ -8,16 +9,23 @@ const backend = runtime.backendOrigin || process.env.AXTOR_BACKEND_ORIGIN;
 const token = owner.token;
 const runId = `HWOPS-${Date.now()}`;
 const checks = [];
-const created = { branches: [], cashiers: [], salesmen: [], expenses: [] };
+const created = { branches: [], tradeSalesUsers: [], salesmen: [], expenses: [] };
 const errors = [];
 const dataOf = (value) => value?.data ?? value;
 const pass = (name, detail) => checks.push({ name, pass: true, detail });
 const fail = (name, detail) => { checks.push({ name, pass: false, detail }); errors.push(`${name}: ${detail}`); };
 
+function mutationKey(path, method, body) {
+  const digest = crypto.createHash('sha256').update(`${method}:${path}:${JSON.stringify(body ?? null)}`).digest('hex').slice(0, 28);
+  return `${runId}:${digest}`;
+}
+
 async function request(path, { method = 'GET', body, expected = [200, 201] } = {}) {
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' };
+  if (method !== 'GET') headers['Idempotency-Key'] = mutationKey(path, method, body);
   const response = await fetch(`${backend}${path}`, {
     method,
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const payload = await response.json().catch(() => null);
@@ -38,16 +46,16 @@ try {
   pass('One warehouse created', warehouse.name || warehouse.id);
 } catch (error) { fail('One warehouse created', error.message); }
 
-let cashierRole;
+let tradeSalesRole;
 try {
   const access = await request('/api/v1/access-control');
-  cashierRole = access.roles?.find((role) => String(role.name).toLowerCase() === 'cashier');
-  if (!cashierRole) throw new Error('Cashier role not found');
+  tradeSalesRole = access.roles?.find((role) => String(role.name).trim().toLowerCase() === 'trade salesperson');
+  if (!tradeSalesRole) throw new Error('Trade Salesperson role not found');
   for (let i = 1; i <= 5; i += 1) {
-    created.cashiers.push(await request('/api/v1/access-control/users', { method: 'POST', body: { name: `QA Cashier ${i}`, email: `qa-hw-cashier-${Date.now()}-${i}@axtor.invalid`, password: `AxtorQA!${Date.now()}x`, branchId: created.branches[(i - 1) % Math.max(created.branches.length, 1)]?.id, roleIds: [cashierRole.id] } }));
+    created.tradeSalesUsers.push(await request('/api/v1/access-control/users', { method: 'POST', body: { name: `QA Trade Salesperson ${i}`, email: `qa-hw-trade-sales-${Date.now()}-${i}@axtor.invalid`, password: `AxtorQA!${Date.now()}x`, branchId: created.branches[(i - 1) % Math.max(created.branches.length, 1)]?.id, roleIds: [tradeSalesRole.id] } }));
   }
-  pass('Five cashiers created', `${created.cashiers.length} cashier users`);
-} catch (error) { fail('Five cashiers created', error.message); }
+  pass('Five trade sales users created', `${created.tradeSalesUsers.length} users assigned to the canonical Trade Salesperson role`);
+} catch (error) { fail('Five trade sales users created', error.message); }
 
 try {
   for (let i = 1; i <= 10; i += 1) {
@@ -81,7 +89,8 @@ try {
   if (!product?.id) throw new Error('Audit product missing');
   purchase = await request('/api/v1/purchases', { method: 'POST', body: { supplierId: supplier.id, warehouseId: warehouse?.id || runtime.ids?.mainWarehouseId, branchId: created.branches[0]?.id, referenceNo: `${runId}-PO`, status: 'DRAFT', items: [{ productId: product.id, sku: product.sku, name: product.name, qty: 100, cost: Number(product.costPrice || product.cost || 10) }] } });
   const received = await request(`/api/v1/purchases/${purchase.id}/receive`, { method: 'POST', body: { warehouseId: warehouse?.id || runtime.ids?.mainWarehouseId, receiptNo: `${runId}-GRN`, notes: 'Supplier goods received during production audit' } });
-  await request('/api/v1/purchases/supplier-payments', { method: 'POST', body: { supplierId: supplier.id, amount: Number(received.balanceAmount || received.balance || received.total || 0), method: 'bank_transfer', referenceNo: `${runId}-SPAY`, allocations: [{ purchaseId: purchase.id, amount: Number(received.balanceAmount || received.balance || received.total || 0) }] } });
+  const payable = Number(received.balanceAmount || received.balance || received.total || 0);
+  await request('/api/v1/purchases/supplier-payments', { method: 'POST', body: { supplierId: supplier.id, amount: payable, method: 'bank_transfer', referenceNo: `${runId}-SPAY`, allocations: [{ purchaseId: purchase.id, amount: payable }] } });
   const receipts = await request('/api/v1/purchases/goods-receipts');
   const payments = await request(`/api/v1/purchases/supplier-payments?supplierId=${supplier.id}`);
   pass('Supplier purchase and item receipt', `${Array.isArray(receipts) ? receipts.length : 0} receipt records available`);
@@ -117,7 +126,7 @@ try {
 
 report.hardwareOperations = {
   runId,
-  counts: { branches: created.branches.length, warehouses: warehouse ? 1 : 0, cashiers: created.cashiers.length, salesmen: created.salesmen.length, expenses: created.expenses.length, suppliers: supplier ? 1 : 0, purchases: purchase ? 1 : 0 },
+  counts: { branches: created.branches.length, warehouses: warehouse ? 1 : 0, tradeSalesUsers: created.tradeSalesUsers.length, salesmen: created.salesmen.length, expenses: created.expenses.length, suppliers: supplier ? 1 : 0, purchases: purchase ? 1 : 0 },
   checks,
   errors,
 };

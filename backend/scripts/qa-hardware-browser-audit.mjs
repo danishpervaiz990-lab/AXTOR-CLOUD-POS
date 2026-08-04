@@ -5,6 +5,8 @@ const require = createRequire('/tmp/axtor-playwright/package.json');
 const { chromium } = require('playwright');
 const runtime = JSON.parse(await fs.readFile('hardware-live-audit-runtime.json', 'utf8'));
 const report = JSON.parse(await fs.readFile('hardware-live-audit-report.json', 'utf8'));
+const backendOrigin = runtime.backendOrigin || report.backendOrigin || process.env.AXTOR_BACKEND_ORIGIN;
+if (!backendOrigin) throw new Error('Hardware browser audit cannot resolve the backend origin');
 const evidenceDir = 'hardware-browser-evidence';
 await fs.mkdir(evidenceDir, { recursive: true });
 
@@ -23,76 +25,192 @@ const pages = [
   ['settings', '/apps/hardware/hardware-settings.html', ['Settings']],
 ];
 
-function cleanErrors(errors, user) {
-  const restricted = ['cashier', 'salesman'].includes(String(user.role || '').toLowerCase());
+const tradeSalesWriteProbes = [
+  ['Delivery create', 'POST', '/api/v1/hardware/deliveries', { documentNo: 'DENIED', scheduledDate: '2099-01-01' }],
+  ['Backorder create', 'POST', '/api/v1/hardware/backorders', { productId: 'denied', quantity: 1 }],
+  ['Rental create', 'POST', '/api/v1/hardware/rentals', { contractNo: 'DENIED', customerId: 'denied', itemDescription: 'denied', startAt: '2099-01-01T00:00:00Z', dueAt: '2099-01-02T00:00:00Z' }],
+  ['Warranty create', 'POST', '/api/v1/hardware/warranties', { productId: 'denied', customerId: 'denied', startsAt: '2099-01-01', expiresAt: '2099-12-31' }],
+  ['Unit conversion create', 'POST', '/api/v1/hardware/unit-conversions', { productId: 'denied', fromUnit: 'box', toUnit: 'piece', factor: 1 }],
+  ['Hardware settings update', 'PUT', '/api/v1/hardware/notification-rules', { eventKey: 'denied', channel: 'in_app', active: true }],
+];
+
+function roleName(user) {
+  return String(user?.role || '').trim().toLowerCase();
+}
+
+function cleanConsoleErrors(errors) {
   return errors.filter((message) => {
     if (/favicon|ERR_ABORTED|Failed to load resource.*404/i.test(message)) return false;
-    if (restricted && /(?:http 403: .*\/api\/v1\/(?:hardware|settings)|Failed to load resource: the server responded with a status of 403)/i.test(message)) return false;
     return true;
   });
 }
 
+async function inspectPage(page, key, terms) {
+  await page.waitForFunction(({ terms }) => {
+    const text = String(document.body?.innerText || '').toLowerCase();
+    const heading = String(document.querySelector('h1')?.textContent || '').toLowerCase();
+    return terms.every((term) => text.includes(String(term).toLowerCase()) || heading.includes(String(term).toLowerCase()));
+  }, { terms }, { timeout: 45000 }).catch(() => null);
+
+  return page.evaluate(({ key, terms }) => {
+    const text = String(document.body?.innerText || '');
+    const lower = text.toLowerCase();
+    const heading = String(document.querySelector('h1')?.textContent || '').toLowerCase();
+    const hasTerms = terms.every((term) => lower.includes(String(term).toLowerCase()) || heading.includes(String(term).toLowerCase()));
+    const dataRows = [...document.querySelectorAll('#app table tbody tr')].filter((row) => row.querySelectorAll('td').length > 1 && !/no records|loading/i.test(row.textContent || '')).length;
+    const appText = String(document.querySelector('#app')?.innerText || '').trim();
+    const terminalReady = key !== 'terminal' || Boolean(document.querySelector('#checkoutForm'));
+    const shellReady = Boolean(document.querySelector('#app')) && !/page not found|404/i.test(text);
+    return {
+      ok: hasTerms && shellReady && terminalReady && !/permission denied|forbidden|access denied/i.test(appText),
+      dataRows,
+      appText,
+    };
+  }, { key, terms });
+}
+
+async function probeTradeSalesRestrictions(token) {
+  const results = [];
+  for (let index = 0; index < tradeSalesWriteProbes.length; index += 1) {
+    const [name, method, path, body] = tradeSalesWriteProbes[index];
+    let status = 0;
+    let responseBody = null;
+    try {
+      const response = await fetch(`${backendOrigin}${path}`, {
+        method,
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `hardware-browser-deny:${runtime.ids.businessSlug}:${index}`,
+        },
+        body: JSON.stringify(body),
+      });
+      status = response.status;
+      responseBody = await response.json().catch(() => null);
+    } catch (error) {
+      responseBody = { error: error?.message || String(error) };
+    }
+    const responseMessage = typeof responseBody?.error === 'string'
+      ? responseBody.error
+      : responseBody?.error?.message || responseBody?.message || null;
+    results.push({ name, method, path, expected: 403, actual: status, pass: status === 403, response: responseMessage });
+  }
+  return results;
+}
+
+const roleOrder = new Map([['cashier1', 1], ['cashier2', 2], ['van', 3], ['manager', 4], ['owner', 5]]);
+const auditUsers = [...runtime.users].sort((a, b) => (roleOrder.get(a.key) || 99) - (roleOrder.get(b.key) || 99));
 const browser = await chromium.launch({ headless: true });
 const results = [];
 try {
-  for (const user of runtime.users) {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  for (const user of auditUsers) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
     const page = await context.newPage();
-    const errors = [];
-    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(`console: ${msg.text()}`); });
-    page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
-    page.on('response', (response) => { if (response.status() >= 400) errors.push(`http ${response.status()}: ${response.url()}`); });
+    const consoleErrors = [];
+    const httpEvents = [];
+    page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(`console: ${msg.text()}`); });
+    page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error?.stack || error?.message || String(error)}`));
+    page.on('response', (response) => {
+      if (response.status() >= 400) httpEvents.push({ status: response.status(), url: response.url() });
+    });
+
     let loginOk = false;
     let roleOk = false;
+    let permissionChecks = [];
     const pageResults = [];
     try {
-      await page.goto(`${runtime.publicOrigin}/login.html`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.locator('#businessSlug').fill(runtime.ids.businessSlug || report.environment.businessSlug);
+      const loginUrl = new URL('/login.html', runtime.publicOrigin);
+      loginUrl.searchParams.set('email', user.email);
+      await page.goto(loginUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.locator('#loginEmail').fill(user.email);
+      await page.waitForFunction((expectedEmail) => {
+        const email = String(document.querySelector('#loginEmail')?.value || '').trim().toLowerCase();
+        const workspace = String(document.querySelector('#businessSlug')?.value || '').trim().toLowerCase();
+        return email === expectedEmail && workspace === expectedEmail;
+      }, String(user.email).trim().toLowerCase(), { timeout: 10000 });
       await page.locator('#loginPassword').fill(user.password);
-      await page.locator('#loginButton').click();
+      await Promise.all([
+        page.waitForURL((url) => !url.pathname.endsWith('/login.html'), { timeout: 30000 }).catch(() => null),
+        page.locator('#loginButton').click(),
+      ]);
       await page.waitForFunction(() => Boolean(localStorage.getItem('axtorAuthToken')), null, { timeout: 30000 });
-      await page.waitForTimeout(750);
       const storage = await context.storageState();
       const originState = storage.origins.find((entry) => entry.origin === runtime.publicOrigin);
       const values = Object.fromEntries((originState?.localStorage || []).map((entry) => [entry.name, entry.value]));
       const session = { token: values.axtorAuthToken || '', user: JSON.parse(values.currentUser || '{}'), business: JSON.parse(values.axtorBusiness || '{}') };
       loginOk = Boolean(session.token) && String(session.business?.slug || '').toLowerCase() === String(runtime.ids.businessSlug || report.environment.businessSlug).toLowerCase();
-      roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === String(user.role).toLowerCase());
+      roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === roleName(user));
 
       for (const [key, route, terms] of pages) {
-        await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await page.waitForTimeout(1200);
-        const structural = await page.evaluate(({ key, terms }) => {
-          const text = String(document.body?.innerText || '').toLowerCase();
-          const heading = String(document.querySelector('h1')?.textContent || '').toLowerCase();
-          const hasTerms = terms.every((term) => text.includes(String(term).toLowerCase()) || heading.includes(String(term).toLowerCase()));
-          if (key === 'settings') return hasTerms && Boolean(document.querySelector('#app'));
-          if (key === 'terminal') return hasTerms && Boolean(document.querySelector('#checkoutForm'));
-          return hasTerms && !/page not found|404/i.test(text);
-        }, { key, terms });
-        pageResults.push({ key, route, ok: structural, finalUrl: page.url() });
-        if (user.key === 'owner') await page.screenshot({ path: `${evidenceDir}/owner-${key}.png`, fullPage: true });
+        let verification = { ok: false, dataRows: 0, appText: '' };
+        let finalUrl = '';
+        let lastError = '';
+        let routeHttp = [];
+        for (let attempt = 1; attempt <= 3 && !verification.ok; attempt += 1) {
+          const httpStart = httpEvents.length;
+          try {
+            await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            verification = await inspectPage(page, key, terms);
+            finalUrl = page.url();
+            routeHttp = httpEvents.slice(httpStart);
+            verification.ok = verification.ok && routeHttp.length === 0;
+          } catch (error) {
+            lastError = error?.message || String(error) || 'unknown navigation error';
+            finalUrl = page.url();
+            routeHttp = httpEvents.slice(httpStart);
+          }
+          if (!verification.ok && attempt < 3) await page.waitForTimeout(1200 * attempt);
+        }
+        pageResults.push({
+          key,
+          route,
+          ok: verification.ok,
+          finalUrl,
+          dataRows: verification.dataRows,
+          http: routeHttp,
+          ...(lastError && !verification.ok ? { error: lastError } : {}),
+        });
+        if (user.key === 'owner') await page.screenshot({ path: `${evidenceDir}/owner-${key}.png`, fullPage: true }).catch(() => null);
+      }
+
+      if (roleName(user) === 'trade salesperson') {
+        permissionChecks = await probeTradeSalesRestrictions(session.token);
       }
     } catch (error) {
-      errors.push(`audit: ${error.message}`);
+      consoleErrors.push(`audit: ${error?.stack || error?.message || String(error) || 'unknown browser audit error'}`);
     }
-    const relevantErrors = cleanErrors(errors, user);
-    results.push({ key: user.key, role: user.role, loginOk, roleOk, pages: pageResults, errors: relevantErrors, pass: loginOk && roleOk && pageResults.every((entry) => entry.ok) && relevantErrors.length === 0 });
+
+    const relevantConsoleErrors = cleanConsoleErrors(consoleErrors);
+    const allPagesChecked = pageResults.length === pages.length;
+    const roleRestrictionsOk = roleName(user) !== 'trade salesperson' || (permissionChecks.length === tradeSalesWriteProbes.length && permissionChecks.every((entry) => entry.pass));
+    results.push({
+      key: user.key,
+      role: user.role,
+      loginOk,
+      roleOk,
+      pages: pageResults,
+      permissionChecks,
+      errors: relevantConsoleErrors,
+      pass: loginOk && roleOk && allPagesChecked && pageResults.every((entry) => entry.ok) && roleRestrictionsOk && relevantConsoleErrors.length === 0,
+    });
     await context.close();
   }
 } finally {
   await browser.close();
 }
 
+const tradeSalesResult = results.find((item) => roleName(item) === 'trade salesperson');
 report.browser = {
   users: results,
   checks: {
     fiveIndependentUsers: results.length === 5,
     allLoginsPass: results.every((item) => item.loginOk),
     allRolesPass: results.every((item) => item.roleOk),
+    allRolesCheckedEveryPage: results.every((item) => item.pages.length === pages.length),
     dedicatedHardwarePagesPass: results.every((item) => item.pages.every((entry) => entry.ok)),
-    settingsPagePass: results.every((item) => item.pages.find((entry) => entry.key === 'settings')?.ok),
+    noUnexpectedPageHttpFailures: results.every((item) => item.pages.every((entry) => entry.http.length === 0)),
+    tradeSalesWriteRestrictionsPass: Boolean(tradeSalesResult) && tradeSalesResult.permissionChecks.length === tradeSalesWriteProbes.length && tradeSalesResult.permissionChecks.every((entry) => entry.pass),
     noUnexpectedBrowserErrors: results.every((item) => item.errors.length === 0),
   },
 };

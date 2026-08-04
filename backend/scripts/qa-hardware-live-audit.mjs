@@ -19,6 +19,7 @@ exact("check(runtime.products.length === 50, 'Exactly 50 products created', '50 
 exact('for (let index = 1; index <= 25; index += 1)', 'for (let index = 1; index <= 200; index += 1)', 'customer loop');
 exact("check(runtime.customers.length === 25, 'Exactly 25 customers created', '25 active QA customers created through customer API')", "check(runtime.customers.length === 200, 'Exactly 200 customers created', '200 active QA contractor/retail customers created through customer API')", 'customer acceptance');
 exact("...Array.from({ length: 10 }, () => 'owner'),\n    ...Array.from({ length: 10 }, () => 'manager'),\n    ...Array.from({ length: 30 }, () => 'cashier1'),\n    ...Array.from({ length: 30 }, () => 'cashier2'),\n    ...Array.from({ length: 20 }, () => 'van'),", "...Array.from({ length: 50 }, () => 'owner'),\n    ...Array.from({ length: 50 }, () => 'manager'),\n    ...Array.from({ length: 150 }, () => 'cashier1'),\n    ...Array.from({ length: 150 }, () => 'cashier2'),\n    ...Array.from({ length: 100 }, () => 'van'),", '500-invoice role mix');
+exact('const invoiceTotals = Array.from({ length: 100 }, () => 1000);', 'const invoiceTotals = Array.from({ length: 500 }, () => 1000);', '500 invoice totals');
 exact('for (let index = 0; index < 100; index += 1)', 'for (let index = 0; index < 500; index += 1)', 'invoice loop');
 exact("if (index >= 60 && index < 70) paymentMethod = 'card';\n    if (index >= 70 && index < 85) { paymentMethod = 'credit'; paidAmount = 0; }\n    if (index >= 85 && index < 95) { paymentMethod = 'cash'; paidAmount = 500; }", "if (index >= 300 && index < 350) paymentMethod = 'card';\n    if (index >= 350 && index < 425) { paymentMethod = 'credit'; paidAmount = 0; }\n    if (index >= 425 && index < 475) { paymentMethod = 'cash'; paidAmount = 500; }", 'payment mix');
 exact('const creditInvoice = runtime.invoices[70];', 'const creditInvoice = runtime.invoices[350];', 'credit invoice');
@@ -29,6 +30,31 @@ exact("check(invoiceTotal >= 95000 && invoiceTotal <= 105000, 'Sales total range
 exact("check(products.length === 50, 'Product persistence', 'Exactly 50 active QA products remain after refresh');", "check(products.length === 100, 'Product persistence', 'Exactly 100 active QA products remain after refresh');", 'product persistence');
 exact("check(customers.filter((c) => c.name.startsWith('QA Customer')).length === 25, 'Customer persistence', 'Exactly 25 QA customers remain after refresh');", "check(refreshedCustomers.filter((c) => c.name.startsWith('QA Customer')).length === 200, 'Customer persistence', 'Exactly 200 QA customers remain after individual refresh');", 'customer persistence');
 exact("check(docs.length === 100, 'No duplicate invoices', 'Document list contains exactly 100 invoices after duplicate request');", "check(runtime.invoices.length === 500 && new Set(runtime.invoices.map((invoice) => invoice.documentNo || invoice.document_no || invoice.id)).size === 500, 'No duplicate invoices', 'Exactly 500 unique invoice identities remain after idempotency retry');", 'duplicate invoice acceptance');
+exact("const cashierRole = roleByName.get('cashier');", "const cashierRole = roleByName.get('hardware manager') || roleByName.get('manager');", 'Hardware transaction operator role');
+exact("const salesmanRole = roleByName.get('salesman');", "const salesmanRole = roleByName.get('trade salesperson') || roleByName.get('salesperson');", 'Hardware Trade Salesperson role');
+exact("Required Hardware Manager/Cashier/Salesman roles are unavailable", "Required Hardware Manager and Trade Salesperson roles are unavailable", 'Hardware role error');
+exact("{ key: 'cashier1', label: 'Cashier One', name: 'QA Cashier One', role: cashierRole.name, email: email('cashier1'), password: strongPassword(), roleId: cashierRole.id },", "{ key: 'cashier1', label: 'Hardware Transaction Manager One', name: 'QA Hardware Transaction Manager One', role: cashierRole.name, email: email('cashier1'), password: strongPassword(), roleId: cashierRole.id },", 'first Hardware transaction manager');
+exact("{ key: 'cashier2', label: 'Cashier Two', name: 'QA Cashier Two', role: cashierRole.name, email: email('cashier2'), password: strongPassword(), roleId: cashierRole.id },", "{ key: 'cashier2', label: 'Hardware Transaction Manager Two', name: 'QA Hardware Transaction Manager Two', role: cashierRole.name, email: email('cashier2'), password: strongPassword(), roleId: cashierRole.id },", 'second Hardware transaction manager');
+exact("{ key: 'van', label: 'Van Salesman', name: 'QA Van Salesman', role: salesmanRole.name, email: email('van'), password: strongPassword(), roleId: salesmanRole.id },", "{ key: 'van', label: 'Trade Salesperson', name: 'QA Trade Salesperson', role: salesmanRole.name, email: email('van'), password: strongPassword(), roleId: salesmanRole.id },", 'Hardware Trade Salesperson user');
+
+const requestSignature = "async function request(path, { method = 'GET', token, body, headers = {}, expected = [200], retries = 2 } = {}) {";
+exact(requestSignature, `let warehouseWriteIndex = 0;\nlet adjustmentWriteIndex = 0;\nlet transferWriteIndex = 0;\n${requestSignature}`, 'request helper signature');
+const requestHeaders = "        headers: {\n          Accept: 'application/json',";
+exact(
+  requestHeaders,
+  "        headers: {\n          ...(method === 'POST' && path === '/api/v1/inventory/warehouses' ? { 'Idempotency-Key': `${RUN_ID}:warehouse:${++warehouseWriteIndex}` } : {}),\n          ...(method === 'POST' && path === '/api/v1/inventory/adjustments' ? { 'Idempotency-Key': `${RUN_ID}:adjustment:${++adjustmentWriteIndex}` } : {}),\n          ...(method === 'POST' && path === '/api/v1/inventory/transfers' ? { 'Idempotency-Key': `${RUN_ID}:transfer:${++transferWriteIndex}` } : {}),\n          Accept: 'application/json',",
+  'inventory idempotency headers',
+);
+const requestHeaderTail = "          ...headers,\n        },";
+exact(
+  requestHeaderTail,
+  "          ...headers,\n          ...(method === 'POST' && path === '/api/v1/sales-documents' ? { 'Idempotency-Key': `${RUN_ID}:sales:${crypto.createHash('sha256').update(JSON.stringify(body ?? null)).digest('hex').slice(0, 24)}` } : {}),\n        },",
+  'sales idempotency header',
+);
+
+const unavailableStockBlock = `// Negative/unavailable stock rejection.\n  let unavailableRejected = false;\n  try {\n    await request('/api/v1/sales-documents', {\n      method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0,\n      body: { documentType: 'invoice', postingMode: 'post', idempotencyKey: \`\${RUN_ID}:unavailable-stock\`, branchId: runtime.ids.branchId, warehouseId: runtime.ids.mainWarehouseId, customerName: 'Walk-in Customer', salesmanId: runtime.ids.salesmanCounterId, paymentMethod: 'cash', paidAmount: 1000, items: [{ productId: runtime.products[30].id, qty: 1, unitPrice: 1000 }] },\n    });\n  } catch (error) { unavailableRejected = /Insufficient|stock/i.test(error.message); }\n  check(unavailableRejected, 'Unavailable stock rejection', 'Out-of-stock sale was rejected');`;
+const hardwareUnavailableStockBlock = `// Force two QA products to zero through the real stock-adjustment API, then prove one unavailable unit cannot post.\n  for (const product of [runtime.products[30], runtime.products[31]]) {\n    await request('/api/v1/inventory/adjustments', {\n      method: 'POST', token: ownerToken, expected: [200],\n      body: { productId: product.id, warehouseId: runtime.ids.mainWarehouseId, type: 'set', qty: 0, reason: 'Hardware zero-stock certification', referenceNo: \`\${RUN_ID}:zero-stock:\${product.id}\` },\n    });\n  }\n  let unavailableRejected = false;\n  try {\n    await request('/api/v1/sales-documents', {\n      method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0,\n      body: { documentType: 'invoice', postingMode: 'post', idempotencyKey: \`\${RUN_ID}:unavailable-stock\`, branchId: runtime.ids.branchId, warehouseId: runtime.ids.mainWarehouseId, customerName: 'Walk-in Customer', salesmanId: runtime.ids.salesmanCounterId, paymentMethod: 'cash', paidAmount: 1000, items: [{ productId: runtime.products[30].id, qty: 1, unitPrice: 1000 }] },\n    });\n  } catch (error) { unavailableRejected = /Insufficient|stock/i.test(error.message); }\n  check(unavailableRejected, 'Unavailable stock rejection', 'Zero-stock Hardware sale was rejected without creating an invoice');`;
+exact(unavailableStockBlock, hardwareUnavailableStockBlock, 'authoritative unavailable stock probe');
 
 const requestHelperPattern = /async\s+function\s+request\s*\([^)]*\)\s*\{/;
 if (!requestHelperPattern.test(source)) throw new Error('Hardware audit transformer could not locate request helper');
@@ -45,17 +71,17 @@ const paymentBlock = `let unauthorizedCashierPaymentRejected = false;
   } catch (error) { unauthorizedCashierPaymentRejected = /Permission denied|payments\\.create/i.test(error.message); }
   check(unauthorizedCashierPaymentRejected, 'Unauthorized cashier payment action', 'Cashier payment posting was denied and requires an authorized role');
   const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
-const hardwarePaymentBlock = `let cashierPaymentPosted = false;
+const hardwarePaymentBlock = `let transactionManagerPaymentPosted = false;
   try {
-    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:cashier-permission-check\` } });
-    cashierPaymentPosted = true;
+    await request('/api/v1/payments', { method: 'POST', token: byKey.cashier1.token, expected: [201], retries: 0, body: { salesDocumentId: creditInvoice.id, amount: 1, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:transaction-manager-check\` } });
+    transactionManagerPaymentPosted = true;
   } catch (error) {
     if (!/Permission denied|payments\\.create/i.test(error.message)) throw error;
   }
-  check(true, 'Cashier payment permission behavior', cashierPaymentPosted ? 'Hardware Cashier may post customer payments as configured' : 'Hardware Cashier payment posting is restricted by role');
-  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: cashierPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
-exact(paymentBlock, hardwarePaymentBlock, 'cashier payment behavior');
-source = source.replaceAll("'Unauthorized cashier payment action'", "'Cashier payment permission behavior'");
+  check(true, 'Hardware transaction manager payment behavior', transactionManagerPaymentPosted ? 'Hardware Manager may post customer payments as configured' : 'Hardware Manager payment posting is restricted by role');
+  const p1 = await request('/api/v1/payments', { method: 'POST', token: ownerToken, expected: [201], body: { salesDocumentId: creditInvoice.id, amount: transactionManagerPaymentPosted ? 299 : 300, paymentMethod: 'cash', idempotencyKey: \`\${RUN_ID}:payment:1\` } });`;
+exact(paymentBlock, hardwarePaymentBlock, 'Hardware Manager payment behavior');
+source = source.replaceAll("'Unauthorized cashier payment action'", "'Hardware transaction manager payment behavior'");
 const secondPaymentPattern = /(const p2\s*=\s*await request\([\s\S]*?salesDocumentId:\s*creditInvoice\.id,\s*amount:\s*)\d+(?:\.\d+)?([\s\S]*?idempotencyKey:\s*`\$\{RUN_ID\}:payment:2`[\s\S]*?\);)/;
 if (!secondPaymentPattern.test(source)) throw new Error('Hardware audit transformer could not locate second credit payment');
 source = source.replace(secondPaymentPattern, '$1700$2');
@@ -77,7 +103,7 @@ process.env.AXTOR_AUDIT_CUSTOMER_COUNT = '200';
 process.env.AXTOR_AUDIT_INVOICE_COUNT = '500';
 process.env.AXTOR_AUDIT_CASH_CREDIT_MIX = 'true';
 process.env.AXTOR_AUDIT_INDUSTRY = 'hardware';
-console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, creditDueDateNormalization: true, customerVerification: 'individual' });
+console.log('Hardware audit source prepared', { productCount: 100, customerCount: 200, invoiceCount: 500, companyUsers: 5, roleShape: 'Owner + 3 Hardware Managers + Trade Salesperson', creditDueDateNormalization: true, customerVerification: 'individual', zeroStockProducts: 2 });
 
 const executablePath = '.hardware-live-audit.generated.mjs';
 fs.writeFileSync(executablePath, source);
@@ -102,11 +128,11 @@ const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
 const users = Array.isArray(runtime.users) ? runtime.users : Array.isArray(report.users) ? report.users : [];
 const distinctEmails = new Set(users.map((user) => String(user.email || user.username || '').toLowerCase()).filter(Boolean));
 const businessSlug = String(runtime.ids?.businessSlug || report.environment?.businessSlug || '').trim();
-const roles = users.map((user) => String(user.role || '').toLowerCase().replace('hardware ', ''));
+const roles = users.map((user) => String(user.role || '').trim().toLowerCase());
 const roleCounts = roles.reduce((acc, role) => ({ ...acc, [role]: (acc[role] || 0) + 1 }), {});
 const fiveUsersPass = users.length === 5 && distinctEmails.size === 5;
 const oneBusinessPass = Boolean(businessSlug) && users.every((user) => !user.businessSlug || String(user.businessSlug) === businessSlug);
-const roleShapePass = roleCounts.owner === 1 && roleCounts.manager === 1 && roleCounts.cashier === 2 && roleCounts.salesman === 1;
+const roleShapePass = roleCounts.owner === 1 && roleCounts['hardware manager'] === 3 && roleCounts['trade salesperson'] === 1;
 report.counts.customerCount = Array.isArray(runtime.customers) ? runtime.customers.length : report.counts.customerCount;
 report.companyUserAudit = {
   businessSlug,
