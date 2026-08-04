@@ -3,24 +3,32 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-const migration = fs.readFileSync(new URL('../prisma/migrations/20260804010000_business_schema_reconciliation/migration.sql', import.meta.url), 'utf8');
+const enumMigration = fs.readFileSync(new URL('../prisma/migrations/20260804010000_business_schema_reconciliation/migration.sql', import.meta.url), 'utf8');
+const columnMigration = fs.readFileSync(new URL('../prisma/migrations/20260804011000_business_column_reconciliation/migration.sql', import.meta.url), 'utf8');
+const combinedMigrations = `${enumMigration}\n${columnMigration}`;
 const predeploy = fs.readFileSync(new URL('../scripts/railway-predeploy.sh', import.meta.url), 'utf8');
 const verifierPath = new URL('../scripts/verify-production-business-schema.mjs', import.meta.url);
 const verifier = fs.readFileSync(verifierPath, 'utf8');
 
-test('Business reconciliation migration is additive and covers current model fields', () => {
-  assert.match(migration, /ALTER TYPE "BusinessStatus" ADD VALUE IF NOT EXISTS 'SUSPENDED'/);
-  assert.match(migration, /ALTER TYPE "OnboardingState" ADD VALUE IF NOT EXISTS 'IN_PROGRESS'/);
+test('Business reconciliation migrations are ordered, additive, and cover the current model', () => {
+  assert.match(enumMigration, /ALTER TYPE "BusinessStatus" ADD VALUE IF NOT EXISTS 'SUSPENDED'/);
+  assert.match(enumMigration, /ALTER TYPE "OnboardingState" ADD VALUE IF NOT EXISTS 'IN_PROGRESS'/);
+  assert.doesNotMatch(enumMigration, /ALTER TABLE "businesses"/);
+
   for (const column of [
+    'legal_name', 'country', 'timezone', 'currency', 'tax_number',
     'subscription_plan', 'subscription_status', 'trial_ends_at',
     'default_language', 'date_format', 'number_locale', 'tax_label',
     'onboarding_state', 'onboarding_step', 'onboarding_completed_at',
     'maintenance_mode', 'created_at', 'updated_at',
   ]) {
-    assert.match(migration, new RegExp(`ADD COLUMN IF NOT EXISTS "${column}"`));
+    assert.match(columnMigration, new RegExp(`ADD COLUMN IF NOT EXISTS "${column}"`));
   }
-  assert.doesNotMatch(migration, /DROP\s+(TABLE|COLUMN)/i);
-  assert.doesNotMatch(migration, /ALTER\s+COLUMN[\s\S]*SET\s+NOT\s+NULL/i);
+  assert.match(columnMigration, /'NOT_STARTED'::"OnboardingState"/);
+  assert.doesNotMatch(combinedMigrations, /DROP\s+(TABLE|COLUMN)/i);
+  assert.doesNotMatch(combinedMigrations, /TRUNCATE/i);
+  assert.doesNotMatch(combinedMigrations, /DELETE\s+FROM/i);
+  assert.doesNotMatch(combinedMigrations, /ALTER\s+COLUMN[\s\S]*SET\s+NOT\s+NULL/i);
 });
 
 test('Railway verifies the Business contract after every migration path', () => {
