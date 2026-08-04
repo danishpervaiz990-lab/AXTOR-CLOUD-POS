@@ -6,7 +6,8 @@ const browser = fs.readFileSync(new URL('../scripts/qa-pharmacy-browser-audit.mj
 
 test('Pharmacy Cashier supplier access is denied without exposing supplier rows', () => {
   assert.match(browser, /function isPharmacyCashier/);
-  assert.match(browser, /\/api\/v1\\\/(?:industry\\\/(?:records\|batches)\|suppliers)/);
+  assert.ok(browser.includes('http 403:'), 'expected explicit HTTP 403 evidence filter');
+  assert.ok(browser.includes('|suppliers)(?:\\?|$)'), 'expected supplier endpoint in restricted-role filter');
   assert.match(browser, /key === 'suppliers' && isPharmacyCashier\(user\)/);
   assert.match(browser, /const dataRows = rows\.filter/);
   assert.match(browser, /state\.dataRows === 0/);
