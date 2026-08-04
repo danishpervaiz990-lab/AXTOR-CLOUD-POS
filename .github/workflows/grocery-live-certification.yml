@@ -22,7 +22,7 @@ permissions:
 
 concurrency:
   group: grocery-live-certification-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   grocery-live-certification:
