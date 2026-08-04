@@ -9,10 +9,10 @@ on:
       - "backend/scripts/qa-paint-transaction-gate.mjs"
       - "backend/scripts/qa-paint-units-audit.mjs"
       - "backend/scripts/qa-paint-role-formula-certification.mjs"
+      - "backend/scripts/qa-paint-browser-audit.mjs"
       - "backend/scripts/qa-hardware-live-audit.mjs"
       - "backend/scripts/qa-hardware-payment-finalizer.mjs"
       - "backend/scripts/qa-hardware-branding-audit.mjs"
-      - "backend/scripts/qa-hardware-browser-audit.mjs"
       - "backend/scripts/qa-hardware-operations-audit.mjs"
       - "backend/scripts/qa-retail-live-audit.payload.*"
       - "backend/scripts/retail-audit-recipient-cert.pem"
@@ -94,7 +94,7 @@ jobs:
         id: browser_audit
         if: always() && steps.branding_audit.outcome == 'success'
         continue-on-error: true
-        run: node backend/scripts/qa-paint-transform-runner.mjs browser
+        run: node backend/scripts/qa-paint-browser-audit.mjs
 
       - name: Protect and remove Paint credentials
         if: always()
