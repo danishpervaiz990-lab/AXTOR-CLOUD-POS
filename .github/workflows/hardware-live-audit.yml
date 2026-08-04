@@ -31,6 +31,7 @@ jobs:
       AXTOR_AUDIT_CUSTOMER_COUNT: "200"
       AXTOR_AUDIT_INVOICE_COUNT: "500"
       AXTOR_AUDIT_CASH_CREDIT_MIX: "true"
+      AXTOR_HARDWARE_FRONTEND_RELEASE: "20260804-role-aware1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -66,8 +67,22 @@ jobs:
         continue-on-error: true
         run: node backend/scripts/qa-hardware-branding-audit.mjs
 
-      - name: Install browser runtime
+      - name: Verify deployed Hardware frontend release
+        id: frontend_release
         if: always() && steps.branding_audit.outcome == 'success'
+        continue-on-error: true
+        run: |
+          html="$(curl -fsS "$AXTOR_PUBLIC_ORIGIN/apps/hardware/hardware-terminal.html")"
+          printf '%s' "$html" | grep -q "$AXTOR_HARDWARE_FRONTEND_RELEASE"
+          script="$(curl -fsS "$AXTOR_PUBLIC_ORIGIN/apps/hardware/js/hardware-print-settings-backend.js?v=$AXTOR_HARDWARE_FRONTEND_RELEASE")"
+          printf '%s' "$script" | grep -q 'canReadSettings'
+          if printf '%s' "$script" | grep -q 'AxtorHardwarePrintSettings.current=current'; then
+            echo 'Getter-only current assignment is still deployed'
+            exit 1
+          fi
+
+      - name: Install browser runtime
+        if: always() && steps.frontend_release.outcome == 'success'
         run: |
           test -f hardware-live-audit-runtime.json
           mkdir -p /tmp/axtor-playwright
@@ -77,7 +92,7 @@ jobs:
 
       - name: Test five users, settings and Hardware pages through Vercel
         id: browser_audit
-        if: always() && steps.branding_audit.outcome == 'success'
+        if: always() && steps.frontend_release.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-hardware-browser-audit.mjs
 
@@ -121,12 +136,14 @@ jobs:
           PAYMENT_OUTCOME: ${{ steps.payment_finalizer.outcome }}
           OPERATIONS_OUTCOME: ${{ steps.operations_audit.outcome }}
           BRANDING_OUTCOME: ${{ steps.branding_audit.outcome }}
+          FRONTEND_OUTCOME: ${{ steps.frontend_release.outcome }}
           BROWSER_OUTCOME: ${{ steps.browser_audit.outcome }}
         run: |
           test "$TRANSACTION_OUTCOME" = "success"
           test "$PAYMENT_OUTCOME" = "success"
           test "$OPERATIONS_OUTCOME" = "success"
           test "$BRANDING_OUTCOME" = "success"
+          test "$FRONTEND_OUTCOME" = "success"
           test "$BROWSER_OUTCOME" = "success"
           test -s hardware-live-audit-report.json
           node -e "const r=require('./hardware-live-audit-report.json'); console.log('Hardware audit result:',r.overall); if(r.overall!=='PASS') process.exit(1)"
