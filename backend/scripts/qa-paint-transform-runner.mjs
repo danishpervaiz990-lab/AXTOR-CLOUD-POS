@@ -34,17 +34,11 @@ if (mode === 'live') {
     .replaceAll("roleShape: 'Owner + 3 Paint Managers + Paint Salesperson'", "roleShape: 'Owner + 3 Paint Shop Managers + Paint Salesperson'")
     .replace("roleCounts['paint manager'] === 3 && roleCounts['paint salesperson'] === 1", "roleCounts['paint shop manager'] === 3 && roleCounts['paint salesperson'] === 1");
 
-  const roleThrow = "throw new Error('Required Paint Shop Manager and Paint Salesperson roles are unavailable')";
-  if (!source.includes(roleThrow)) throw new Error('Paint audit transformer could not locate the role failure throw');
-  source = source.replace(roleThrow, `{
-      console.log('Paint provisioned roles', [...roleByName.keys()].sort());
-      console.log('Paint role lookup status', {
-        managerRole: managerRole?.name || null,
-        cashierRole: cashierRole?.name || null,
-        salesmanRole: salesmanRole?.name || null,
-      });
-      throw new Error('Required Paint Shop Manager and Paint Salesperson roles are unavailable');
-    }`);
+  const roleMapStart = source.indexOf('const roleByName = new Map');
+  if (roleMapStart < 0) throw new Error('Paint audit transformer could not locate roleByName construction');
+  const roleMapEnd = source.indexOf(';', roleMapStart);
+  if (roleMapEnd < 0) throw new Error('Paint audit transformer could not locate roleByName terminator');
+  source = `${source.slice(0, roleMapEnd + 1)}\n  console.log('Paint provisioned roles', [...roleByName.keys()].sort());${source.slice(roleMapEnd + 1)}`;
 }
 
 if (mode === 'operations') {
