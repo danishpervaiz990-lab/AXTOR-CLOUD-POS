@@ -24,6 +24,22 @@ function attach(page, errors) {
   page.on('response', (response) => { if (response.status() >= 400) errors.push(`http ${response.status()}: ${response.url()}`); });
 }
 
+async function waitForRouteReady(page, route) {
+  await page.locator('.g-shell').waitFor({ state: 'visible', timeout: 20000 });
+  await page.locator('#app').waitFor({ state: 'visible', timeout: 20000 });
+  if (route === 'grocery-dashboard.html') {
+    await page.locator('#gDashboardStatus.g-status.ok').waitFor({ state: 'visible', timeout: 30000 });
+    await page.locator('#gTopProducts').waitFor({ state: 'visible', timeout: 10000 });
+    return;
+  }
+  if (route === 'grocery-reports.html') {
+    await page.locator('#gFinanceReports').waitFor({ state: 'visible', timeout: 30000 });
+    await page.locator('#gfStatus.g-status.ok').waitFor({ state: 'visible', timeout: 30000 });
+    return;
+  }
+  await page.waitForTimeout(1500);
+}
+
 const documents = rows((await request(runtime.backendOrigin, '/api/v1/sales-documents?documentType=invoice&limit=250', { token: runtime.token, expected: [200] })).payload)
   .filter((document) => String(document.referenceNo || '').startsWith(`QA-${runtime.runTag}-`));
 const selected = [documents[0], documents[49], documents[99]].filter(Boolean);
@@ -82,9 +98,7 @@ try {
     attach(page, errors);
     try {
       await page.goto(`${runtime.publicOrigin}/apps/grocery/${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.locator('.g-shell').waitFor({ state: 'visible', timeout: 15000 });
-      await page.locator('#app').waitFor({ state: 'visible', timeout: 15000 });
-      await page.waitForTimeout(1200);
+      await waitForRouteReady(page, route);
       const finalUrl = new URL(page.url());
       const title = String(await page.locator('.g-hero h1').innerText().catch(() => '')).trim();
       const body = String(await page.locator('body').innerText().catch(() => '')).trim();
@@ -117,15 +131,23 @@ try {
     try {
       const url = `${runtime.publicOrigin}/apps/grocery/invoice-view.html?id=${encodeURIComponent(document.id)}&profile=${encodeURIComponent(profile)}&print=0`;
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.waitForTimeout(2000);
+      await page.waitForFunction(
+        (documentNo) => document.body.dataset.groceryDocumentReady === 'true'
+          && String(document.querySelector('#invoiceViewRoot')?.textContent || '').includes(documentNo),
+        document.documentNo,
+        { timeout: 30000 },
+      );
       const body = String(await page.locator('body').innerText({ timeout: 10000 }).catch(() => '')).trim();
       const filteredErrors = meaningful(errors);
+      const selectedProfile = await page.locator('#invoiceViewProfile').inputValue().catch(() => '');
       const pass = body.includes(document.documentNo)
-        && !/document not found|no document data|page not found|authentication required/i.test(body)
+        && selectedProfile === profile
+        && !/document not found|no saved document was selected|page not found|authentication required|module ready/i.test(body)
         && filteredErrors.length === 0;
       await page.screenshot({ path: `${evidenceDir}/print-${profile}.png`, fullPage: true }).catch(() => undefined);
-      results.push({ name: `Print profile ${profile}`, pass, documentNo: document.documentNo, finalUrl: page.url(), errors: filteredErrors });
+      results.push({ name: `Print profile ${profile}`, pass, documentNo: document.documentNo, selectedProfile, finalUrl: page.url(), errors: filteredErrors });
     } catch (error) {
+      await page.screenshot({ path: `${evidenceDir}/print-${profile}-failure.png`, fullPage: true }).catch(() => undefined);
       results.push({ name: `Print profile ${profile}`, pass: false, error: error.message, errors: meaningful(errors) });
     } finally {
       await page.close();
