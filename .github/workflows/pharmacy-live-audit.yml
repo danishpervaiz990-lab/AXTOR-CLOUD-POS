@@ -7,6 +7,7 @@ on:
     paths:
       - "backend/scripts/qa-pharmacy-live-audit.mjs"
       - "backend/scripts/qa-pharmacy-browser-audit.mjs"
+      - "backend/scripts/qa-pharmacy-role-debug.mjs"
       - "backend/scripts/qa-retail-live-audit.payload.*"
       - ".github/workflows/pharmacy-live-audit.yml"
   workflow_dispatch:
@@ -31,6 +32,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
+
+      - name: Inspect generated Pharmacy role lookup
+        run: node backend/scripts/qa-pharmacy-role-debug.mjs
 
       - name: Run Pharmacy transaction and data audit
         id: transaction_audit
