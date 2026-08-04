@@ -8,6 +8,7 @@ const scripts = [
   'qa-grocery-live-preflight.mjs',
   'qa-grocery-browser-preflight.mjs',
   'qa-grocery-full-live-audit.mjs',
+  'qa-grocery-full-live-audit-with-payment-reconciliation.mjs',
   'qa-grocery-extended-operations.mjs',
   'qa-grocery-authenticated-browser-audit.mjs',
 ];
@@ -31,7 +32,24 @@ test('Grocery core audit uses resilient registration and real FEFO batches', () 
   assert.match(core, /Exactly 100 FEFO invoices posted/);
   assert.match(core, /uniqueDocumentNumbers/);
   assert.match(core, /grocery-live-cleanup\.sql/);
-  assert.doesNotMatch(core, /--accept-data-loss|prisma db push|DELETE FROM "businesses"/);
+  assert.doesNotMatch(core, /--accept-data-loss|prisma db push|prisma db execute/);
+  assert.doesNotMatch(core, /request\([^\n]*DELETE|fetch\([^\n]*DELETE/);
+});
+
+test('Grocery payment adapter aligns weighted totals and writes early cleanup evidence', () => {
+  const adapter = source['qa-grocery-full-live-audit-with-payment-reconciliation.mjs'];
+  assert.match(adapter, /early tenant cleanup and credential evidence/);
+  assert.match(adapter, /discountAmount: 0/);
+  assert.match(adapter, /backend-aligned line rounding/);
+  assert.match(adapter, /named customer assignment for every certification invoice/);
+  assert.match(adapter, /AXTOR_GROCERY_PAYMENT_ADAPTER_VALIDATE_ONLY/);
+  const result = spawnSync(process.execPath, [new URL('../scripts/qa-grocery-full-live-audit-with-payment-reconciliation.mjs', import.meta.url).pathname], {
+    cwd: new URL('../..', import.meta.url),
+    encoding: 'utf8',
+    env: { ...process.env, AXTOR_GROCERY_PAYMENT_ADAPTER_VALIDATE_ONLY: '1' },
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /PASS: Grocery weighted-payment reconciliation adapter matches/);
 });
 
 test('Grocery extended audit uses current report IDs and atomic writes', () => {
@@ -56,12 +74,15 @@ test('Authenticated browser audit uses stable Grocery shell selectors', () => {
   assert.doesNotMatch(browser, /\/404\|page not found\|authentication required\/i\.test\(body\) && \/grocery\|sales/);
 });
 
-test('Workflow encrypts credentials, shreds runtime and enforces all reports', () => {
+test('Workflow encrypts credentials, shreds runtime and uses true step outcomes', () => {
   assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /qa-grocery-full-live-audit-with-payment-reconciliation\.mjs/);
+  assert.match(workflow, /steps\.core_transactions\.outcome == 'success'/);
   assert.match(workflow, /grocery-live-credentials\.p7m/);
   assert.match(workflow, /shred -u grocery-live-credentials\.json/);
   assert.match(workflow, /shred -u grocery-live-runtime\.json/);
   assert.match(workflow, /test \"\$AUTH_BROWSER_OUTCOME\" = \"success\"/);
   assert.match(workflow, /core\.counts\?\.batches!==50/);
+  assert.doesNotMatch(workflow, /steps\.core_transactions\.conclusion/);
   assert.doesNotMatch(workflow, /grocery-live-runtime\.json\n\s+grocery-live-credentials\.json/);
 });
