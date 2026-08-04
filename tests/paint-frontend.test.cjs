@@ -5,7 +5,8 @@ const root = path.join(__dirname, '../demo-static');
 const pages = ['paint-dashboard.html','paint-catalogue.html','paint-formulas.html','paint-formula-revisions.html','paint-mix-jobs.html','paint-component-stock.html','paint-consumption.html','paint-quality.html','paint-labels.html','paint-deliveries.html','paint-reports.html','paint-settings.html'];
 for (const file of pages) {
   const html = fs.readFileSync(path.join(root, file), 'utf8');
-  assert.match(html, /paint-app\.js/);
+  if (file === 'paint-reports.html') assert.match(html, /paint-role-aware-reports\.js/);
+  else assert.match(html, /paint-app\.js/);
   assert.match(html, /data-page=/);
   assert.doesNotMatch(html, /industry\.html\?module=/);
 }
@@ -18,6 +19,26 @@ for (const file of ['paint-settings.html','paint-mix-jobs.html','paint-quality.h
 }
 const settingsPage = fs.readFileSync(path.join(root, 'paint-settings.html'), 'utf8');
 assert.ok(settingsPage.indexOf('paint-role-aware-settings.js') < settingsPage.indexOf('paint-isolation-branding-runtime.js'), 'settings guard must load before branding runtime');
+
+const dashboardPage = fs.readFileSync(path.join(root, 'paint-dashboard.html'), 'utf8');
+assert.match(dashboardPage, /paint-role-aware-settings\.js\?v=20260805-role-aware2/);
+assert.ok(dashboardPage.indexOf('paint-role-aware-settings.js') < dashboardPage.indexOf('paint-isolation-branding-runtime.js'), 'dashboard guard must load before branding runtime');
+
+const reportsPage = fs.readFileSync(path.join(root, 'paint-reports.html'), 'utf8');
+assert.match(reportsPage, /paint-role-aware-settings\.js\?v=20260805-role-aware2/);
+assert.match(reportsPage, /paint-role-aware-reports\.js\?v=20260805-role-aware2/);
+assert.doesNotMatch(reportsPage, /<script src="js\/paint-app\.js/);
+assert.doesNotMatch(reportsPage, /<script src="js\/paint-isolation-branding-runtime\.js/);
+assert.ok(reportsPage.indexOf('paint-role-aware-settings.js') < reportsPage.indexOf('paint-role-aware-reports.js'), 'reports settings guard must load before reports loader');
+
+const reportGuard = fs.readFileSync(path.join(root, 'js/paint-role-aware-reports.js'), 'utf8');
+new Function(reportGuard);
+for (const token of ['REPORT_ROLES','paint shop manager','accountant','auditor','Paint Salesperson','paintReportsRoleNotice','Reports access','verifyPaintTenant','paint-isolation-branding-runtime.js','paint-app.js']) {
+  assert.ok(reportGuard.toLowerCase().includes(token.toLowerCase()), `role-aware reports loader missing ${token}`);
+}
+assert.match(reportGuard, /if \(!canReadReports\(\)\)/);
+assert.match(reportGuard, /restrictedShell\(\)/);
+assert.ok(reportGuard.indexOf('if (!canReadReports())') < reportGuard.indexOf('loadScript("js/paint-isolation-branding-runtime.js'), 'restricted roles must be resolved before report scripts load');
 
 const app = fs.readFileSync(path.join(root, 'js/paint-app.js'), 'utf8');
 assert.match(app, /\/api\/v1\/paint/);
@@ -45,4 +66,4 @@ const settings = fs.readFileSync(path.join(root, 'js/paint-print-settings-backen
 for (const token of ['/api/v1/settings','invoice.settings','thermal-80','thermal-58','showColourCode','showFormulaReference','showMixJobReference','showBatch','showQualityApproval']) assert.ok(settings.includes(token), `print settings missing ${token}`);
 const docs = fs.readFileSync(path.join(root, 'js/paint-document-print-backend.js'), 'utf8');
 for (const token of ['invoice-view.html','normalizeMix','formulaReference','mixJobReference','qualityApproval']) assert.ok(docs.includes(token), `document router missing ${token}`);
-console.log(`PASS: ${pages.length} purpose-built Paint pages with role-aware tenant print and document routing`);
+console.log(`PASS: ${pages.length} purpose-built Paint pages with role-aware dashboard, reports, tenant print and document routing`);
