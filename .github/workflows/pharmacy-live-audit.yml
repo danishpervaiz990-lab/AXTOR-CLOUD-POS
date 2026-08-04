@@ -38,7 +38,7 @@ jobs:
         run: node backend/scripts/qa-pharmacy-live-audit.mjs
 
       - name: Install browser runtime
-        if: always() && steps.transaction_audit.conclusion == 'success'
+        if: always() && steps.transaction_audit.outcome == 'success'
         run: |
           test -f pharmacy-live-audit-runtime.json
           mkdir -p /tmp/axtor-playwright
@@ -48,7 +48,7 @@ jobs:
 
       - name: Test five users and Pharmacy workflows through Vercel
         id: browser_audit
-        if: always() && steps.transaction_audit.conclusion == 'success'
+        if: always() && steps.transaction_audit.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-pharmacy-browser-audit.mjs
 
@@ -74,8 +74,8 @@ jobs:
       - name: Enforce Pharmacy launch-readiness result
         if: always()
         env:
-          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.conclusion }}
-          BROWSER_OUTCOME: ${{ steps.browser_audit.conclusion }}
+          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser_audit.outcome }}
         run: |
           test "$TRANSACTION_OUTCOME" = "success"
           test "$BROWSER_OUTCOME" = "success"
