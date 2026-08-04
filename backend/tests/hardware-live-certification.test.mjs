@@ -12,10 +12,12 @@ test('Hardware transaction audit preserves production-scale data and idempotency
   assert.match(transaction, /AXTOR_AUDIT_INVOICE_COUNT = '500'/);
   assert.match(transaction, /Exactly 500 posted invoices/);
   assert.match(transaction, /Exactly 500 unique invoice identities/);
-  assert.match(transaction, /Idempotency-Key/);
+  assert.match(transaction, /idempotencyKey/);
   assert.match(transaction, /customerVerification: 'individual'/);
   assert.match(transaction, /fiveUsersPass/);
   assert.match(transaction, /expectedRoleShape/);
+  assert.match(transaction, /HARDWARE_ACCESS_ROLE_NAMES/);
+  assert.match(transaction, /access\.roles\.map\(\(role\) => role\.name\)/);
 });
 
 test('Hardware browser audit uses live readonly login and isolated route checks', () => {
