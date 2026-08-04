@@ -32,7 +32,9 @@ test("financial movement reports expose requested debit credit and method views"
 });
 
 test("reports controller routes the new reports before industry-specific handlers", () => {
-  assert.match(controller, /isFinancialMovementReport/);
-  assert.match(controller, /runFinancialMovementReport/);
-  assert.ok(controller.indexOf("isFinancialMovementReport") < controller.indexOf("isGroceryOperationalReport"));
+  const financialHandler = controller.indexOf("if (isFinancialMovementReport(reportId))");
+  const groceryHandler = controller.indexOf("else if (isGroceryOperationalReport(reportId))");
+  assert.ok(financialHandler >= 0, "financial movement handler is missing");
+  assert.ok(groceryHandler > financialHandler, "financial movement handler must run before Grocery-specific handlers");
+  assert.match(controller, /runFinancialMovementReport\(context\.businessId, reportId, req\.query\)/);
 });
