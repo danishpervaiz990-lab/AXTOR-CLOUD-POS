@@ -24,6 +24,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.x
+      - name: Apply live Grocery role catalogue mapping
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/scripts/provision-retail-grocery-demo-accounts.mjs')
+          source = path.read_text()
+          old = "roleByExact(roles, ['Grocery Manager', 'Manager'])"
+          new = "roleByExact(roles, ['Grocery Manager', 'Store Manager', 'Manager'])"
+          if old not in source:
+              raise SystemExit('Grocery manager mapping marker not found')
+          path.write_text(source.replace(old, new, 1))
+          PY
       - name: Provision and verify live accounts
         run: node backend/scripts/provision-retail-grocery-demo-accounts.mjs
       - name: Validate protected output
