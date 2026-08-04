@@ -10,7 +10,6 @@ on:
       - "backend/scripts/qa-hardware-operations-audit.mjs"
       - "backend/scripts/qa-hardware-branding-audit.mjs"
       - "backend/scripts/qa-hardware-browser-audit.mjs"
-      - "backend/scripts/qa-hardware-role-debug.mjs"
       - "backend/scripts/qa-retail-live-audit.payload.*"
       - "backend/scripts/retail-audit-recipient-cert.pem"
       - ".github/workflows/hardware-live-audit.yml"
@@ -36,9 +35,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
-
-      - name: Inspect generated Hardware role lookup
-        run: node backend/scripts/qa-hardware-role-debug.mjs
 
       - name: Run Hardware transaction and reports audit
         id: transaction_audit
