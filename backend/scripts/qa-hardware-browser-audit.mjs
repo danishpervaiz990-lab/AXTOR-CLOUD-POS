@@ -23,34 +23,34 @@ const pages = [
   ['settings', '/apps/hardware/hardware-settings.html', ['Settings']],
 ];
 
+const tradeSalesWriteProbes = [
+  ['Delivery create', 'POST', '/api/v1/hardware/deliveries', { documentNo: 'DENIED', scheduledDate: '2099-01-01' }],
+  ['Backorder create', 'POST', '/api/v1/hardware/backorders', { productId: 'denied', quantity: 1 }],
+  ['Rental create', 'POST', '/api/v1/hardware/rentals', { contractNo: 'DENIED', customerId: 'denied', itemDescription: 'denied', startAt: '2099-01-01T00:00:00Z', dueAt: '2099-01-02T00:00:00Z' }],
+  ['Warranty create', 'POST', '/api/v1/hardware/warranties', { productId: 'denied', customerId: 'denied', startsAt: '2099-01-01', expiresAt: '2099-12-31' }],
+  ['Unit conversion create', 'POST', '/api/v1/hardware/unit-conversions', { productId: 'denied', fromUnit: 'box', toUnit: 'piece', factor: 1 }],
+  ['Hardware settings update', 'PUT', '/api/v1/hardware/notification-rules', { eventKey: 'denied', channel: 'in_app', active: true }],
+];
+
 function roleName(user) {
   return String(user?.role || '').trim().toLowerCase();
 }
 
-function expectedRestricted(user, key) {
-  const role = roleName(user);
-  if (role === 'owner' || role === 'hardware manager') return false;
-  if (role === 'trade salesperson') {
-    return ['dashboard', 'deliveries', 'backorders', 'rentals', 'warranties', 'unit-conversions', 'reports', 'settings'].includes(key);
-  }
-  return true;
-}
-
 function cleanConsoleErrors(errors) {
   return errors.filter((message) => {
-    if (/favicon|ERR_ABORTED|Failed to load resource: the server responded with a status of 403|Failed to load resource.*404/i.test(message)) return false;
+    if (/favicon|ERR_ABORTED|Failed to load resource.*404/i.test(message)) return false;
     return true;
   });
 }
 
-async function inspectPage(page, key, terms, restricted) {
+async function inspectPage(page, key, terms) {
   await page.waitForFunction(({ terms }) => {
     const text = String(document.body?.innerText || '').toLowerCase();
     const heading = String(document.querySelector('h1')?.textContent || '').toLowerCase();
     return terms.every((term) => text.includes(String(term).toLowerCase()) || heading.includes(String(term).toLowerCase()));
   }, { terms }, { timeout: 45000 }).catch(() => null);
 
-  return page.evaluate(({ key, terms, restricted }) => {
+  return page.evaluate(({ key, terms }) => {
     const text = String(document.body?.innerText || '');
     const lower = text.toLowerCase();
     const heading = String(document.querySelector('h1')?.textContent || '').toLowerCase();
@@ -60,13 +60,38 @@ async function inspectPage(page, key, terms, restricted) {
     const terminalReady = key !== 'terminal' || Boolean(document.querySelector('#checkoutForm'));
     const shellReady = Boolean(document.querySelector('#app')) && !/page not found|404/i.test(text);
     return {
-      ok: hasTerms && shellReady && terminalReady,
-      restricted,
+      ok: hasTerms && shellReady && terminalReady && !/permission denied|forbidden|access denied/i.test(appText),
       dataRows,
       appText,
-      errorTextVisible: /permission|forbidden|not allowed|access denied|request failed/i.test(appText),
     };
-  }, { key, terms, restricted });
+  }, { key, terms });
+}
+
+async function probeTradeSalesRestrictions(token) {
+  const results = [];
+  for (let index = 0; index < tradeSalesWriteProbes.length; index += 1) {
+    const [name, method, path, body] = tradeSalesWriteProbes[index];
+    let status = 0;
+    let responseBody = null;
+    try {
+      const response = await fetch(`${runtime.backendOrigin}${path}`, {
+        method,
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `hardware-browser-deny:${runtime.ids.businessSlug}:${index}`,
+        },
+        body: JSON.stringify(body),
+      });
+      status = response.status;
+      responseBody = await response.json().catch(() => null);
+    } catch (error) {
+      responseBody = { error: error?.message || String(error) };
+    }
+    results.push({ name, method, path, expected: 403, actual: status, pass: status === 403, response: responseBody?.error?.message || responseBody?.message || null });
+  }
+  return results;
 }
 
 const roleOrder = new Map([['cashier1', 1], ['cashier2', 2], ['van', 3], ['manager', 4], ['owner', 5]]);
@@ -80,13 +105,14 @@ try {
     const consoleErrors = [];
     const httpEvents = [];
     page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(`console: ${msg.text()}`); });
-    page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
+    page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error?.stack || error?.message || String(error)}`));
     page.on('response', (response) => {
       if (response.status() >= 400) httpEvents.push({ status: response.status(), url: response.url() });
     });
 
     let loginOk = false;
     let roleOk = false;
+    let permissionChecks = [];
     const pageResults = [];
     try {
       const loginUrl = new URL('/login.html', runtime.publicOrigin);
@@ -112,8 +138,7 @@ try {
       roleOk = Array.isArray(session.user?.roles) && session.user.roles.some((role) => String(role).toLowerCase() === roleName(user));
 
       for (const [key, route, terms] of pages) {
-        const restricted = expectedRestricted(user, key);
-        let verification = { ok: false, restricted, dataRows: 0, appText: '', errorTextVisible: false };
+        let verification = { ok: false, dataRows: 0, appText: '' };
         let finalUrl = '';
         let lastError = '';
         let routeHttp = [];
@@ -121,16 +146,10 @@ try {
           const httpStart = httpEvents.length;
           try {
             await page.goto(`${runtime.publicOrigin}${route}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-            verification = await inspectPage(page, key, terms, restricted);
+            verification = await inspectPage(page, key, terms);
             finalUrl = page.url();
             routeHttp = httpEvents.slice(httpStart);
-            const has403 = routeHttp.some((event) => event.status === 403);
-            const unexpectedHttp = routeHttp.filter((event) => event.status >= 400 && !(restricted && event.status === 403));
-            if (restricted) {
-              verification.ok = verification.ok && has403 && verification.dataRows === 0;
-            } else {
-              verification.ok = verification.ok && unexpectedHttp.length === 0 && !has403;
-            }
+            verification.ok = verification.ok && routeHttp.length === 0;
           } catch (error) {
             lastError = error?.message || String(error) || 'unknown navigation error';
             finalUrl = page.url();
@@ -143,28 +162,32 @@ try {
           route,
           ok: verification.ok,
           finalUrl,
-          restricted,
           dataRows: verification.dataRows,
-          errorTextVisible: verification.errorTextVisible,
           http: routeHttp,
           ...(lastError && !verification.ok ? { error: lastError } : {}),
         });
         if (user.key === 'owner') await page.screenshot({ path: `${evidenceDir}/owner-${key}.png`, fullPage: true }).catch(() => null);
       }
+
+      if (roleName(user) === 'trade salesperson') {
+        permissionChecks = await probeTradeSalesRestrictions(session.token);
+      }
     } catch (error) {
-      consoleErrors.push(`audit: ${error?.message || String(error) || 'unknown browser audit error'}`);
+      consoleErrors.push(`audit: ${error?.stack || error?.message || String(error) || 'unknown browser audit error'}`);
     }
 
     const relevantConsoleErrors = cleanConsoleErrors(consoleErrors);
     const allPagesChecked = pageResults.length === pages.length;
+    const roleRestrictionsOk = roleName(user) !== 'trade salesperson' || (permissionChecks.length === tradeSalesWriteProbes.length && permissionChecks.every((entry) => entry.pass));
     results.push({
       key: user.key,
       role: user.role,
       loginOk,
       roleOk,
       pages: pageResults,
+      permissionChecks,
       errors: relevantConsoleErrors,
-      pass: loginOk && roleOk && allPagesChecked && pageResults.every((entry) => entry.ok) && relevantConsoleErrors.length === 0,
+      pass: loginOk && roleOk && allPagesChecked && pageResults.every((entry) => entry.ok) && roleRestrictionsOk && relevantConsoleErrors.length === 0,
     });
     await context.close();
   }
@@ -172,7 +195,7 @@ try {
   await browser.close();
 }
 
-const restrictedPages = results.flatMap((item) => item.pages.filter((page) => page.restricted));
+const tradeSalesResult = results.find((item) => roleName(item) === 'trade salesperson');
 report.browser = {
   users: results,
   checks: {
@@ -181,8 +204,8 @@ report.browser = {
     allRolesPass: results.every((item) => item.roleOk),
     allRolesCheckedEveryPage: results.every((item) => item.pages.length === pages.length),
     dedicatedHardwarePagesPass: results.every((item) => item.pages.every((entry) => entry.ok)),
-    restrictedPagesExposeNoRows: restrictedPages.length > 0 && restrictedPages.every((entry) => entry.dataRows === 0),
-    expectedRoleRestrictionsPass: restrictedPages.every((entry) => entry.http.some((event) => event.status === 403)),
+    noUnexpectedPageHttpFailures: results.every((item) => item.pages.every((entry) => entry.http.length === 0)),
+    tradeSalesWriteRestrictionsPass: Boolean(tradeSalesResult) && tradeSalesResult.permissionChecks.length === tradeSalesWriteProbes.length && tradeSalesResult.permissionChecks.every((entry) => entry.pass),
     noUnexpectedBrowserErrors: results.every((item) => item.errors.length === 0),
   },
 };
