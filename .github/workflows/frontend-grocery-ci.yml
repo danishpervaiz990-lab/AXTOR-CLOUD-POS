@@ -17,6 +17,7 @@ jobs:
       - run: node --check demo-static/js/axtor-api.js
       - run: node --check demo-static/js/grocery-app.js
       - run: node --check demo-static/js/grocery-tenant-locale.js
+      - run: node --check demo-static/js/grocery-report-shell.js
       - run: node --check demo-static/js/grocery-report-sync.js
       - run: node --check demo-static/js/grocery-sales-analytics.js
       - run: node --check demo-static/js/grocery-operational-postgres.js
