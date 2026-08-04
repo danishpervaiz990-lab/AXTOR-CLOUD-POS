@@ -4,6 +4,9 @@
   const REPORT_ROLES = new Set([
     "owner", "admin", "administrator", "manager", "paint manager", "paint shop manager", "accountant", "auditor"
   ]);
+  const RESTRICTED_REPORT_ROLES = new Set([
+    "paint salesperson", "salesperson", "colorist", "colourist", "paint storekeeper", "storekeeper", "paint quality inspector", "quality inspector"
+  ]);
   const NAV = [
     ["paint-dashboard.html", "Dashboard"],
     ["paint-catalogue.html", "Colour Catalogue"],
@@ -36,8 +39,14 @@
     return [user.role, user.roleName, ...(Array.isArray(user.roles) ? user.roles : [])].map(normalize).filter(Boolean);
   }
 
+  function isExplicitlyRestricted() {
+    return storedRoles().some(function (role) { return RESTRICTED_REPORT_ROLES.has(role); });
+  }
+
   function canReadReports() {
-    return storedRoles().some(function (role) { return REPORT_ROLES.has(role); });
+    const roles = storedRoles();
+    return !roles.some(function (role) { return RESTRICTED_REPORT_ROLES.has(role); })
+      && roles.some(function (role) { return REPORT_ROLES.has(role); });
   }
 
   function esc(value) {
@@ -92,5 +101,5 @@
     if (notice) notice.insertAdjacentHTML("beforeend", '<p class="p-status error">' + esc(error.message || error) + "</p>");
   });
 
-  window.AxtorPaintRoleAwareReports = { roles: storedRoles, canReadReports };
+  window.AxtorPaintRoleAwareReports = { roles: storedRoles, canReadReports, isExplicitlyRestricted };
 })();
