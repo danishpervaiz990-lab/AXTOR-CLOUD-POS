@@ -39,6 +39,7 @@ type ColumnRow = {
 
 type NameRow = { name: string };
 type PrivilegeRow = { can_insert: boolean };
+type SecurityRow = { row_security_enabled: boolean; row_security_forced: boolean };
 
 export type BusinessInsertCompatibility = {
   status: "AVAILABLE" | "UNAVAILABLE";
@@ -49,6 +50,9 @@ export type BusinessInsertCompatibility = {
     onboardingState: string | null;
   };
   insertPrivilege: boolean | null;
+  rowSecurityEnabled: boolean | null;
+  rowSecurityForced: boolean | null;
+  policyNames: string[];
   triggerNames: string[];
   checkConstraintNames: string[];
 };
@@ -57,7 +61,7 @@ export async function collectBusinessInsertCompatibility(
   db: DiagnosticsDb = prisma,
 ): Promise<BusinessInsertCompatibility> {
   try {
-    const [columns, triggers, constraints, privileges] = await Promise.all([
+    const [columns, triggers, constraints, privileges, security, policies] = await Promise.all([
       db.$queryRaw<ColumnRow[]>`
         SELECT column_name, is_nullable, column_default, is_identity, is_generated, udt_name
         FROM information_schema.columns
@@ -89,6 +93,21 @@ export async function collectBusinessInsertCompatibility(
           'INSERT'
         ) AS can_insert
       `,
+      db.$queryRaw<SecurityRow[]>`
+        SELECT relrowsecurity AS row_security_enabled,
+               relforcerowsecurity AS row_security_forced
+        FROM pg_class rel
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        WHERE nsp.nspname = current_schema()
+          AND rel.relname = 'businesses'
+      `,
+      db.$queryRaw<NameRow[]>`
+        SELECT policyname AS name
+        FROM pg_policies
+        WHERE schemaname = current_schema()
+          AND tablename = 'businesses'
+        ORDER BY policyname
+      `,
     ]);
 
     const names = new Set(columns.map((column) => String(column.column_name)));
@@ -119,6 +138,9 @@ export async function collectBusinessInsertCompatibility(
         onboardingState: typeByColumn.get("onboarding_state") || null,
       },
       insertPrivilege: privileges[0]?.can_insert ?? null,
+      rowSecurityEnabled: security[0]?.row_security_enabled ?? null,
+      rowSecurityForced: security[0]?.row_security_forced ?? null,
+      policyNames: policies.map((row) => String(row.name)).sort(),
       triggerNames: triggers.map((row) => String(row.name)).sort(),
       checkConstraintNames: constraints.map((row) => String(row.name)).sort(),
     };
@@ -130,6 +152,9 @@ export async function collectBusinessInsertCompatibility(
       blockingExtraColumns: [],
       enumColumnTypes: { status: null, onboardingState: null },
       insertPrivilege: null,
+      rowSecurityEnabled: null,
+      rowSecurityForced: null,
+      policyNames: [],
       triggerNames: [],
       checkConstraintNames: [],
     };
