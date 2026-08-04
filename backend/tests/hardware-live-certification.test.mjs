@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const transaction = fs.readFileSync(new URL('../scripts/qa-hardware-live-audit.mjs', import.meta.url), 'utf8');
+const adapter = fs.readFileSync(new URL('../scripts/qa-hardware-live-audit-with-canonical-roles.mjs', import.meta.url), 'utf8');
 const browser = fs.readFileSync(new URL('../scripts/qa-hardware-browser-audit.mjs', import.meta.url), 'utf8');
 const workflow = fs.readFileSync(new URL('../../.github/workflows/hardware-live-audit.yml', import.meta.url), 'utf8');
 
@@ -16,8 +17,17 @@ test('Hardware transaction audit preserves production-scale data and idempotency
   assert.match(transaction, /customerVerification: 'individual'/);
   assert.match(transaction, /fiveUsersPass/);
   assert.match(transaction, /expectedRoleShape/);
-  assert.match(transaction, /HARDWARE_ACCESS_ROLE_NAMES/);
-  assert.match(transaction, /access\.roles\.map\(\(role\) => role\.name\)/);
+});
+
+test('Hardware role adapter resolves the actual fresh-tenant sales catalog', () => {
+  assert.match(adapter, /roleByName\.get\('salesperson'\)/);
+  assert.match(adapter, /roleByName\.get\('trade salesperson'\)/);
+  assert.match(adapter, /roleByName\.get\('salesman'\)/);
+  assert.match(adapter, /could not remove the temporary role diagnostic/);
+  assert.match(adapter, /double-patching/);
+  assert.match(adapter, /flag: 'wx'/);
+  assert.match(adapter, /fs\.unlink\(temporaryUrl\)/);
+  assert.match(workflow, /qa-hardware-live-audit-with-canonical-roles\.mjs/);
 });
 
 test('Hardware browser audit uses live readonly login and isolated route checks', () => {
