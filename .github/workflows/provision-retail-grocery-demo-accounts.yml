@@ -1,0 +1,50 @@
+name: Provision Retail Grocery Demo Accounts
+
+on:
+  pull_request:
+    branches:
+      - backend
+    paths:
+      - backend/scripts/provision-retail-grocery-demo-accounts.mjs
+      - .github/workflows/provision-retail-grocery-demo-accounts.yml
+
+permissions:
+  contents: read
+
+jobs:
+  provision-accounts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      AXTOR_PUBLIC_ORIGIN: https://axtorpos.vercel.app
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_ACCOUNT_OUTPUT: retail-grocery-demo-credentials.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Provision and verify live accounts
+        run: node backend/scripts/provision-retail-grocery-demo-accounts.mjs
+      - name: Validate protected output
+        run: |
+          test -s retail-grocery-demo-credentials.json
+          chmod 600 retail-grocery-demo-credentials.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('retail-grocery-demo-credentials.json', 'utf8'));
+          if (!Array.isArray(report.tenants) || report.tenants.length !== 2) process.exit(1);
+          for (const tenant of report.tenants) {
+            if (!tenant.businessSlug || !Array.isArray(tenant.accounts) || tenant.accounts.length < 6) process.exit(1);
+            if (!tenant.accounts.every(account => account.email && account.password && account.role)) process.exit(1);
+          }
+          console.log('Credential artifact structure PASS; secrets not printed');
+          NODE
+      - name: Upload credentials for owner delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: retail-grocery-demo-credentials-${{ github.run_id }}
+          path: retail-grocery-demo-credentials.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 9
