@@ -21,9 +21,15 @@ run_migrate_deploy() {
   return "$DEPLOY_CODE"
 }
 
+verify_business_schema() {
+  echo "Verifying deployed Business schema contract..."
+  node scripts/verify-production-business-schema.mjs
+}
+
 echo "Applying pending Prisma migrations..."
 if run_migrate_deploy; then
   echo "Prisma migrations applied successfully."
+  verify_business_schema
   exit 0
 fi
 
@@ -71,3 +77,4 @@ done
 
 echo "Legacy baseline complete. Applying pending additive migrations..."
 npx prisma migrate deploy
+verify_business_schema
