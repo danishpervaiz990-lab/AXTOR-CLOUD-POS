@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const live = fs.readFileSync(new URL('../scripts/qa-pharmacy-live-audit.mjs', import.meta.url), 'utf8');
+const adapter = fs.readFileSync(new URL('../scripts/qa-pharmacy-live-audit-with-canonical-roles.mjs', import.meta.url), 'utf8');
 const browser = fs.readFileSync(new URL('../scripts/qa-pharmacy-browser-audit.mjs', import.meta.url), 'utf8');
 const workflow = fs.readFileSync(new URL('../../.github/workflows/pharmacy-live-audit.yml', import.meta.url), 'utf8');
 
@@ -14,6 +15,16 @@ test('Pharmacy live audit preserves the required production dataset and reconcil
   assert.match(live, /Customer balances reconcile/);
   assert.match(live, /No duplicate invoices/);
   assert.match(live, /Idempotency-Key/);
+});
+
+test('Pharmacy canonical-role adapter applies only current role-label migrations', () => {
+  assert.match(adapter, /replaceAll\('Pharmacy Manager', 'Manager'\)/);
+  assert.match(adapter, /replaceAll\('Salesman', 'Salesperson'\)/);
+  assert.match(adapter, /could not find the industry transformation marker/);
+  assert.match(adapter, /double-patching/);
+  assert.match(adapter, /flag: 'wx'/);
+  assert.match(adapter, /fs\.unlink\(temporaryUrl\)/);
+  assert.match(workflow, /qa-pharmacy-live-audit-with-canonical-roles\.mjs/);
 });
 
 test('Pharmacy browser audit isolates all roles and page navigations', () => {
