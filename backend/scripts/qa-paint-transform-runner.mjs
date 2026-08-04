@@ -37,9 +37,9 @@ if (mode === 'live') {
   const payloadTransformMarker = "source = source.replace(/Retail/g, 'Paint').replace(/retail/g, 'paint').replace(/RETAIL/g, 'PAINT');";
   if (!source.includes(payloadTransformMarker)) throw new Error('Paint audit transformer could not locate the payload industry conversion');
   source = source.replace(payloadTransformMarker, `${payloadTransformMarker}
-const __paintRoleBlockIndex = source.indexOf('const managerRole');
+const __paintRoleBlockIndex = source.indexOf('Required Paint Manager/Cashier/Salesman roles are unavailable');
 console.log('BEGIN GENERATED PAINT ROLE BLOCK');
-console.log(__paintRoleBlockIndex >= 0 ? source.slice(__paintRoleBlockIndex, __paintRoleBlockIndex + 1200) : 'managerRole source not found');
+console.log(__paintRoleBlockIndex >= 0 ? source.slice(Math.max(0, __paintRoleBlockIndex - 1800), __paintRoleBlockIndex + 600) : 'Paint role error source not found');
 console.log('END GENERATED PAINT ROLE BLOCK');`);
 }
 
