@@ -33,9 +33,10 @@ assert.match(app, /\/reverse/);
 
 const roleGuard = fs.readFileSync(path.join(root, 'js/paint-role-aware-settings.js'), 'utf8');
 new Function(roleGuard);
-for (const token of ['Paint Salesperson','paint shop manager','SETTINGS_READ_ROLES','SETTINGS_WRITE_ROLES','/api/v1/settings','emptySettings','paintSettingsRoleNotice']) {
+for (const token of ['Paint Salesperson','paint shop manager','SETTINGS_PATH','SETTINGS_READ_ROLES','SETTINGS_WRITE_ROLES','SETTINGS_RESTRICTED_ROLES','emptySettings','paintSettingsRoleNotice']) {
   assert.ok(roleGuard.toLowerCase().includes(token.toLowerCase()), `role-aware settings guard missing ${token}`);
 }
+assert.match(roleGuard, /SETTINGS_PATH = \/\^\\\/api\\\/v1\\\/settings/);
 assert.match(roleGuard, /verb === "GET" && !canReadSettings\(\)/);
 assert.match(roleGuard, /verb !== "GET" && !canWriteSettings\(\)/);
 assert.match(roleGuard, /#paintPrintSettings,#paintBrandingPanel/);
