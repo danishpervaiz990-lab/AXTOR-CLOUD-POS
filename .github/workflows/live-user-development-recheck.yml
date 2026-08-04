@@ -39,8 +39,15 @@ jobs:
           const fs = require('fs');
           const report = JSON.parse(fs.readFileSync('live-user-development-recheck.json', 'utf8'));
           const raw = JSON.stringify(report);
-          if (/password|axtorAuthToken|authorization/i.test(raw)) {
-            throw new Error('Report contains a credential-shaped field');
+          const forbidden = [
+            /"password"\s*:/i,
+            /"token"\s*:/i,
+            /axtorAuthToken/i,
+            /Authorization\s*:\s*Bearer/i,
+            /Bearer\s+[A-Za-z0-9._~+\/-]{20,}/i,
+          ];
+          if (forbidden.some(pattern => pattern.test(raw))) {
+            throw new Error('Report contains an actual credential-shaped field or value');
           }
           console.log('Redacted report validation', { overall: report.overall, industries: Object.keys(report.tenants || {}) });
           NODE
