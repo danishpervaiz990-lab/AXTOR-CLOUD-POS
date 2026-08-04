@@ -27,6 +27,16 @@
     return true;
   }
 
+  function cleanupDevelopmentCommercialUi(){
+    document.querySelectorAll(".axtor-plan-block,[data-plan-gate],[data-subscription-gate]").forEach(function(node){node.remove();});
+    document.querySelectorAll("body *").forEach(function(node){
+      if(node.children.length) return;
+      const text=String(node.textContent||"").trim();
+      const lower=text.toLowerCase().replace(/\s+/g," ");
+      if((lower.indexOf("trial:")===0&&lower.includes("day(s) remaining"))||lower==="plans & subscription") node.hidden=true;
+    });
+  }
+
   function refreshAdapters(){
     try{window.AxtorSalesBackend?.refreshProducts?.();}catch(error){console.warn("Retail product refresh skipped",error);}
     try{window.AxtorSalesBackend?.refresh?.({preserveSearch:true,preserveTab:true});}catch(error){console.warn("Retail sales refresh skipped",error);}
@@ -82,6 +92,7 @@
 
   function run(){
     const patched=patchApi();
+    cleanupDevelopmentCommercialUi();
     bindPrintHandoff();
     upgradePrintButtons();
     reconcileFinancialLabels();
@@ -89,6 +100,6 @@
   }
 
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",run); else run();
-  const observer=new MutationObserver(function(){upgradePrintButtons();reconcileFinancialLabels();});
+  const observer=new MutationObserver(function(){cleanupDevelopmentCommercialUi();upgradePrintButtons();reconcileFinancialLabels();});
   observer.observe(document.documentElement,{childList:true,subtree:true});
 })();
