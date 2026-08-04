@@ -21,6 +21,26 @@ source = source
   .replaceAll('qa-hw-', 'qa-paint-')
   .replaceAll('HWB', 'PTB');
 
+if (mode === 'live') {
+  source = source
+    .replace("const cashierRole = roleByName.get('paint manager') || roleByName.get('manager');", "const cashierRole = roleByName.get('cashier');")
+    .replace("const salesmanRole = roleByName.get('trade salesperson') || roleByName.get('salesperson');", "const salesmanRole = roleByName.get('salesperson') || roleByName.get('salesman');")
+    .replace('Required Paint Manager and Trade Salesperson roles are unavailable', 'Required Paint Cashier and Salesperson roles are unavailable')
+    .replaceAll('Paint Transaction Manager One', 'Paint Cashier One')
+    .replaceAll('Paint Transaction Manager Two', 'Paint Cashier Two')
+    .replaceAll('Trade Salesperson', 'Salesperson')
+    .replaceAll("roleShape: 'Owner + 3 Paint Managers + Salesperson'", "roleShape: 'Owner + 3 Cashiers + Salesperson'")
+    .replace("roleCounts['paint manager'] === 3 && roleCounts['salesperson'] === 1", "roleCounts.cashier === 3 && roleCounts.salesperson === 1");
+}
+
+if (mode === 'operations') {
+  source = source
+    .replaceAll('Trade Salesperson', 'Salesperson')
+    .replaceAll('trade salesperson', 'salesperson')
+    .replaceAll('tradeSalesUsers', 'salesUsers')
+    .replaceAll('trade sales users', 'sales users');
+}
+
 if (mode === 'browser') {
   const deployedPaintPages = `const pages = [
   ['dashboard', '/apps/paint/paint-dashboard.html', ['Paint']],
