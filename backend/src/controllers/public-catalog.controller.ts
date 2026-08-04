@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
 import * as service from "../services/public-catalog-launch.service.js";
-import { collectBusinessInsertCompatibility } from "../services/business-schema-diagnostics.service.js";
 import { createAuthToken, hashAuthToken } from "../utils/auth-token.js";
 import { verifyPassword } from "../utils/password.js";
 
@@ -53,6 +52,17 @@ function safeModelName(error: unknown): string | null {
   return /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(model) ? model : null;
 }
 
+async function collectRegistrationCompatibility(stage: RegistrationStage) {
+  if (stage !== "tenant_provisioning") return null;
+  try {
+    const diagnostics = await import("../services/business-schema-diagnostics.service.js");
+    return await diagnostics.collectBusinessInsertCompatibility();
+  } catch (diagnosticError) {
+    console.error("Registration schema diagnostics could not load", { diagnosticError });
+    return null;
+  }
+}
+
 async function failRegistration(res: Response, error: unknown, stage: RegistrationStage) {
   if (error instanceof service.PublicCatalogError) {
     fail(res, error);
@@ -70,9 +80,7 @@ async function failRegistration(res: Response, error: unknown, stage: Registrati
   const message = stage === "owner_session"
     ? "Workspace provisioning completed, but owner session setup could not complete"
     : "Workspace provisioning could not complete";
-  const businessInsertCompatibility = stage === "tenant_provisioning"
-    ? await collectBusinessInsertCompatibility()
-    : null;
+  const businessInsertCompatibility = await collectRegistrationCompatibility(stage);
 
   console.error("Public registration failed", {
     referenceId: res.locals.requestId,
