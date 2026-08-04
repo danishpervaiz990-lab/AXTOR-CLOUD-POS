@@ -6,6 +6,7 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "backend/scripts/qa-hardware-live-audit.mjs"
+      - "backend/scripts/qa-hardware-transaction-gate.mjs"
       - "backend/scripts/qa-hardware-payment-finalizer.mjs"
       - "backend/scripts/qa-hardware-operations-audit.mjs"
       - "backend/scripts/qa-hardware-branding-audit.mjs"
@@ -41,15 +42,21 @@ jobs:
         continue-on-error: true
         run: node backend/scripts/qa-hardware-live-audit.mjs
 
+      - name: Enforce stored Hardware transaction evidence
+        id: transaction_gate
+        if: always()
+        continue-on-error: true
+        run: node backend/scripts/qa-hardware-transaction-gate.mjs
+
       - name: Settle any remaining audited credit balance
         id: payment_finalizer
-        if: always() && steps.transaction_audit.outcome == 'success'
+        if: always() && steps.transaction_gate.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-hardware-payment-finalizer.mjs
 
       - name: Run branches, staffing, expenses, supplier and percentage reports audit
         id: operations_audit
-        if: always() && steps.transaction_audit.outcome == 'success' && steps.payment_finalizer.outcome == 'success'
+        if: always() && steps.transaction_gate.outcome == 'success' && steps.payment_finalizer.outcome == 'success'
         continue-on-error: true
         run: node backend/scripts/qa-hardware-operations-audit.mjs
 
@@ -110,7 +117,7 @@ jobs:
       - name: Enforce Hardware launch-readiness result
         if: always()
         env:
-          TRANSACTION_OUTCOME: ${{ steps.transaction_audit.outcome }}
+          TRANSACTION_OUTCOME: ${{ steps.transaction_gate.outcome }}
           PAYMENT_OUTCOME: ${{ steps.payment_finalizer.outcome }}
           OPERATIONS_OUTCOME: ${{ steps.operations_audit.outcome }}
           BRANDING_OUTCOME: ${{ steps.branding_audit.outcome }}
