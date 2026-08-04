@@ -8,6 +8,7 @@ on:
     paths:
       - "backend/scripts/qa-pharmacy-live-audit.mjs"
       - "backend/scripts/qa-pharmacy-live-audit-with-canonical-roles.mjs"
+      - "backend/scripts/qa-pharmacy-live-audit-finalize.mjs"
       - "backend/scripts/qa-pharmacy-browser-audit.mjs"
       - "backend/scripts/qa-retail-live-audit.payload.*"
       - "backend/tests/pharmacy-live-certification.test.mjs"
@@ -38,10 +39,16 @@ jobs:
         with:
           node-version: "22.x"
 
-      - name: Run Pharmacy transaction and data audit
+      - name: Run Pharmacy transaction, data and paginated persistence audit
         id: transaction_audit
         continue-on-error: true
-        run: node backend/scripts/qa-pharmacy-live-audit-with-canonical-roles.mjs
+        run: |
+          set +e
+          node backend/scripts/qa-pharmacy-live-audit-with-canonical-roles.mjs
+          BASE_AUDIT_STATUS=$?
+          set -e
+          echo "Base Pharmacy audit exit status: $BASE_AUDIT_STATUS"
+          node backend/scripts/qa-pharmacy-live-audit-finalize.mjs
 
       - name: Install browser runtime
         if: always() && steps.transaction_audit.outcome == 'success'
@@ -102,8 +109,8 @@ jobs:
           console.log('Pharmacy audit result:', report.overall);
           if (report.overall !== 'PASS') process.exit(1);
           if (report.counts?.productCount !== 100) process.exit(1);
-          if (report.counts?.customerCount !== 200) process.exit(1);
-          if (report.counts?.invoiceCount !== 500) process.exit(1);
+          if (report.counts?.customerCount !== 200 || report.counts?.uniqueCustomerIds !== 200) process.exit(1);
+          if (report.counts?.invoiceCount !== 500 || report.counts?.uniqueInvoiceIds !== 500 || report.counts?.uniqueDocumentNumbers !== 500) process.exit(1);
           const users = report.browser?.users || [];
           if (users.length !== 5 || users.some((user) => user.pass !== true || user.pages?.length !== 8)) process.exit(1);
           NODE
