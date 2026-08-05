@@ -1,0 +1,968 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("GROCERY_DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  LOCKED
+}
+
+enum RoleKey {
+  OWNER
+  ADMINISTRATOR
+  MANAGER
+  CASHIER
+  INVENTORY_MANAGER
+  ACCOUNTANT
+  SALESPERSON
+  VIEWER_AUDITOR
+}
+
+enum ProductType {
+  STANDARD
+  WEIGHTED
+  SERVICE
+}
+
+enum BatchStatus {
+  AVAILABLE
+  QUARANTINED
+  EXPIRED
+  DAMAGED
+  DEPLETED
+}
+
+enum InventoryMovementType {
+  OPENING
+  PURCHASE_RECEIPT
+  SALE
+  SALE_RETURN
+  PURCHASE_RETURN
+  TRANSFER_IN
+  TRANSFER_OUT
+  COUNT_GAIN
+  COUNT_LOSS
+  ADJUSTMENT_GAIN
+  ADJUSTMENT_LOSS
+  DAMAGE
+  WASTAGE
+  EXPIRY
+}
+
+enum SaleStatus {
+  DRAFT
+  HELD
+  COMPLETED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+  PARTIALLY_RETURNED
+  FULLY_RETURNED
+  REFUNDED
+}
+
+enum PurchaseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum PaymentMethodType {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  MOBILE_WALLET
+  CUSTOMER_CREDIT
+  GIFT_VOUCHER
+  LOYALTY
+  CHEQUE
+  CUSTOM
+}
+
+enum PaymentDirection {
+  RECEIPT
+  PAYMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  POSTED
+  REVERSED
+  FAILED
+}
+
+enum ChequeDirection {
+  INWARD
+  OUTWARD
+}
+
+enum ChequeStatus {
+  RECEIVED
+  ISSUED
+  POST_DATED
+  DUE_TODAY
+  DEPOSITED
+  SUBMITTED_FOR_CLEARING
+  CLEARED
+  BOUNCED
+  RETURNED
+  REPLACED
+  CANCELLED
+  STOPPED
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+  REOPENED
+}
+
+enum CashMovementType {
+  OPENING
+  CASH_IN
+  CASH_OUT
+  DROP
+  WITHDRAWAL
+  REFUND
+  CLOSING_ADJUSTMENT
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  POST
+  REVERSE
+  CLEAR
+  BOUNCE
+  RETURN
+  CANCEL
+  REOPEN
+  EXPORT
+  LOGIN
+  LOGOUT
+}
+
+model Business {
+  id                  String               @id @default(uuid()) @db.Uuid
+  slug                String               @unique
+  name                String
+  currencyCode        String               @default("QAR") @db.VarChar(3)
+  timezone            String               @default("Asia/Qatar")
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  users               User[]
+  branches            Branch[]
+  warehouses          Warehouse[]
+  registers           Register[]
+  categories          Category[]
+  units               Unit[]
+  products            Product[]
+  productBatches      ProductBatch[]
+  inventoryBalances   InventoryBalance[]
+  inventoryMovements  InventoryMovement[]
+  customers           Customer[]
+  suppliers           Supplier[]
+  sales               Sale[]
+  purchaseOrders      PurchaseOrder[]
+  goodsReceipts       GoodsReceipt[]
+  paymentAccounts     PaymentAccount[]
+  paymentTransactions PaymentTransaction[]
+  cheques             Cheque[]
+  shifts              CashierShift[]
+  cashMovements       CashMovement[]
+  expenses            Expense[]
+  ledgerEntries       LedgerEntry[]
+  auditLogs           AuditLog[]
+  idempotencyRecords  IdempotencyRecord[]
+
+  @@map("grocery_businesses")
+}
+
+model User {
+  id                  String               @id @default(uuid()) @db.Uuid
+  businessId          String               @db.Uuid
+  email               String
+  passwordHash        String
+  displayName         String
+  role                 RoleKey
+  status               UserStatus           @default(ACTIVE)
+  failedLoginCount    Int                  @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  business            Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  sessions            Session[]
+  cashierSales        Sale[]               @relation("SaleCashier")
+  purchaseOrders      PurchaseOrder[]      @relation("PurchaseOrderCreator")
+  goodsReceipts       GoodsReceipt[]       @relation("GoodsReceiptReceiver")
+  paymentsCreated     PaymentTransaction[] @relation("PaymentCreator")
+  chequesCreated      Cheque[]             @relation("ChequeCreator")
+  cashierShifts       CashierShift[]       @relation("ShiftCashier")
+  cashMovements       CashMovement[]       @relation("CashMovementCreator")
+  expensesCreated     Expense[]            @relation("ExpenseCreator")
+  auditLogs           AuditLog[]           @relation("AuditActor")
+
+  @@unique([businessId, email])
+  @@index([businessId, role, status])
+  @@map("grocery_users")
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  businessId   String   @db.Uuid
+  userId       String   @db.Uuid
+  tokenHash    String   @unique
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  ipHash       String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, userId, expiresAt])
+  @@map("grocery_sessions")
+}
+
+model Branch {
+  id                  String               @id @default(uuid()) @db.Uuid
+  businessId          String               @db.Uuid
+  code                String
+  name                String
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  business            Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  warehouses          Warehouse[]
+  registers           Register[]
+  sales               Sale[]
+  purchaseOrders      PurchaseOrder[]
+  goodsReceipts       GoodsReceipt[]
+  paymentAccounts     PaymentAccount[]
+  paymentTransactions PaymentTransaction[]
+  cheques             Cheque[]
+  shifts              CashierShift[]
+  expenses            Expense[]
+
+  @@unique([businessId, code])
+  @@index([businessId, active])
+  @@map("grocery_branches")
+}
+
+model Warehouse {
+  id                 String              @id @default(uuid()) @db.Uuid
+  businessId         String              @db.Uuid
+  branchId           String              @db.Uuid
+  code               String
+  name               String
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  business           Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  registers          Register[]
+  productBatches     ProductBatch[]
+  inventoryBalances InventoryBalance[]
+  inventoryMovements InventoryMovement[]
+  sales              Sale[]
+  purchaseOrders     PurchaseOrder[]
+  goodsReceipts      GoodsReceipt[]
+
+  @@unique([businessId, code])
+  @@index([businessId, branchId, active])
+  @@map("grocery_warehouses")
+}
+
+model Register {
+  id          String         @id @default(uuid()) @db.Uuid
+  businessId  String         @db.Uuid
+  branchId    String         @db.Uuid
+  warehouseId String?        @db.Uuid
+  code        String
+  name        String
+  active      Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  business    Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch      Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  warehouse   Warehouse?     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  sales       Sale[]
+  shifts      CashierShift[]
+
+  @@unique([businessId, code])
+  @@index([businessId, branchId, active])
+  @@map("grocery_registers")
+}
+
+model Category {
+  id         String    @id @default(uuid()) @db.Uuid
+  businessId String    @db.Uuid
+  code       String
+  name       String
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  products   Product[]
+
+  @@unique([businessId, code])
+  @@index([businessId, active])
+  @@map("grocery_categories")
+}
+
+model Unit {
+  id              String           @id @default(uuid()) @db.Uuid
+  businessId      String           @db.Uuid
+  code            String
+  name            String
+  symbol          String
+  decimalScale    Int              @default(3)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  products        Product[]
+  conversionsFrom UnitConversion[] @relation("ConversionFromUnit")
+  conversionsTo   UnitConversion[] @relation("ConversionToUnit")
+
+  @@unique([businessId, code])
+  @@map("grocery_units")
+}
+
+model Product {
+  id                  String              @id @default(uuid()) @db.Uuid
+  businessId          String              @db.Uuid
+  categoryId          String?             @db.Uuid
+  baseUnitId          String              @db.Uuid
+  sku                 String
+  plu                 String?
+  name                String
+  localName           String?
+  type                ProductType         @default(STANDARD)
+  trackInventory      Boolean             @default(true)
+  trackBatches        Boolean             @default(false)
+  trackExpiry         Boolean             @default(false)
+  allowNegativeStock  Boolean             @default(false)
+  allowPriceOverride  Boolean             @default(false)
+  allowDiscount       Boolean             @default(true)
+  costPrice           Decimal             @default(0) @db.Decimal(19, 4)
+  retailPrice         Decimal             @default(0) @db.Decimal(19, 4)
+  wholesalePrice      Decimal?            @db.Decimal(19, 4)
+  memberPrice         Decimal?            @db.Decimal(19, 4)
+  minimumStock        Decimal             @default(0) @db.Decimal(19, 4)
+  reorderQuantity     Decimal             @default(0) @db.Decimal(19, 4)
+  taxRate             Decimal             @default(0) @db.Decimal(9, 6)
+  active              Boolean             @default(true)
+  version             Int                 @default(1)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  business            Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  category            Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  baseUnit            Unit                @relation(fields: [baseUnitId], references: [id], onDelete: Restrict)
+  barcodes            ProductBarcode[]
+  unitConversions     UnitConversion[]
+  batches             ProductBatch[]
+  inventoryBalances   InventoryBalance[]
+  inventoryMovements  InventoryMovement[]
+  saleItems           SaleItem[]
+  purchaseOrderItems  PurchaseOrderItem[]
+  goodsReceiptItems   GoodsReceiptItem[]
+
+  @@unique([businessId, sku])
+  @@unique([businessId, plu])
+  @@index([businessId, categoryId, active])
+  @@index([businessId, name])
+  @@map("grocery_products")
+}
+
+model ProductBarcode {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @db.Uuid
+  productId  String   @db.Uuid
+  barcode    String
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, barcode])
+  @@index([businessId, productId])
+  @@map("grocery_product_barcodes")
+}
+
+model UnitConversion {
+  id         String  @id @default(uuid()) @db.Uuid
+  businessId String  @db.Uuid
+  productId  String  @db.Uuid
+  fromUnitId String  @db.Uuid
+  toUnitId   String  @db.Uuid
+  factor     Decimal @db.Decimal(19, 6)
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fromUnit   Unit    @relation("ConversionFromUnit", fields: [fromUnitId], references: [id], onDelete: Restrict)
+  toUnit     Unit    @relation("ConversionToUnit", fields: [toUnitId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, productId, fromUnitId, toUnitId])
+  @@map("grocery_unit_conversions")
+}
+
+model ProductBatch {
+  id                String             @id @default(uuid()) @db.Uuid
+  businessId        String             @db.Uuid
+  productId         String             @db.Uuid
+  warehouseId       String             @db.Uuid
+  batchNumber       String
+  manufactureDate   DateTime?
+  expiryDate        DateTime?
+  receivedQuantity  Decimal            @db.Decimal(19, 4)
+  remainingQuantity Decimal            @db.Decimal(19, 4)
+  unitCost          Decimal            @db.Decimal(19, 4)
+  status            BatchStatus        @default(AVAILABLE)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse         Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  inventoryBalances InventoryBalance[]
+  inventoryMovements InventoryMovement[]
+  saleItems         SaleItem[]
+  goodsReceiptItems GoodsReceiptItem[]
+
+  @@unique([businessId, productId, warehouseId, batchNumber])
+  @@index([businessId, warehouseId, expiryDate, status])
+  @@map("grocery_product_batches")
+}
+
+model InventoryBalance {
+  id          String        @id @default(uuid()) @db.Uuid
+  businessId  String        @db.Uuid
+  warehouseId String        @db.Uuid
+  productId   String        @db.Uuid
+  batchId     String?       @db.Uuid
+  scopeKey    String        @default("NO_BATCH")
+  quantity    Decimal       @default(0) @db.Decimal(19, 4)
+  reserved    Decimal       @default(0) @db.Decimal(19, 4)
+  version     Int           @default(1)
+  updatedAt   DateTime      @updatedAt
+  business    Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  warehouse   Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product     Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch       ProductBatch? @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, warehouseId, productId, scopeKey])
+  @@index([businessId, productId, warehouseId])
+  @@map("grocery_inventory_balances")
+}
+
+model InventoryMovement {
+  id             String                @id @default(uuid()) @db.Uuid
+  businessId     String                @db.Uuid
+  branchId       String                @db.Uuid
+  warehouseId    String                @db.Uuid
+  productId      String                @db.Uuid
+  batchId        String?               @db.Uuid
+  type           InventoryMovementType
+  quantity       Decimal               @db.Decimal(19, 4)
+  quantityBefore Decimal               @db.Decimal(19, 4)
+  quantityAfter  Decimal               @db.Decimal(19, 4)
+  unitCost       Decimal?              @db.Decimal(19, 4)
+  referenceType  String
+  referenceId    String
+  reason         String?
+  idempotencyKey String?
+  createdAt      DateTime              @default(now())
+  business       Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product        Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch          ProductBatch?         @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, branchId, warehouseId, productId, createdAt])
+  @@index([businessId, referenceType, referenceId])
+  @@map("grocery_inventory_movements")
+}
+
+model Customer {
+  id            String        @id @default(uuid()) @db.Uuid
+  businessId    String        @db.Uuid
+  code          String
+  name          String
+  phone         String?
+  email         String?
+  creditEnabled Boolean       @default(false)
+  creditLimit   Decimal       @default(0) @db.Decimal(19, 4)
+  creditHold    Boolean       @default(false)
+  active        Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  sales         Sale[]
+  cheques       Cheque[]
+  ledgerEntries LedgerEntry[]
+
+  @@unique([businessId, code])
+  @@index([businessId, name, active])
+  @@index([businessId, phone])
+  @@map("grocery_customers")
+}
+
+model Supplier {
+  id            String          @id @default(uuid()) @db.Uuid
+  businessId    String          @db.Uuid
+  code          String
+  name          String
+  phone         String?
+  email         String?
+  creditLimit   Decimal         @default(0) @db.Decimal(19, 4)
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  business      Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  purchaseOrders PurchaseOrder[]
+  goodsReceipts GoodsReceipt[]
+  cheques       Cheque[]
+  ledgerEntries LedgerEntry[]
+
+  @@unique([businessId, code])
+  @@index([businessId, name, active])
+  @@map("grocery_suppliers")
+}
+
+model Sale {
+  id            String               @id @default(uuid()) @db.Uuid
+  businessId    String               @db.Uuid
+  branchId      String               @db.Uuid
+  warehouseId   String               @db.Uuid
+  registerId    String               @db.Uuid
+  cashierId     String               @db.Uuid
+  customerId    String?              @db.Uuid
+  invoiceNumber String
+  status        SaleStatus           @default(DRAFT)
+  subtotal      Decimal              @default(0) @db.Decimal(19, 4)
+  discountTotal Decimal              @default(0) @db.Decimal(19, 4)
+  taxTotal      Decimal              @default(0) @db.Decimal(19, 4)
+  grandTotal    Decimal              @default(0) @db.Decimal(19, 4)
+  paidTotal     Decimal              @default(0) @db.Decimal(19, 4)
+  balanceDue    Decimal              @default(0) @db.Decimal(19, 4)
+  dueAt         DateTime?
+  completedAt   DateTime?
+  version       Int                  @default(1)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  business      Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch        Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  warehouse     Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  register      Register             @relation(fields: [registerId], references: [id], onDelete: Restrict)
+  cashier       User                 @relation("SaleCashier", fields: [cashierId], references: [id], onDelete: Restrict)
+  customer      Customer?            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items         SaleItem[]
+  payments      PaymentTransaction[]
+
+  @@unique([businessId, invoiceNumber])
+  @@index([businessId, branchId, createdAt])
+  @@index([businessId, customerId, status])
+  @@map("grocery_sales")
+}
+
+model SaleItem {
+  id               String        @id @default(uuid()) @db.Uuid
+  businessId       String        @db.Uuid
+  saleId           String        @db.Uuid
+  productId        String        @db.Uuid
+  batchId          String?       @db.Uuid
+  quantity         Decimal       @db.Decimal(19, 4)
+  unitPrice        Decimal       @db.Decimal(19, 4)
+  unitCostSnapshot Decimal       @db.Decimal(19, 4)
+  discountAmount   Decimal       @default(0) @db.Decimal(19, 4)
+  taxAmount        Decimal       @default(0) @db.Decimal(19, 4)
+  lineTotal        Decimal       @db.Decimal(19, 4)
+  createdAt        DateTime      @default(now())
+  sale             Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product          Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch            ProductBatch? @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, saleId])
+  @@index([businessId, productId])
+  @@map("grocery_sale_items")
+}
+
+model PurchaseOrder {
+  id            String              @id @default(uuid()) @db.Uuid
+  businessId    String              @db.Uuid
+  branchId      String              @db.Uuid
+  warehouseId   String              @db.Uuid
+  supplierId    String              @db.Uuid
+  createdById   String              @db.Uuid
+  orderNumber   String
+  status        PurchaseStatus      @default(DRAFT)
+  expectedAt    DateTime?
+  subtotal      Decimal             @default(0) @db.Decimal(19, 4)
+  discountTotal Decimal             @default(0) @db.Decimal(19, 4)
+  taxTotal      Decimal             @default(0) @db.Decimal(19, 4)
+  grandTotal    Decimal             @default(0) @db.Decimal(19, 4)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch        Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  warehouse     Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  supplier      Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy     User                @relation("PurchaseOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  items         PurchaseOrderItem[]
+  receipts      GoodsReceipt[]
+
+  @@unique([businessId, orderNumber])
+  @@index([businessId, supplierId, status])
+  @@map("grocery_purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id               String        @id @default(uuid()) @db.Uuid
+  businessId       String        @db.Uuid
+  purchaseOrderId  String        @db.Uuid
+  productId        String        @db.Uuid
+  orderedQuantity  Decimal       @db.Decimal(19, 4)
+  receivedQuantity Decimal       @default(0) @db.Decimal(19, 4)
+  unitCost         Decimal       @db.Decimal(19, 4)
+  lineTotal        Decimal       @db.Decimal(19, 4)
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product          Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, purchaseOrderId])
+  @@map("grocery_purchase_order_items")
+}
+
+model GoodsReceipt {
+  id              String             @id @default(uuid()) @db.Uuid
+  businessId      String             @db.Uuid
+  branchId        String             @db.Uuid
+  warehouseId     String             @db.Uuid
+  supplierId      String             @db.Uuid
+  purchaseOrderId String?            @db.Uuid
+  receivedById    String             @db.Uuid
+  receiptNumber   String
+  receivedAt      DateTime           @default(now())
+  postedAt        DateTime?
+  createdAt       DateTime           @default(now())
+  business        Business           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch          Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  warehouse       Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  supplier        Supplier           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrder   PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  receivedBy      User               @relation("GoodsReceiptReceiver", fields: [receivedById], references: [id], onDelete: Restrict)
+  items           GoodsReceiptItem[]
+
+  @@unique([businessId, receiptNumber])
+  @@index([businessId, supplierId, receivedAt])
+  @@map("grocery_goods_receipts")
+}
+
+model GoodsReceiptItem {
+  id             String        @id @default(uuid()) @db.Uuid
+  businessId     String        @db.Uuid
+  goodsReceiptId String        @db.Uuid
+  productId      String        @db.Uuid
+  batchId        String?       @db.Uuid
+  quantity       Decimal       @db.Decimal(19, 4)
+  unitCost       Decimal       @db.Decimal(19, 4)
+  goodsReceipt   GoodsReceipt  @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  product        Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch          ProductBatch? @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, goodsReceiptId])
+  @@map("grocery_goods_receipt_items")
+}
+
+model PaymentAccount {
+  id                  String               @id @default(uuid()) @db.Uuid
+  businessId          String               @db.Uuid
+  branchId            String?              @db.Uuid
+  code                String
+  name                String
+  methodType          PaymentMethodType
+  currencyCode        String               @db.VarChar(3)
+  maskedAccountNumber String?
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  business            Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch              Branch?              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  transactions        PaymentTransaction[]
+  cheques             Cheque[]
+  expenses            Expense[]
+
+  @@unique([businessId, code])
+  @@index([businessId, methodType, active])
+  @@map("grocery_payment_accounts")
+}
+
+model PaymentTransaction {
+  id                   String              @id @default(uuid()) @db.Uuid
+  businessId           String              @db.Uuid
+  branchId             String?             @db.Uuid
+  saleId               String?             @db.Uuid
+  accountId            String              @db.Uuid
+  shiftId              String?             @db.Uuid
+  createdById          String              @db.Uuid
+  methodType           PaymentMethodType
+  direction            PaymentDirection
+  status               PaymentStatus       @default(POSTED)
+  amount               Decimal             @db.Decimal(19, 4)
+  feeAmount            Decimal             @default(0) @db.Decimal(19, 4)
+  currencyCode         String              @db.VarChar(3)
+  exchangeRate         Decimal             @default(1) @db.Decimal(19, 8)
+  reference            String?
+  idempotencyKey       String
+  postedAt             DateTime             @default(now())
+  reversedAt           DateTime?
+  reversalReason       String?
+  createdAt            DateTime             @default(now())
+  business             Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch               Branch?              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  sale                 Sale?                @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  account              PaymentAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  shift                CashierShift?        @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  createdBy            User                 @relation("PaymentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  cheque               Cheque?
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, methodType, direction, postedAt])
+  @@index([businessId, accountId, postedAt])
+  @@map("grocery_payment_transactions")
+}
+
+model Cheque {
+  id                   String                @id @default(uuid()) @db.Uuid
+  businessId           String                @db.Uuid
+  branchId             String?               @db.Uuid
+  paymentAccountId     String                @db.Uuid
+  paymentTransactionId String?               @unique @db.Uuid
+  customerId           String?               @db.Uuid
+  supplierId           String?               @db.Uuid
+  createdById          String                @db.Uuid
+  direction            ChequeDirection
+  status               ChequeStatus
+  chequeNumber         String
+  bankName             String
+  bankBranch           String?
+  maskedAccount        String?
+  drawerOrIssuer       String?
+  payeeOrBeneficiary   String?
+  amount               Decimal               @db.Decimal(19, 4)
+  currencyCode         String                @db.VarChar(3)
+  chequeDate           DateTime
+  receivedOrIssuedAt   DateTime
+  dueDate              DateTime
+  depositDate          DateTime?
+  clearingDate         DateTime?
+  bounceOrReturnDate   DateTime?
+  cancellationDate     DateTime?
+  notes                String?
+  version              Int                   @default(1)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  business             Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch               Branch?               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  paymentAccount       PaymentAccount        @relation(fields: [paymentAccountId], references: [id], onDelete: Restrict)
+  paymentTransaction   PaymentTransaction?   @relation(fields: [paymentTransactionId], references: [id], onDelete: Restrict)
+  customer             Customer?             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplier             Supplier?             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy            User                  @relation("ChequeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  allocations          ChequeAllocation[]
+  statusHistory        ChequeStatusHistory[]
+  reminders            ChequeReminder[]
+
+  @@unique([businessId, direction, chequeNumber, bankName])
+  @@index([businessId, direction, status, dueDate])
+  @@index([businessId, customerId])
+  @@index([businessId, supplierId])
+  @@map("grocery_cheques")
+}
+
+model ChequeAllocation {
+  id            String   @id @default(uuid()) @db.Uuid
+  businessId    String   @db.Uuid
+  chequeId      String   @db.Uuid
+  referenceType String
+  referenceId   String
+  amount        Decimal  @db.Decimal(19, 4)
+  createdAt     DateTime @default(now())
+  cheque        Cheque   @relation(fields: [chequeId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, chequeId, referenceType, referenceId])
+  @@index([businessId, referenceType, referenceId])
+  @@map("grocery_cheque_allocations")
+}
+
+model ChequeStatusHistory {
+  id          String       @id @default(uuid()) @db.Uuid
+  businessId  String       @db.Uuid
+  chequeId    String       @db.Uuid
+  fromStatus  ChequeStatus?
+  toStatus    ChequeStatus
+  actorUserId String       @db.Uuid
+  reason      String?
+  occurredAt  DateTime     @default(now())
+  cheque      Cheque       @relation(fields: [chequeId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, chequeId, occurredAt])
+  @@map("grocery_cheque_status_history")
+}
+
+model ChequeReminder {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @db.Uuid
+  chequeId    String   @db.Uuid
+  reminderKey String
+  scheduledAt DateTime
+  deliveredAt DateTime?
+  createdAt   DateTime @default(now())
+  cheque      Cheque   @relation(fields: [chequeId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, chequeId, reminderKey])
+  @@index([businessId, scheduledAt, deliveredAt])
+  @@map("grocery_cheque_reminders")
+}
+
+model CashierShift {
+  id               String               @id @default(uuid()) @db.Uuid
+  businessId       String               @db.Uuid
+  branchId         String               @db.Uuid
+  registerId       String               @db.Uuid
+  cashierId        String               @db.Uuid
+  status           ShiftStatus          @default(OPEN)
+  openingCash      Decimal              @default(0) @db.Decimal(19, 4)
+  expectedCash     Decimal              @default(0) @db.Decimal(19, 4)
+  actualCash       Decimal?             @db.Decimal(19, 4)
+  variance         Decimal?             @db.Decimal(19, 4)
+  openedAt         DateTime             @default(now())
+  closedAt         DateTime?
+  reopenedAt       DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  business         Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch           Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  register         Register             @relation(fields: [registerId], references: [id], onDelete: Restrict)
+  cashier          User                 @relation("ShiftCashier", fields: [cashierId], references: [id], onDelete: Restrict)
+  cashMovements    CashMovement[]
+  paymentTransactions PaymentTransaction[]
+
+  @@index([businessId, registerId, status])
+  @@index([businessId, cashierId, openedAt])
+  @@map("grocery_cashier_shifts")
+}
+
+model CashMovement {
+  id          String           @id @default(uuid()) @db.Uuid
+  businessId  String           @db.Uuid
+  shiftId     String           @db.Uuid
+  createdById String           @db.Uuid
+  type        CashMovementType
+  amount      Decimal          @db.Decimal(19, 4)
+  reason      String
+  createdAt   DateTime         @default(now())
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  shift       CashierShift     @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  createdBy   User             @relation("CashMovementCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([businessId, shiftId, createdAt])
+  @@map("grocery_cash_movements")
+}
+
+model Expense {
+  id               String         @id @default(uuid()) @db.Uuid
+  businessId       String         @db.Uuid
+  branchId         String         @db.Uuid
+  paymentAccountId String         @db.Uuid
+  createdById      String         @db.Uuid
+  expenseNumber    String
+  category         String
+  description      String
+  amount           Decimal        @db.Decimal(19, 4)
+  taxAmount        Decimal        @default(0) @db.Decimal(19, 4)
+  incurredAt       DateTime
+  createdAt        DateTime       @default(now())
+  business         Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  branch           Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  paymentAccount   PaymentAccount @relation(fields: [paymentAccountId], references: [id], onDelete: Restrict)
+  createdBy        User           @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, expenseNumber])
+  @@index([businessId, branchId, incurredAt])
+  @@map("grocery_expenses")
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid()) @db.Uuid
+  businessId    String          @db.Uuid
+  customerId    String?         @db.Uuid
+  supplierId    String?         @db.Uuid
+  direction     LedgerDirection
+  amount        Decimal         @db.Decimal(19, 4)
+  referenceType String
+  referenceId   String
+  description   String
+  occurredAt    DateTime        @default(now())
+  business      Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer      Customer?       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, customerId, occurredAt])
+  @@index([businessId, supplierId, occurredAt])
+  @@index([businessId, referenceType, referenceId])
+  @@map("grocery_ledger_entries")
+}
+
+model AuditLog {
+  id           String      @id @default(uuid()) @db.Uuid
+  businessId   String      @db.Uuid
+  actorUserId  String?     @db.Uuid
+  action       AuditAction
+  entityType   String
+  entityId     String
+  requestId    String?
+  beforeData   Json?
+  afterData    Json?
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+  business     Business    @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  actor        User?       @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, entityType, entityId, createdAt])
+  @@index([businessId, actorUserId, createdAt])
+  @@map("grocery_audit_logs")
+}
+
+model IdempotencyRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  businessId   String   @db.Uuid
+  key          String
+  operation    String
+  requestHash  String
+  statusCode   Int?
+  responseBody Json?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  completedAt  DateTime?
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, key])
+  @@index([businessId, operation, expiresAt])
+  @@map("grocery_idempotency_records")
+}
