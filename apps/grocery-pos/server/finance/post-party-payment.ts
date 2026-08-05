@@ -36,7 +36,10 @@ export async function postPartyPayment(input: {
 }) {
   requirePermission(input.context, "payments.create");
   if (!input.idempotencyKey || input.idempotencyKey.length > 160) throw new Error("INVALID_IDEMPOTENCY_KEY");
-  if ([PaymentMethodType.CHEQUE, PaymentMethodType.CUSTOMER_CREDIT].includes(input.methodType)) {
+  if (
+    input.methodType === PaymentMethodType.CHEQUE ||
+    input.methodType === PaymentMethodType.CUSTOMER_CREDIT
+  ) {
     throw new Error("DEDICATED_PAYMENT_WORKFLOW_REQUIRED");
   }
 
