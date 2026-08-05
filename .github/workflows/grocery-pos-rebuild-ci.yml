@@ -36,7 +36,7 @@ jobs:
       GROCERY_LOG_LEVEL: error
       GROCERY_CRON_SECRET: ci-cron-secret-that-is-longer-than-twenty-four-characters
       GROCERY_FILE_STORAGE_PROVIDER: vercel-blob
-      GROCERY_EMAIL_FROM_NAME: AXTLOR Grocery POS Cloud CI
+      GROCERY_EMAIL_FROM_NAME: AXTOR Grocery POS Cloud CI
       GROCERY_EMAIL_FROM_ADDRESS: no-reply@example.com
 
     steps:
