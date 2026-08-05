@@ -1,114 +1,45 @@
 const RAW = "https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-POS/frontend-grocery/demo-static/";
 const MAX_BYTES = 20 * 1024 * 1024;
-
 export const runtime = "edge";
 export const config = { runtime: "edge" };
 
-const NATIVE_PAGES = new Set([
-  "grocery-dashboard.html",
-  "grocery-terminal.html",
-  "grocery-products.html",
-  "grocery-batches.html",
-  "grocery-expiry.html",
-  "grocery-receiving.html",
-  "grocery-waste.html",
-  "grocery-recalls.html",
-  "grocery-reports.html",
+const MANAGED = new Set([
+  "grocery-sales.html","grocery-categories.html","grocery-purchases.html","grocery-suppliers.html",
+  "grocery-promotions.html","grocery-loyalty.html","grocery-labels.html","grocery-shifts.html",
+  "grocery-expenses.html","grocery-accounts.html","grocery-notifications.html","grocery-users.html",
   "grocery-settings.html"
 ]);
-
-const CONTENT_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".pdf": "application/pdf"
-};
-
-function safePath(value) {
-  let decoded;
-  try { decoded = decodeURIComponent(String(value || "")).replace(/^\/+/, ""); }
-  catch { return null; }
-  const selected = decoded || "grocery-dashboard.html";
-  if (selected.length > 500 || selected.includes("..") || selected.includes("\\") || !/^[A-Za-z0-9._/()-]+$/.test(selected)) return null;
-  return selected;
-}
-
-function extension(path) {
-  const match = path.toLowerCase().match(/(\.[a-z0-9]+)$/);
-  return match ? match[1] : "";
-}
-
-function responseText(message, status) {
-  return new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
-}
-
-function removeScript(html, filename) {
-  return html.replace(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*><\/script>/gi, function (tag) {
-    return tag.includes(filename) ? "" : tag;
-  });
-}
-
-function prepareHtml(path, html) {
-  const page = path.split("/").pop();
-  if (!NATIVE_PAGES.has(page)) html = removeScript(html, "grocery-app.js");
-
-  if (!html.includes("grocery-sidebar-repair.js") && !NATIVE_PAGES.has(page)) {
-    html = html.replace(/<\/body>/i, '<script src="js/grocery-sidebar-repair.js?v=20260805-all-pages2"></script></body>');
+const NATIVE = new Set([
+  "grocery-dashboard.html","grocery-terminal.html","grocery-products.html","grocery-batches.html",
+  "grocery-expiry.html","grocery-receiving.html","grocery-waste.html","grocery-recalls.html","grocery-reports.html"
+]);
+const TYPES={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".svg":"image/svg+xml",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".ico":"image/x-icon",".woff":"font/woff",".woff2":"font/woff2",".pdf":"application/pdf"};
+function safePath(value){let decoded;try{decoded=decodeURIComponent(String(value||"")).replace(/^\/+/,"")}catch{return null}const selected=decoded||"grocery-dashboard.html";if(selected.length>500||selected.includes("..")||selected.includes("\\")||!/^[A-Za-z0-9._/()-]+$/.test(selected))return null;return selected}
+function ext(path){const m=path.toLowerCase().match(/(\.[a-z0-9]+)$/);return m?m[1]:""}
+function text(message,status){return new Response(message,{status,headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-store"}})}
+function injectBeforeBody(html,code){return /<\/body>/i.test(html)?html.replace(/<\/body>/i,code+"</body>"):html+code}
+function prepare(path,html){const page=path.split("/").pop();
+  if(MANAGED.has(page)){
+    html=html.replace(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*><\/script>/gi,"");
+    html=injectBeforeBody(html,'<script src="/apps/grocery/js/axtor-api.js?v=20260805-managed1"></script><script src="/apps/grocery/js/grocery-managed-modules.js?v=20260805-managed1"></script><script src="/apps/grocery/js/grocery-navigation-ui.js?v=20260805-managed1"></script>');
+    return html;
   }
-  if (!html.includes("grocery-navigation-ui.js")) {
-    html = html.replace(/<\/body>/i, '<script src="js/grocery-navigation-ui.js?v=20260805-all-pages2"></script></body>');
-  }
+  if(!NATIVE.has(page)) html=html.replace(/<script\b[^>]*\bsrc=["'][^"']*grocery-app\.js[^"']*["'][^>]*><\/script>/gi,"");
+  if(!html.includes("grocery-navigation-ui.js")) html=injectBeforeBody(html,'<script src="js/grocery-navigation-ui.js?v=20260805-managed1"></script>');
   return html;
 }
-
-export default async function groceryAsset(request) {
-  if (request.method !== "GET" && request.method !== "HEAD") return responseText("Method not allowed", 405);
-  const url = new URL(request.url);
-  const path = safePath(url.searchParams.get("path"));
-  if (!path) return responseText("Invalid Grocery asset path", 400);
-
-  const encoded = path.split("/").map(encodeURIComponent).join("/");
-  const source = RAW + encoded + "?release=20260805-all-pages2";
-
-  try {
-    const upstream = await fetch(source, {
-      method: request.method,
-      cache: "no-store",
-      headers: { Accept: "*/*", "User-Agent": "Axtor-Grocery-Delivery/3.1" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!upstream.ok) return responseText(upstream.status === 404 ? "Grocery page not found" : "Grocery source unavailable", upstream.status === 404 ? 404 : 502);
-
-    const type = CONTENT_TYPES[extension(path)] || upstream.headers.get("content-type") || "application/octet-stream";
-    const headers = new Headers({
-      "Content-Type": type,
-      "Cache-Control": type.startsWith("text/html") ? "no-store, max-age=0" : "public, max-age=60, must-revalidate",
-      "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "DENY",
-      "X-Robots-Tag": "noindex",
-      "X-Axtor-Industry": "grocery",
-      "X-Axtor-Grocery-Release": "20260805-all-pages2"
-    });
-    if (request.method === "HEAD") return new Response(null, { status: 200, headers });
-
-    const bytes = new Uint8Array(await upstream.arrayBuffer());
-    if (bytes.byteLength > MAX_BYTES) return responseText("Grocery asset exceeds delivery limit", 413);
-    if (!type.startsWith("text/html")) return new Response(bytes, { status: 200, headers });
-
-    const html = prepareHtml(path, new TextDecoder().decode(bytes));
-    return new Response(html, { status: 200, headers });
-  } catch (error) {
-    console.error("Grocery asset delivery failed", { path, message: error instanceof Error ? error.message : String(error) });
-    return responseText("Grocery source unavailable", 502);
-  }
+export default async function groceryAsset(request){
+  if(request.method!=="GET"&&request.method!=="HEAD")return text("Method not allowed",405);
+  const url=new URL(request.url),path=safePath(url.searchParams.get("path"));if(!path)return text("Invalid Grocery asset path",400);
+  const source=RAW+path.split("/").map(encodeURIComponent).join("/")+"?release=20260805-managed1";
+  try{
+    const upstream=await fetch(source,{method:request.method,cache:"no-store",headers:{Accept:"*/*","User-Agent":"Axtor-Grocery-Delivery/4.0"},redirect:"follow",signal:AbortSignal.timeout(15000)});
+    if(!upstream.ok)return text(upstream.status===404?"Grocery page not found":"Grocery source unavailable",upstream.status===404?404:502);
+    const type=TYPES[ext(path)]||upstream.headers.get("content-type")||"application/octet-stream";
+    const headers=new Headers({"Content-Type":type,"Cache-Control":type.startsWith("text/html")?"no-store, max-age=0":"public, max-age=60, must-revalidate","X-Content-Type-Options":"nosniff","X-Frame-Options":"DENY","X-Robots-Tag":"noindex","X-Axtor-Industry":"grocery","X-Axtor-Grocery-Release":"20260805-managed1"});
+    if(request.method==="HEAD")return new Response(null,{status:200,headers});
+    const bytes=new Uint8Array(await upstream.arrayBuffer());if(bytes.byteLength>MAX_BYTES)return text("Grocery asset exceeds delivery limit",413);
+    if(!type.startsWith("text/html"))return new Response(bytes,{status:200,headers});
+    return new Response(prepare(path,new TextDecoder().decode(bytes)),{status:200,headers});
+  }catch(error){console.error("Grocery asset delivery failed",{path,message:error instanceof Error?error.message:String(error)});return text("Grocery source unavailable",502)}
 }
