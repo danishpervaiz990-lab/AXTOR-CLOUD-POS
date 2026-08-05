@@ -8,7 +8,7 @@ export default function LoginPage() {
     <main className="auth-shell">
       <section className="auth-panel" aria-labelledby="sign-in-heading">
         <div className="auth-card">
-          <Link className="brand" href="/" aria-label="Back to AXTLOR Grocery POS Cloud home">
+          <Link className="brand" href="/" aria-label="Back to AXTOR Grocery POS Cloud home">
             <span className="brand-mark" aria-hidden="true">AG</span>
             <span className="brand-copy">AXTOR Grocery<small>POS Cloud</small></span>
           </Link>
