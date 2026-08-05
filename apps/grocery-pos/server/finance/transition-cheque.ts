@@ -1,4 +1,10 @@
-import { AuditAction, ChequeStatus } from "@prisma/client";
+import {
+  AuditAction,
+  ChequeDirection,
+  ChequeStatus,
+  LedgerDirection,
+  PaymentStatus
+} from "@prisma/client";
 import { getDatabase } from "@/lib/db";
 import { assertChequeTransition, type ChequeStatusValue } from "@/server/finance/cheque-status";
 import { requirePermission, type Permission } from "@/server/permissions/permissions";
@@ -14,6 +20,13 @@ const permissionByTargetStatus: Partial<Record<ChequeStatusValue, Permission>> =
   CANCELLED: "cheques.cancel",
   REPLACED: "cheques.replace"
 };
+
+const failedPaymentStatuses: ReadonlySet<ChequeStatusValue> = new Set([
+  "BOUNCED",
+  "RETURNED",
+  "STOPPED",
+  "CANCELLED"
+]);
 
 function auditActionForStatus(status: ChequeStatusValue): AuditAction {
   switch (status) {
@@ -94,6 +107,78 @@ export async function transitionCheque(input: {
       throw new Error("CONCURRENT_MODIFICATION");
     }
 
+    let paymentStatus: PaymentStatus | null = null;
+    let ledgerEntryId: string | null = null;
+
+    if (cheque.paymentTransactionId && input.toStatus === "CLEARED") {
+      const paymentUpdate = await transaction.paymentTransaction.updateMany({
+        where: {
+          id: cheque.paymentTransactionId,
+          businessId: input.context.businessId,
+          status: PaymentStatus.PENDING
+        },
+        data: {
+          status: PaymentStatus.POSTED,
+          postedAt: occurredAt,
+          reversedAt: null,
+          reversalReason: null
+        }
+      });
+      if (paymentUpdate.count !== 1) {
+        throw new Error("CHEQUE_PAYMENT_STATE_CONFLICT");
+      }
+      paymentStatus = PaymentStatus.POSTED;
+
+      if (cheque.direction === ChequeDirection.INWARD && cheque.customerId) {
+        const ledger = await transaction.ledgerEntry.create({
+          data: {
+            businessId: input.context.businessId,
+            customerId: cheque.customerId,
+            direction: LedgerDirection.CREDIT,
+            amount: cheque.amount,
+            referenceType: "CHEQUE_CLEARING",
+            referenceId: cheque.id,
+            description: `Inward cheque ${cheque.chequeNumber} cleared`
+          }
+        });
+        ledgerEntryId = ledger.id;
+      }
+
+      if (cheque.direction === ChequeDirection.OUTWARD && cheque.supplierId) {
+        const ledger = await transaction.ledgerEntry.create({
+          data: {
+            businessId: input.context.businessId,
+            supplierId: cheque.supplierId,
+            direction: LedgerDirection.DEBIT,
+            amount: cheque.amount,
+            referenceType: "CHEQUE_CLEARING",
+            referenceId: cheque.id,
+            description: `Outward cheque ${cheque.chequeNumber} cleared`
+          }
+        });
+        ledgerEntryId = ledger.id;
+      }
+    }
+
+    if (cheque.paymentTransactionId && failedPaymentStatuses.has(input.toStatus)) {
+      const paymentUpdate = await transaction.paymentTransaction.updateMany({
+        where: {
+          id: cheque.paymentTransactionId,
+          businessId: input.context.businessId,
+          status: PaymentStatus.PENDING
+        },
+        data: {
+          status: PaymentStatus.FAILED,
+          reversedAt: occurredAt,
+          reversalReason: input.reason ?? `Cheque marked ${input.toStatus.toLowerCase()}`
+        }
+      });
+      if (paymentUpdate.count !== 1) {
+        throw new Error("CHEQUE_PAYMENT_STATE_CONFLICT");
+      }
+      paymentStatus = PaymentStatus.FAILED;
+    }
+
     await transaction.chequeStatusHistory.create({
       data: {
         businessId: input.context.businessId,
@@ -113,8 +198,17 @@ export async function transitionCheque(input: {
         action: auditActionForStatus(input.toStatus),
         entityType: "CHEQUE",
         entityId: cheque.id,
-        beforeData: { status: fromStatus, version: cheque.version },
-        afterData: { status: input.toStatus, version: cheque.version + 1 },
+        beforeData: {
+          status: fromStatus,
+          version: cheque.version,
+          paymentStatus: cheque.paymentTransactionId ? PaymentStatus.PENDING : null
+        },
+        afterData: {
+          status: input.toStatus,
+          version: cheque.version + 1,
+          paymentStatus,
+          ledgerEntryId
+        },
         metadata: input.reason ? { reason: input.reason } : undefined
       }
     });
