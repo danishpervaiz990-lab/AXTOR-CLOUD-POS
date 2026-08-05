@@ -1,0 +1,77 @@
+name: Grocery POS Rebuild CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/grocery-pos/**"
+      - "docs/grocery/**"
+      - ".github/workflows/grocery-pos-rebuild-ci.yml"
+  push:
+    branches: [feat/grocery-total-rebuild]
+    paths:
+      - "apps/grocery-pos/**"
+      - "docs/grocery/**"
+      - ".github/workflows/grocery-pos-rebuild-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grocery-pos-rebuild-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/grocery-pos
+    env:
+      GROCERY_DATABASE_URL: postgresql://grocery_ci:grocery_ci@127.0.0.1:5432/grocery_ci
+      GROCERY_SESSION_SECRET: ci-session-secret-that-is-longer-than-thirty-two-characters
+      GROCERY_APP_URL: http://localhost:3000
+      GROCERY_ENVIRONMENT: test
+      GROCERY_LOG_LEVEL: error
+      GROCERY_CRON_SECRET: ci-cron-secret-that-is-longer-than-twenty-four-characters
+      GROCERY_FILE_STORAGE_PROVIDER: vercel-blob
+      GROCERY_EMAIL_FROM_NAME: AXTLOR Grocery POS Cloud CI
+      GROCERY_EMAIL_FROM_ADDRESS: no-reply@example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install isolated Grocery dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Validate Prisma schema
+        run: npm run prisma:validate
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Reject legacy Grocery and Railway runtime imports
+        run: |
+          if grep -RInE "frontend-grocery|grocery-dashboard\.html|axtorAuthToken|railway\.app" app components lib server prisma tests --exclude-dir=node_modules; then
+            echo "Legacy Grocery or Railway coupling detected in the isolated application"
+            exit 1
+          fi
+
+      - name: Validate Vercel configuration
+        run: node -e "const value=JSON.parse(require('fs').readFileSync('vercel.json','utf8')); if(value.framework!=='nextjs') process.exit(1); if(!Array.isArray(value.crons)) process.exit(1); console.log('Vercel config valid')"
+
+      - name: Production build
+        run: npm run build
