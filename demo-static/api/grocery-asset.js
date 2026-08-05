@@ -52,23 +52,20 @@ function responseText(message, status) {
 }
 
 function removeScript(html, filename) {
-  const escaped = filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return html.replace(new RegExp('<script[^>]+src=["\\'][^"\\']*' + escaped + '[^"\\']*["\\'][^>]*><\\/script>', "gi"), "");
+  return html.replace(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*><\/script>/gi, function (tag) {
+    return tag.includes(filename) ? "" : tag;
+  });
 }
 
 function prepareHtml(path, html) {
   const page = path.split("/").pop();
-
-  // Core pages are owned by grocery-app.js. Every other module is owned by its
-  // dedicated controller or the legacy fallback runtime and must not be rejected
-  // by grocery-app.js as an unsupported page.
   if (!NATIVE_PAGES.has(page)) html = removeScript(html, "grocery-app.js");
 
   if (!html.includes("grocery-sidebar-repair.js") && !NATIVE_PAGES.has(page)) {
-    html = html.replace(/<\/body>/i, '<script src="js/grocery-sidebar-repair.js?v=20260805-all-pages1"></script></body>');
+    html = html.replace(/<\/body>/i, '<script src="js/grocery-sidebar-repair.js?v=20260805-all-pages2"></script></body>');
   }
   if (!html.includes("grocery-navigation-ui.js")) {
-    html = html.replace(/<\/body>/i, '<script src="js/grocery-navigation-ui.js?v=20260805-all-pages1"></script></body>');
+    html = html.replace(/<\/body>/i, '<script src="js/grocery-navigation-ui.js?v=20260805-all-pages2"></script></body>');
   }
   return html;
 }
@@ -80,13 +77,13 @@ export default async function groceryAsset(request) {
   if (!path) return responseText("Invalid Grocery asset path", 400);
 
   const encoded = path.split("/").map(encodeURIComponent).join("/");
-  const source = RAW + encoded + "?release=20260805-all-pages1";
+  const source = RAW + encoded + "?release=20260805-all-pages2";
 
   try {
     const upstream = await fetch(source, {
       method: request.method,
       cache: "no-store",
-      headers: { Accept: "*/*", "User-Agent": "Axtor-Grocery-Delivery/3.0" },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-Grocery-Delivery/3.1" },
       redirect: "follow",
       signal: AbortSignal.timeout(15000)
     });
@@ -100,7 +97,7 @@ export default async function groceryAsset(request) {
       "X-Frame-Options": "DENY",
       "X-Robots-Tag": "noindex",
       "X-Axtor-Industry": "grocery",
-      "X-Axtor-Grocery-Release": "20260805-all-pages1"
+      "X-Axtor-Grocery-Release": "20260805-all-pages2"
     });
     if (request.method === "HEAD") return new Response(null, { status: 200, headers });
 
