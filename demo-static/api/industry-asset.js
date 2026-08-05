@@ -165,8 +165,13 @@ function injectIndustryRuntime(industry, pathname, bytes, type) {
 
   if (!html.includes("data-axtor-development-runtime")) headScripts.push(developmentRuntime(industry));
 
-  if (industry === "grocery" && shouldInjectGroceryRepair(pathname, html)) {
-    bodyScripts.push('<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>');
+  if (industry === "grocery") {
+    if (shouldInjectGroceryRepair(pathname, html)) {
+      bodyScripts.push('<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>');
+    }
+    if (!html.includes("grocery-navigation-ui.js")) {
+      bodyScripts.push('<script src="js/grocery-navigation-ui.js?v=20260805-navigation3"></script>');
+    }
   }
 
   if (industry === "retail") {
@@ -206,7 +211,7 @@ export default async function industryAsset(request) {
   try {
     const upstream = await fetch(source, {
       method: request.method,
-      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.6" },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.7" },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
