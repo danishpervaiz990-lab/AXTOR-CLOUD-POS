@@ -2,7 +2,7 @@ import { PaymentMethodType } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertTrustedMutationOrigin } from "@/server/security/origin";
-import { completeSale } from "@/server/sales/complete-sale";
+import { completeSaleV2 } from "@/server/sales/complete-sale-v2";
 import { requireTenantContext } from "@/server/tenancy/context";
 
 export const runtime = "nodejs";
@@ -45,6 +45,7 @@ const safeClientErrors = new Set([
   "INVALID_IDEMPOTENCY_KEY",
   "INVALID_SALE_ITEMS",
   "TOO_MANY_PAYMENT_COMPONENTS",
+  "CUSTOMER_CREDIT_COMPONENT_NOT_ALLOWED",
   "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST",
   "REQUEST_ALREADY_IN_PROGRESS",
   "RESOURCE_NOT_FOUND",
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
 
   try {
     const context = await requireTenantContext();
-    const result = await completeSale({
+    const result = await completeSaleV2({
       context,
       idempotencyKey,
       ...parsed.data
