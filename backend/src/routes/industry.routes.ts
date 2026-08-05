@@ -2,9 +2,11 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import * as controller from "../controllers/industry.controller.js";
 import groceryRouter from "./grocery.routes.js";
+import groceryMasterdataRouter from "./grocery-masterdata.routes.js";
 
 const router = Router();
 router.use(requireAuth);
+router.use("/grocery/master-data", groceryMasterdataRouter);
 router.use("/grocery", groceryRouter);
 router.get("/registry", controller.registry);
 router.get("/summary", controller.summary);
