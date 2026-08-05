@@ -16,6 +16,7 @@
     { "source": "/index.html", "destination": "/login.html", "permanent": false }
   ],
   "rewrites": [
+    { "source": "/apps/grocery/grocery-customers.html", "destination": "/api/grocery-customers" },
     { "source": "/apps/:industry", "destination": "/api/industry-asset?industry=:industry" },
     { "source": "/apps/:industry/:path*", "destination": "/api/industry-asset?industry=:industry&path=:path*" },
     { "source": "/login", "destination": "/login.html" },
@@ -62,8 +63,8 @@
       "source": "/apps/(.*)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex" },
-        { "key": "X-Axtor-Gateway-Release", "value": "20260804-strict-industry-development1" },
-        { "key": "X-Axtor-Gateway-Patch", "value": "20260804-strict2-trial-label1" }
+        { "key": "X-Axtor-Gateway-Release", "value": "20260805-grocery-customers-v3" },
+        { "key": "X-Axtor-Gateway-Patch", "value": "20260805-customers-dedicated-v3" }
       ]
     }
   ]
