@@ -12,6 +12,13 @@ import { getDatabase } from "@/lib/db";
 import { requirePermission } from "@/server/permissions/permissions";
 import type { TenantContext } from "@/server/tenancy/context";
 
+const subtractiveCashMovements: ReadonlySet<CashMovementType> = new Set([
+  CashMovementType.CASH_OUT,
+  CashMovementType.DROP,
+  CashMovementType.WITHDRAWAL,
+  CashMovementType.REFUND
+]);
+
 function cash(value: string): Decimal {
   const result = new Decimal(value);
   if (!result.isFinite() || result.isNegative() || result.decimalPlaces() > 4) {
@@ -210,12 +217,7 @@ export async function closeCashierShift(input: {
     for (const movement of movements) {
       const value = new Decimal(movement.amount.toString());
       if (movement.type === CashMovementType.CASH_IN) expectedCash = expectedCash.plus(value);
-      if ([
-        CashMovementType.CASH_OUT,
-        CashMovementType.DROP,
-        CashMovementType.WITHDRAWAL,
-        CashMovementType.REFUND
-      ].includes(movement.type)) {
+      if (subtractiveCashMovements.has(movement.type)) {
         expectedCash = expectedCash.minus(value);
       }
       if (movement.type === CashMovementType.CLOSING_ADJUSTMENT) {
