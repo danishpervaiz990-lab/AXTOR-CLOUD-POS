@@ -51,7 +51,7 @@ jobs:
 
       - name: Commit generated migration
         run: |
-          if git diff --quiet -- apps/grocery-pos/prisma/migrations; then
+          if [ -z "$(git status --porcelain -- apps/grocery-pos/prisma/migrations)" ]; then
             echo "Migration is already current"
             exit 0
           fi
