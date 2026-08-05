@@ -1,12 +1,13 @@
 name: Grocery POS Generate Migration
 
 on:
-  push:
-    branches: [feat/grocery-total-rebuild]
+  pull_request:
+    branches: [main]
     paths:
       - "apps/grocery-pos/prisma/schema.prisma"
       - "apps/grocery-pos/prisma.config.ts"
       - ".github/workflows/grocery-pos-generate-migration.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
