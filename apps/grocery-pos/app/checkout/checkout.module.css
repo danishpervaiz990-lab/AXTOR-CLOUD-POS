@@ -1,0 +1,320 @@
+.scope {
+  min-height: 100vh;
+}
+
+:global(.terminal-page) {
+  min-height: 100vh;
+  background: #eef5ef;
+}
+
+:global(.terminal-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 22px;
+  border-bottom: 1px solid #d4e2d8;
+  background: #fff;
+}
+
+:global(.terminal-header > div:last-child) {
+  display: grid;
+  text-align: right;
+}
+
+:global(.terminal-header span) {
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+:global(.terminal-grid) {
+  display: grid;
+  min-height: calc(100vh - 75px);
+  grid-template-columns: minmax(420px, .9fr) minmax(520px, 1.1fr);
+}
+
+:global(.terminal-catalog),
+:global(.terminal-cart) {
+  min-width: 0;
+  padding: 22px;
+}
+
+:global(.terminal-catalog) {
+  border-right: 1px solid #d4e2d8;
+}
+
+:global(.terminal-context) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+:global(.terminal-context label),
+:global(.cart-line label),
+:global(.due-field),
+:global(.cheque-fields label) {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+:global(.terminal-context select),
+:global(.scan-form input),
+:global(.customer-picker input),
+:global(.cart-line input),
+:global(.payment-draft input),
+:global(.payment-draft select),
+:global(.terminal-alert input),
+:global(.due-field input) {
+  min-height: 44px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #bdcec3;
+  border-radius: 10px;
+  color: var(--ink);
+  background: #fff;
+}
+
+:global(.terminal-alert),
+:global(.terminal-ready),
+:global(.terminal-success) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+:global(.terminal-alert) {
+  border: 1px solid #ecd18e;
+  background: #fff8df;
+}
+
+:global(.terminal-alert input) {
+  width: 130px;
+}
+
+:global(.terminal-ready),
+:global(.terminal-success) {
+  border: 1px solid #a9d4b9;
+  color: var(--leaf-dark);
+  background: #e8f7ed;
+}
+
+:global(.scan-form) {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+:global(.scan-form > label),
+:global(.customer-picker > label) {
+  font-weight: 850;
+}
+
+:global(.scan-form > div),
+:global(.customer-picker > div:first-of-type) {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+}
+
+:global(.scan-form input) {
+  min-height: 58px;
+  border: 2px solid var(--leaf);
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+:global(.search-results),
+:global(.customer-results) {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+:global(.product-result),
+:global(.customer-results button) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: left;
+  background: #fff;
+  cursor: pointer;
+}
+
+:global(.product-result small) {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+:global(.customer-picker) {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+:global(.terminal-cart) {
+  display: flex;
+  flex-direction: column;
+  background: #f9fbf9;
+}
+
+:global(.terminal-cart > header) {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+:global(.terminal-cart h1),
+:global(.terminal-cart h2) {
+  margin: 7px 0 0;
+}
+
+:global(.terminal-cart > header > strong) {
+  font-size: 2rem;
+}
+
+:global(.cart-lines) {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+:global(.cart-line) {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 100px 100px 115px 32px;
+  gap: 9px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+:global(.cart-line small) {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+:global(.cart-line > span) {
+  align-self: center;
+  text-align: right;
+  font-weight: 850;
+}
+
+:global(.cart-line > button),
+:global(.payment-draft > button) {
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  color: #8d242c;
+  background: #ffeaec;
+  cursor: pointer;
+}
+
+:global(.empty-cart) {
+  padding: 34px;
+  border: 2px dashed #c9d8ce;
+  border-radius: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+:global(.payment-drafts) {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+:global(.payment-heading),
+:global(.payment-summary) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+:global(.payment-draft) {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 120px minmax(130px, .7fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+:global(.cheque-fields) {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+:global(.due-field) {
+  max-width: 240px;
+  margin-top: 12px;
+}
+
+:global(.payment-summary) {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--mint);
+}
+
+:global(.complete-sale) {
+  min-height: 58px;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 15px;
+  color: #fff;
+  background: var(--leaf);
+  font-size: 1.05rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+:global(.complete-sale:disabled) {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+@media (max-width: 1050px) {
+  :global(.terminal-grid) {
+    grid-template-columns: 1fr;
+  }
+  :global(.terminal-catalog) {
+    border-right: 0;
+    border-bottom: 1px solid #d4e2d8;
+  }
+}
+
+@media (max-width: 700px) {
+  :global(.terminal-context),
+  :global(.cheque-fields) {
+    grid-template-columns: 1fr;
+  }
+  :global(.cart-line),
+  :global(.payment-draft) {
+    grid-template-columns: 1fr 1fr;
+  }
+  :global(.cart-line > div:first-child),
+  :global(.cheque-fields) {
+    grid-column: 1 / -1;
+  }
+}
