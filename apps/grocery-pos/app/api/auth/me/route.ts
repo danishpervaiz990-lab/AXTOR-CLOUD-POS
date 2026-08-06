@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { SharedBackendError, groceryApi } from "@/lib/shared-backend";
+import { getSharedBackendCredentials } from "@/lib/shared-session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  const businessId = request.headers.get("x-business-id") ?? undefined;
-
-  if (!token) {
+export async function GET() {
+  const credentials = await getSharedBackendCredentials();
+  if (!credentials) {
     return NextResponse.json(
       { error: "AUTHENTICATION_REQUIRED" },
       { status: 401, headers: { "Cache-Control": "no-store" } }
@@ -16,7 +15,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const payload = await groceryApi.get<unknown>("/api/v1/auth/me", token, businessId);
+    const payload = await groceryApi.get<unknown>(
+      "/api/v1/auth/me",
+      credentials.token,
+      credentials.businessId
+    );
     return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof SharedBackendError) {
