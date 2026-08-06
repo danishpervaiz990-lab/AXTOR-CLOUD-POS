@@ -3,7 +3,10 @@ on:
   pull_request:
     branches: [frontend-restaurant]
   push:
-    branches: [frontend-restaurant, fix/restaurant/dedicated-frontend-v1]
+    branches:
+      - frontend-restaurant
+      - fix/restaurant/dedicated-frontend-v1
+      - feat/restaurant-production-completion-20260806
 permissions:
   contents: read
 jobs:
@@ -18,10 +21,16 @@ jobs:
         run: |
           node --check demo-static/js/axtor-api.js
           node --check demo-static/js/restaurant-app.js
-      - name: Restaurant release suite
+      - name: Restaurant production release suite
         run: node tests/restaurant-frontend.test.cjs
       - name: Reject generic industry routes
         run: |
           if grep -R "industry.html?module=" demo-static/restaurant-*.html; then exit 1; fi
+      - name: Reject raw-ID and JSON operator forms
+        run: |
+          if grep -Ei "Items JSON|Ingredients JSON|Table ID|Category ID|Product ID|Menu item ID" demo-static/js/restaurant-app.js; then
+            echo "Legacy operator-facing Restaurant forms detected"
+            exit 1
+          fi
       - name: Verify Vercel configuration
         run: node -e "JSON.parse(require('fs').readFileSync('demo-static/vercel.json','utf8')); console.log('Vercel configuration valid')"
