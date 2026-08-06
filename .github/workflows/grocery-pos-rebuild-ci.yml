@@ -29,7 +29,7 @@ jobs:
       run:
         working-directory: apps/grocery-pos
     env:
-      # Transitional only: Prisma generation remains until every legacy direct-database route is removed.
+      # Transitional only. The migration audit fails until all runtime database dependencies are removed.
       GROCERY_DATABASE_URL: postgresql://migration_only:migration_only@127.0.0.1:5432/migration_only
       AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
       NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
@@ -62,6 +62,9 @@ jobs:
 
       - name: Unit tests
         run: npm run test
+
+      - name: Audit complete shared-backend migration
+        run: node scripts/audit-shared-backend-migration.mjs
 
       - name: Enforce shared-backend deployment architecture
         working-directory: .
