@@ -84,14 +84,40 @@
     });
   }
 
+  function activatePaintApp() {
+    if (document.readyState !== "loading") {
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+    }
+  }
+
+  function waitForElement(selector, timeout) {
+    return new Promise(function (resolve, reject) {
+      const started = Date.now();
+      const timer = setInterval(function () {
+        const element = document.querySelector(selector);
+        if (element) {
+          clearInterval(timer);
+          resolve(element);
+          return;
+        }
+        if (Date.now() - started >= timeout) {
+          clearInterval(timer);
+          reject(new Error("Paint reports application did not render " + selector));
+        }
+      }, 50);
+    });
+  }
+
   async function start() {
     await verifyPaintTenant();
     if (!canReadReports()) {
       restrictedShell();
       return;
     }
-    await loadScript("js/paint-isolation-branding-runtime.js?v=20260805-role-aware2");
-    await loadScript("js/paint-app.js?v=20260805-role-aware2");
+    await loadScript("js/paint-isolation-branding-runtime.js?v=20260806-dom-ready1");
+    await loadScript("js/paint-app.js?v=20260806-dom-ready1");
+    activatePaintApp();
+    await waitForElement("#reportForm", 18000);
   }
 
   start().catch(function (error) {
