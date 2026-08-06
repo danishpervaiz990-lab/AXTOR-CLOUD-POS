@@ -12,10 +12,10 @@ AXTOR Grocery POS Cloud is the isolated grocery and supermarket application insi
 - Primary authentication: signed, secure, HTTP-only session cookie
 - Tenant identity: derived only from the verified server session
 - Money: PostgreSQL `Decimal` fields and `decimal.js`; never JavaScript binary floating point for persisted financial values
-- Deployment target: a dedicated Vercel project rooted at this directory
-- Railway dependency: none
+- Deployment target: a dedicated Railway service rooted at this directory
+- Shared AXTOR backend dependency: none
 
-The application must not import the legacy `frontend-grocery` branch, legacy Grocery HTML files, Retail UI, or the shared Railway backend.
+The application must not import the legacy `frontend-grocery` branch, legacy Grocery HTML files, Retail UI, or the shared multi-industry backend.
 
 ## Local setup
 
@@ -39,9 +39,15 @@ npm run test
 npm run build
 ```
 
-## Current implementation gate
+## Railway release
 
-This directory begins the clean backend-first replacement. It is not production-certified until migrations, authentication, tenant isolation, operational APIs, finance and cheque reconciliation, complete frontend workflows, Playwright coverage, realistic grocery simulation and production smoke tests have all produced recorded evidence.
+Create a separate Railway service with root directory `apps/grocery-pos`. The included `railway.toml` builds the Next.js application, applies the versioned Prisma migration, upserts the protected demo tenant and starts the service on Railway's assigned `PORT`.
+
+Required deployment variables and isolation rules are documented in `RAILWAY.md`.
+
+## Cutover
+
+The active AXTOR Grocery route no longer fetches the historical `frontend-grocery` branch. The central Vercel Grocery gateway redirects only Grocery traffic to the dedicated Railway service. Retail and all other industry routes remain unchanged.
 
 ## Documentation
 
