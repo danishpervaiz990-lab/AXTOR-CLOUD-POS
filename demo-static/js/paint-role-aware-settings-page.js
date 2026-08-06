@@ -55,16 +55,42 @@
     });
   }
 
+  function activatePaintApp() {
+    if (document.readyState !== "loading") {
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+    }
+  }
+
+  function waitForElement(selector, timeout) {
+    return new Promise(function (resolve, reject) {
+      const started = Date.now();
+      const timer = setInterval(function () {
+        const element = document.querySelector(selector);
+        if (element) {
+          clearInterval(timer);
+          resolve(element);
+          return;
+        }
+        if (Date.now() - started >= timeout) {
+          clearInterval(timer);
+          reject(new Error("Paint settings application did not render " + selector));
+        }
+      }, 50);
+    });
+  }
+
   async function start() {
     await verifyPaintTenant();
     if (!canReadSettings()) {
       restrictedShell();
       return;
     }
-    await loadScript("js/paint-isolation-branding-runtime.js?v=20260805-role-aware3");
-    await loadScript("js/paint-app.js?v=20260805-role-aware3");
-    await loadScript("js/paint-print-settings-backend.js?v=20260805-role-aware3");
-    await loadScript("js/paint-document-print-backend.js?v=20260805-role-aware3");
+    await loadScript("js/paint-isolation-branding-runtime.js?v=20260806-dom-ready1");
+    await loadScript("js/paint-app.js?v=20260806-dom-ready1");
+    activatePaintApp();
+    await waitForElement("#ruleForm", 18000);
+    await loadScript("js/paint-print-settings-backend.js?v=20260806-dom-ready1");
+    await loadScript("js/paint-document-print-backend.js?v=20260806-dom-ready1");
   }
 
   start().catch(function (error) {
