@@ -16,7 +16,6 @@
     { "source": "/index.html", "destination": "/login.html", "permanent": false }
   ],
   "rewrites": [
-    { "source": "/apps/grocery/grocery-customers.html", "destination": "/api/grocery-customers" },
     { "source": "/apps/grocery", "destination": "/api/grocery-asset" },
     { "source": "/apps/grocery/:path*", "destination": "/api/grocery-asset?path=:path*" },
     { "source": "/apps/:industry", "destination": "/api/industry-asset?industry=:industry" },
@@ -59,6 +58,14 @@
       "source": "/industry-hosts.json",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=60, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/apps/grocery/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex" },
+        { "key": "X-Axtor-Grocery-Release", "value": "20260806-new-railway-cutover" },
+        { "key": "X-Axtor-Legacy-Grocery", "value": "retired" }
       ]
     },
     {
