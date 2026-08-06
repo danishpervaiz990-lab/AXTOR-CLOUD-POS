@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSharedBackendCredentials } from "@/lib/shared-session";
 
 function getSharedBackendBaseUrl(): string {
   const value = process.env.AXTOR_SHARED_BACKEND_URL ?? process.env.NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL;
@@ -31,6 +32,14 @@ export async function bridgeSharedRoute(request: Request, backendPath: string): 
   for (const name of FORWARDED_REQUEST_HEADERS) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
+  }
+
+  const credentials = await getSharedBackendCredentials();
+  if (!headers.has("authorization") && credentials?.token) {
+    headers.set("Authorization", `Bearer ${credentials.token}`);
+  }
+  if (!headers.has("x-business-id") && credentials?.businessId) {
+    headers.set("X-Business-Id", credentials.businessId);
   }
 
   const method = request.method.toUpperCase();
