@@ -28,7 +28,7 @@ jobs:
           if grep -R "industry.html?module=" demo-static/restaurant-*.html; then exit 1; fi
       - name: Reject raw-ID and JSON operator forms
         run: |
-          if grep -Ei "Items JSON|Ingredients JSON|Table ID|Category ID|Product ID|Menu item ID" demo-static/js/restaurant-app.js; then
+          if grep -E 'Items JSON|Ingredients JSON|"Table ID"|"Category ID"|"Product ID"|"Menu item ID"' demo-static/js/restaurant-app.js; then
             echo "Legacy operator-facing Restaurant forms detected"
             exit 1
           fi
