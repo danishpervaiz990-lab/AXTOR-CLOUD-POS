@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import {
   SharedBackendError,
-  sharedBackendRequest
+  sharedBackendRequest,
+  sharedRequestContext
 } from "@/lib/shared-backend";
 
 const TOKEN_COOKIE = "axtorGroceryAuthToken";
@@ -114,6 +115,15 @@ export async function getSharedBackendCredentials(): Promise<{
     token,
     businessId: cookieStore.get(BUSINESS_COOKIE)?.value
   };
+}
+
+export async function getRequestSharedBackendCredentials(request: Request): Promise<{
+  token?: string;
+  businessId?: string;
+}> {
+  const explicit = sharedRequestContext(request);
+  if (explicit.token) return explicit;
+  return (await getSharedBackendCredentials()) ?? explicit;
 }
 
 export async function clearSharedBackendSession() {
