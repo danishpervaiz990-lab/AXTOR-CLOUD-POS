@@ -1,21 +1,26 @@
 # AXTOR Grocery POS Cloud
 
-AXTOR Grocery POS Cloud is the isolated grocery and supermarket application inside the AXTOR POS Cloud repository.
+AXTOR Grocery POS Cloud is the grocery-only frontend application inside the AXTOR POS Cloud repository.
 
-## Isolation contract
+## Architecture contract
 
 - Application root: `apps/grocery-pos`
 - Package: `@axtor/grocery-pos`
-- API namespace for business modules: `/api/grocery`
-- Health endpoints: `/api/health` and `/api/health/database`
-- Database environment variable: `GROCERY_DATABASE_URL`
-- Primary authentication: signed, secure, HTTP-only session cookie
-- Tenant identity: derived only from the verified server session
-- Money: PostgreSQL `Decimal` fields and `decimal.js`; never JavaScript binary floating point for persisted financial values
-- Deployment target: a dedicated Railway service rooted at this directory
-- Shared AXTOR backend dependency: none
+- Grocery compatibility API namespace: `/api/grocery`
+- Shared backend proxy namespace: `/api/shared/[...path]`
+- Backend: the existing AXTOR Node.js/Express/TypeScript service
+- Backend environment variable: `AXTOR_SHARED_BACKEND_URL`
+- Browser authentication: existing AXTOR JWT contract
+- Tenant isolation: verified JWT plus `businessId` context forwarded to the shared backend
+- Frontend deployment: an isolated Vercel project rooted at this directory
+- Additional Railway service: prohibited
+- Additional Grocery PostgreSQL database: prohibited for the target production architecture
 
-The application must not import the legacy `frontend-grocery` branch, legacy Grocery HTML files, Retail UI, or the shared multi-industry backend.
+Retail and every other industry remain unchanged. Grocery UI and workflows remain independent, but all production data is owned by the existing shared backend and PostgreSQL infrastructure.
+
+## Migration compatibility
+
+The application is being migrated from an earlier standalone Next.js/Prisma implementation. During migration, legacy `/api/grocery/*` URLs remain as compatibility bridges, but each bridge must delegate to the existing `/api/v1/*` backend. New code must not add direct Prisma writes, local tenant authority, local financial records or a second source of truth.
 
 ## Local setup
 
@@ -23,32 +28,30 @@ The application must not import the legacy `frontend-grocery` branch, legacy Gro
 cd apps/grocery-pos
 npm install
 cp .env.example .env.local
-npm run prisma:generate
-npm run prisma:validate
 npm run dev
 ```
 
-A PostgreSQL database is required for migrations and database-backed tests. Do not use a production database for local development.
+Set `AXTOR_SHARED_BACKEND_URL` to the existing backend origin. Do not configure `GROCERY_DATABASE_URL` for the target shared-backend deployment.
 
 ## Quality commands
 
 ```bash
-npm run prisma:validate
 npm run typecheck
 npm run test
 npm run build
 ```
 
-## Railway release
+The migration is production-ready only when:
 
-Create a separate Railway service with root directory `apps/grocery-pos`. The included `railway.toml` builds the Next.js application, applies the versioned Prisma migration, upserts the protected demo tenant and starts the service on Railway's assigned `PORT`.
+1. All Grocery routes delegate to the shared backend.
+2. No production runtime requires `GROCERY_DATABASE_URL`.
+3. Authentication and tenant isolation tests pass.
+4. Products, customers, suppliers, inventory, purchases, sales, payments, returns, reports and cheques pass browser tests.
+5. Owner, manager, cashier, salesman, accountant, inventory and viewer roles are certified live.
+6. The isolated Grocery Vercel deployment passes frontend-to-backend testing.
 
-Required deployment variables and isolation rules are documented in `RAILWAY.md`.
+## Deployment
 
-## Cutover
-
-The active AXTOR Grocery route no longer fetches the historical `frontend-grocery` branch. The central Vercel Grocery gateway redirects only Grocery traffic to the dedicated Railway service. Retail and all other industry routes remain unchanged.
-
-## Documentation
+Deploy only the Grocery frontend as a separate Vercel project with root directory `apps/grocery-pos`. Configure it to use the existing AXTOR backend. Do not create a dedicated Railway project or service for Grocery.
 
 Repository-wide Grocery audit and cutover records are stored in `/docs/grocery`.
