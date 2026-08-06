@@ -4,5 +4,5 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  return bridgeSharedRoute(request, "/api/v1/dashboard");
+  return bridgeSharedRoute(request, "/api/v1/dashboard/summary");
 }
