@@ -57,7 +57,7 @@ export async function PATCH(request: Request, routeContext: { params: Promise<{ 
         parsed.data.status !== undefined && parsed.data.status !== existing.status
       );
       if (authorizationChanged) {
-        await transaction.userSession.updateMany({
+        await transaction.session.updateMany({
           where: { businessId: context.businessId, userId: existing.id, revokedAt: null },
           data: { revokedAt: new Date() }
         });
