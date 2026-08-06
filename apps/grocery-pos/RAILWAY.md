@@ -1,31 +1,27 @@
-# Dedicated Railway deployment
+# Railway usage policy
 
-This Grocery application must be deployed as its own Railway service. It must not replace or share the start command of the existing AXTOR multi-industry backend service.
+The Grocery POS must **not** be deployed as a separate Railway service.
 
-## Service settings
+## Approved architecture
 
-- Repository: `danishpervaiz990-lab/AXTOR-CLOUD-POS`
-- Branch: `cutover/grocery-new-railway-20260806`
-- Root directory: `apps/grocery-pos`
-- Config file: `railway.toml`
-- Health check: `/api/health`
-- Database health check: `/api/health/database`
+- Continue using the existing AXTOR Railway backend service.
+- Continue using the existing shared PostgreSQL infrastructure.
+- Deploy the Grocery-only frontend as an isolated Vercel project rooted at `apps/grocery-pos`.
+- Configure `AXTOR_SHARED_BACKEND_URL` with the existing backend origin.
+- Preserve JWT authentication, `businessId` tenant isolation and backend role permissions.
 
-## Required variables
+## Prohibited configuration
 
-- `GROCERY_DATABASE_URL` — dedicated PostgreSQL URL for Grocery only
-- `GROCERY_SESSION_SECRET` — at least 32 random characters
-- `GROCERY_APP_URL` — final Railway public origin
-- `GROCERY_ENVIRONMENT=production`
-- `GROCERY_LOG_LEVEL=info`
-- `GROCERY_CRON_SECRET` — separate secret, at least 24 characters
-- `GROCERY_FILE_STORAGE_PROVIDER=s3-compatible` or `vercel-blob` when configured
-- `GROCERY_EMAIL_FROM_NAME=AXTOR Grocery POS Cloud`
-- `GROCERY_EMAIL_FROM_ADDRESS` — valid sender email
-- `GROCERY_DEMO_PASSWORD` — at least 12 characters; used to seed the protected Green Basket demo tenant
+Do not create:
 
-Railway supplies `PORT` automatically. The release command applies the versioned Prisma migration, upserts the demo dataset, and starts Next.js on Railway's assigned port.
+- A dedicated Grocery Railway project or service
+- A `GROCERY_DATABASE_URL` production database
+- A second Prisma migration history for Grocery production data
+- A separate Grocery authentication or tenant authority
+- A local copy of sales, payments, inventory, credit/debit or cheque records
 
-## Isolation rule
+## Existing Railway backend
 
-Do not point `GROCERY_DATABASE_URL` at the shared multi-industry database. Retail and every other industry remain on their current frontend branches and existing shared backend.
+Any Grocery-specific backend capability must be added to the existing Node.js/Express/TypeScript/Prisma backend through backward-compatible routes and migrations. Existing Retail and other-industry routes must not regress.
+
+This file replaces the earlier dedicated-Railway deployment plan and exists to prevent that obsolete architecture from being restored accidentally.
