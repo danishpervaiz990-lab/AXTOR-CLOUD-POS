@@ -13,7 +13,9 @@ function show(branch, file) {
   return run("git", ["show", `origin/${branch}:${file}`]);
 }
 
-const frontendRefs = manifest.projects.map(item => certificationRefs[item.industry] || item.branch);
+const frontendRefs = manifest.projects
+  .filter(item => item.industry !== "grocery")
+  .map(item => certificationRefs[item.industry] || item.branch);
 const branches = [...new Set(frontendRefs.concat(["backend"]))];
 run("git", ["fetch", "--quiet", "origin", ...branches.map(branch => `refs/heads/${branch}:refs/remotes/origin/${branch}`)]);
 
@@ -22,6 +24,45 @@ for (const project of manifest.projects) {
   const certificationRef = certificationRefs[project.industry] || project.branch;
   console.log(`CERTIFY ${project.industry} (${certificationRef})`);
   try {
+    if (project.industry === "grocery") {
+      const root = "apps/grocery-pos";
+      const pkg = JSON.parse(fs.readFileSync(`${root}/package.json`, "utf8"));
+      const railway = fs.readFileSync(`${root}/railway.toml`, "utf8");
+      const schema = fs.readFileSync(`${root}/prisma/schema.prisma`, "utf8");
+      const dashboard = fs.readFileSync(`${root}/app/dashboard/page.tsx`, "utf8");
+      const checkout = fs.readFileSync(`${root}/components/checkout-terminal.tsx`, "utf8");
+      const groceryGateway = fs.readFileSync("demo-static/api/grocery-asset.js", "utf8");
+      for (const file of [
+        "app/login/page.tsx", "app/dashboard/page.tsx", "app/checkout/page.tsx",
+        "app/inventory/page.tsx", "app/finance/page.tsx", "app/cheques/page.tsx",
+        "app/api/health/route.ts", "app/api/health/database/route.ts",
+        "prisma/migrations/20260806010000_initial_grocery_foundation/migration.sql"
+      ]) assert.ok(fs.existsSync(`${root}/${file}`), `Grocery replacement is missing ${file}`);
+      assert.match(dashboard, /dashboard/i);
+      assert.match(checkout, /\/api\/grocery\/sales\/complete/);
+      assert.match(schema, /model Business/);
+      assert.match(schema, /model Cheque/);
+      assert.match(pkg.scripts?.["release:railway"] || "", /prisma:migrate:deploy/);
+      assert.match(pkg.scripts?.["release:railway"] || "", /prisma:seed/);
+      assert.match(railway, /healthcheckPath\s*=\s*"\/api\/health"/);
+      assert.match(groceryGateway, /axtor-grocery-pos-production\.up\.railway\.app/);
+      assert.doesNotMatch(groceryGateway, /frontend-grocery|raw\.githubusercontent\.com/);
+      assert.equal(project.branch, "cutover/grocery-new-railway-20260806");
+      assert.equal(project.project, "axtor-grocery");
+      assert.equal(project.origin, "https://axtorpos.vercel.app/apps/grocery");
+      assert.equal(project.status, "railway_cutover_prepared");
+      assert.equal(project.sourceAlias, "https://axtor-grocery-pos-production.up.railway.app");
+      results.push({
+        industry: project.industry,
+        branch: project.branch,
+        certificationRef,
+        staticRelease: "RETIRED",
+        deployment: "RAILWAY_CUTOVER_PREPARED"
+      });
+      console.log("PASS grocery");
+      continue;
+    }
+
     const runtimeFile = project.runtime || `${project.industry}-app.js`;
     const dashboard = show(certificationRef, `demo-static/${project.dashboard}`);
     const runtime = show(certificationRef, `demo-static/js/${runtimeFile}`);
@@ -77,6 +118,7 @@ console.log("CERTIFY proposed main SaaS router and delivery layer");
 const router = fs.readFileSync("demo-static/js/saas-router.js", "utf8");
 const hosts = JSON.parse(fs.readFileSync("demo-static/industry-hosts.json", "utf8"));
 const proxy = fs.readFileSync("demo-static/api/industry-asset.js", "utf8");
+const groceryProxy = fs.readFileSync("demo-static/api/grocery-asset.js", "utf8");
 const mainVercel = JSON.parse(fs.readFileSync("demo-static/vercel.json", "utf8"));
 assert.match(router, /same_origin_branch_proxy/);
 assert.match(router, /window\.location\.origin/);
@@ -84,7 +126,11 @@ assert.match(router, /\/api\/v1\/auth\/handoff/);
 assert.match(router, /session-handoff\.html/);
 assert.doesNotMatch(router, /searchParams\.set\(["']token/);
 assert.match(proxy, /raw\.githubusercontent\.com/);
+assert.doesNotMatch(proxy, /frontend-grocery/);
 assert.doesNotMatch(proxy, /req\.query\.branch/);
+assert.match(groceryProxy, /axtor-grocery-pos-production\.up\.railway\.app/);
+assert.doesNotMatch(groceryProxy, /frontend-grocery|raw\.githubusercontent\.com/);
+assert.ok(mainVercel.rewrites.some(row => row.source === "/apps/grocery/:path*"));
 assert.ok(mainVercel.rewrites.some(row => row.source === "/apps/:industry/:path*"));
 for (const project of manifest.projects) {
   const host = hosts.frontends[project.industry];
@@ -93,11 +139,15 @@ for (const project of manifest.projects) {
   assert.equal(host?.delivery, "same_origin_branch_proxy", `main router delivery mismatch for ${project.industry}`);
   assert.equal(host?.basePath, `/apps/${project.industry}`, `main router base path mismatch for ${project.industry}`);
   assert.equal(host?.sourceAlias, project.sourceAlias, `main router source alias mismatch for ${project.industry}`);
-  assert.match(proxy, new RegExp(project.branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `proxy branch whitelist missing ${project.branch}`);
+  if (project.industry === "grocery") {
+    assert.match(groceryProxy, /GROCERY_RAILWAY_ORIGIN/);
+  } else {
+    assert.match(proxy, new RegExp(project.branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `proxy branch whitelist missing ${project.branch}`);
+  }
 }
 assert.equal(manifest.projects.length, 13);
 assert.deepEqual(manifest.unreleased, []);
 console.log("PASS proposed main SaaS router and delivery layer");
 
 console.table(results);
-console.log(`PASS: ${results.length} code-complete frontend branches, proposed same-origin delivery, main router, and secure handoff backend contract; no Vercel deployment was attempted`);
+console.log(`PASS: ${results.length} industries certified; 12 existing static frontends preserved, Grocery replaced by the isolated Railway application, and secure shared handoff retained`);

@@ -8,6 +8,7 @@ const router=fs.readFileSync(path.join(root,'js/saas-router.js'),'utf8');
 const handoff=fs.readFileSync(path.join(root,'js/session-handoff.js'),'utf8');
 const onboarding=fs.readFileSync(path.join(root,'tenant-onboarding.html'),'utf8');
 const proxy=fs.readFileSync(path.join(root,'api/industry-asset.js'),'utf8');
+const groceryProxy=fs.readFileSync(path.join(root,'api/grocery-asset.js'),'utf8');
 const hosts=JSON.parse(fs.readFileSync(path.join(root,'industry-hosts.json'),'utf8'));
 const vercel=JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
 const manifest=JSON.parse(fs.readFileSync(path.join(__dirname,'../deployment/vercel-industry-projects.json'),'utf8'));
@@ -36,20 +37,31 @@ for(const code of expected){
   const entry=hosts.frontends[code];
   assert.ok(entry,`${code} router entry missing`);
   assert.equal(entry.project,`axtor-${code}`,`${code} project mismatch`);
-  assert.equal(entry.branch,`frontend-${code}`,`${code} branch mismatch`);
   assert.equal(entry.dashboard,`${code}-dashboard.html`,`${code} dashboard mismatch`);
   assert.equal(entry.delivery,'same_origin_branch_proxy',`${code} delivery mode mismatch`);
   assert.equal(entry.basePath,`/apps/${code}`,`${code} base path mismatch`);
-  assert.match(entry.sourceAlias,new RegExp(`^https://axtorpos-git-frontend-${code}-`),`${code} source alias mismatch`);
+  if(code==='grocery'){
+    assert.equal(entry.branch,'cutover/grocery-new-railway-20260806','grocery replacement branch mismatch');
+    assert.equal(entry.sourceAlias,'https://axtor-grocery-pos-production.up.railway.app','grocery Railway source alias mismatch');
+  }else{
+    assert.equal(entry.branch,`frontend-${code}`,`${code} branch mismatch`);
+    assert.match(entry.sourceAlias,new RegExp(`^https://axtorpos-git-frontend-${code}-`),`${code} source alias mismatch`);
+  }
 }
 
 assert.equal(manifest.projects.length,13,'Deployment manifest must include all 13 industries');
 assert.deepEqual(manifest.projects.map(item=>item.industry).sort(),expected.slice().sort());
 assert.deepEqual(manifest.unreleased,[],'No industry should remain marked unreleased after Release E');
 for(const item of manifest.projects){
-  assert.equal(item.branch,`frontend-${item.industry}`);
   assert.equal(item.dashboard,`${item.industry}-dashboard.html`);
-  assert.equal(item.status,'code_complete_not_deployed');
+  if(item.industry==='grocery'){
+    assert.equal(item.branch,'cutover/grocery-new-railway-20260806');
+    assert.equal(item.sourceAlias,'https://axtor-grocery-pos-production.up.railway.app');
+    assert.equal(item.status,'railway_cutover_prepared');
+  }else{
+    assert.equal(item.branch,`frontend-${item.industry}`);
+    assert.equal(item.status,'code_complete_not_deployed');
+  }
 }
 
 const redirects=(vercel.redirects||[]).map(row=>`${row.source}->${row.destination}`);
@@ -58,9 +70,11 @@ assert.ok(redirects.includes('/->/login.html'));
 assert.ok(redirects.includes('/index.html->/login.html'));
 assert.ok(rewrites.includes('/industry.html->/router.html'));
 assert.ok(rewrites.includes('/dashboard.html->/router.html'));
+assert.ok(rewrites.includes('/apps/grocery->/api/grocery-asset'));
+assert.ok(rewrites.includes('/apps/grocery/:path*->/api/grocery-asset?path=:path*'));
 assert.ok(rewrites.includes('/apps/:industry->/api/industry-asset?industry=:industry'));
 assert.ok(rewrites.includes('/apps/:industry/:path*->/api/industry-asset?industry=:industry&path=:path*'));
-for(const code of expected){
+for(const code of expected.filter(code=>code!=='grocery')){
   assert.match(proxy,new RegExp(`\\b${code}: \\{ branch: "frontend-${code}", dashboard: "${code}-dashboard\\.html" \\}`),`${code} gateway entry missing`);
 }
 assert.match(proxy,/raw\.githubusercontent\.com/);
@@ -72,13 +86,18 @@ assert.match(proxy,/new URL\(request\.url\)/);
 assert.match(proxy,/searchParams\.get\(["']industry["']\)/);
 assert.match(proxy,/searchParams\.get\(["']path["']\)/);
 assert.match(proxy,/export default async function industryAsset/);
-assert.match(proxy,/GROCERY_REPAIR_EXCLUDED_PAGES/);
-assert.match(proxy,/grocery-dashboard\|grocery-reports\|invoice-view/);
-assert.match(proxy,/shouldInjectGroceryRepair\(pathname, html\)/);
+assert.doesNotMatch(proxy,/frontend-grocery/,'generic gateway must not expose the retired Grocery branch');
+assert.doesNotMatch(proxy,/GROCERY_REPAIR_EXCLUDED_PAGES/,'legacy Grocery repair injection must be removed');
 assert.doesNotMatch(proxy,/req\.query/);
 assert.doesNotMatch(proxy,/module\.exports/);
 assert.doesNotMatch(proxy,/Buffer\.from/);
 assert.doesNotMatch(proxy,/url\.parse\s*\(/);
+
+assert.match(groceryProxy,/axtor-grocery-pos-production\.up\.railway\.app/);
+assert.match(groceryProxy,/GROCERY_RAILWAY_ORIGIN/);
+assert.match(groceryProxy,/X-Axtor-Legacy-Grocery/);
+assert.doesNotMatch(groceryProxy,/frontend-grocery/);
+assert.doesNotMatch(groceryProxy,/raw\.githubusercontent\.com/);
 
 // Authentication entry must never publish a working account or temporary password.
 assert.doesNotMatch(login,/owner@axtorpos\.local/i);
@@ -103,4 +122,4 @@ for(const rule of loginHeaderRules){
   assert.match(values['cache-control']||'',/no-store/);
   assert.equal(values.pragma,'no-cache');
 }
-console.log('PASS: main SaaS router, secure email-as-workspace login, 13 isolated industry branches, Edge URL gateway and Grocery runtime exclusions are code-certified without deployment');
+console.log('PASS: main SaaS router preserves 12 existing industries and routes Grocery only to the isolated Railway replacement');
