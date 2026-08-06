@@ -9,13 +9,48 @@ const base='https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-P
 
 async function fetchText(ref,path){
  const url=`${base}/${encodeURIComponent(ref).replaceAll('%2F','/')}/demo-static/${path.split('/').map(encodeURIComponent).join('/')}`;
- const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.1'},signal:AbortSignal.timeout(20000)});
+ const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.2'},signal:AbortSignal.timeout(20000)});
  assert.equal(response.status,200,`${ref}:${path} returned HTTP ${response.status}`);
  return await response.text();
 }
 
+function certifyGrocery(project){
+ const root='apps/grocery-pos';
+ const required=[
+  'package.json','railway.toml','prisma/schema.prisma',
+  'prisma/migrations/20260806010000_initial_grocery_foundation/migration.sql',
+  'app/login/page.tsx','app/dashboard/page.tsx','app/checkout/page.tsx',
+  'app/inventory/page.tsx','app/finance/page.tsx','app/cheques/page.tsx',
+  'app/api/health/route.ts','app/api/health/database/route.ts',
+  'app/api/grocery/sales/complete/route.ts','app/api/grocery/reports/payment-reconciliation/route.ts',
+  'app/api/grocery/reports/cheques/route.ts'
+ ];
+ for(const file of required)assert.ok(fs.existsSync(`${root}/${file}`),`Grocery replacement is missing ${file}`);
+ const pkg=JSON.parse(fs.readFileSync(`${root}/package.json`,'utf8'));
+ const railway=fs.readFileSync(`${root}/railway.toml`,'utf8');
+ const schema=fs.readFileSync(`${root}/prisma/schema.prisma`,'utf8');
+ const checkout=fs.readFileSync(`${root}/components/checkout-terminal.tsx`,'utf8');
+ const gateway=fs.readFileSync('demo-static/api/grocery-asset.js','utf8');
+ assert.equal(project.branch,'cutover/grocery-new-railway-20260806');
+ assert.equal(project.project,'axtor-grocery');
+ assert.equal(project.status,'railway_cutover_prepared');
+ assert.equal(project.sourceAlias,'https://axtor-grocery-pos-production.up.railway.app');
+ assert.match(pkg.scripts?.['release:railway']||'',/prisma:migrate:deploy/);
+ assert.match(pkg.scripts?.['release:railway']||'',/prisma:seed/);
+ assert.match(pkg.scripts?.['start:railway']||'',/next start/);
+ assert.match(railway,/healthcheckPath\s*=\s*"\/api\/health"/);
+ assert.match(railway,/npm run release:railway/);
+ assert.match(schema,/@@map\("grocery_businesses"\)/);
+ assert.match(schema,/model Cheque/);
+ assert.match(checkout,/\/api\/grocery\/sales\/complete/);
+ assert.match(checkout,/Idempotency-Key/);
+ assert.match(gateway,/axtor-grocery-pos-production\.up\.railway\.app/);
+ assert.match(gateway,/X-Axtor-Legacy-Grocery/);
+ assert.doesNotMatch(gateway,/frontend-grocery|raw\.githubusercontent\.com/);
+ return {industry:'grocery',ref:project.branch,dashboard:'app/dashboard/page.tsx',runtime:'Next.js full-stack Railway service',status:'PASS'};
+}
+
 function runtimeFilesFor(industry){
- if(industry==='grocery')return ['grocery-report-shell.js','grocery-report-sync.js'];
  return [`${industry}-app.js`];
 }
 
@@ -23,6 +58,12 @@ assert.deepEqual(manifest.projects.map(item=>item.industry).sort(),expected.slic
 assert.deepEqual(manifest.unreleased,[]);
 const results=[];
 for(const project of manifest.projects){
+ if(project.industry==='grocery'){
+  console.log(`CERTIFY grocery from ${project.branch}`);
+  results.push(certifyGrocery(project));
+  console.log('PASS grocery');
+  continue;
+ }
  const ref=releaseRefs[project.industry]||project.branch;
  const runtimeFiles=runtimeFilesFor(project.industry);
  console.log(`CERTIFY ${project.industry} from ${ref}`);
@@ -36,11 +77,6 @@ for(const project of manifest.projects){
  const vercel=JSON.parse(vercelText);
  for(const runtimeFile of runtimeFiles){
    assert.match(dashboard,new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`${project.industry} dashboard does not load ${runtimeFile}`);
- }
- if(project.industry==='grocery'){
-   assert.doesNotMatch(dashboard,/grocery-app\.js/i,'Grocery dashboard must not reload the competing generic renderer');
-   assert.match(combinedRuntime,/groceryReportShell/,'Grocery shell runtime is missing its ownership marker');
-   assert.match(combinedRuntime,/daily-sales/,'Grocery report runtime is missing PostgreSQL report integration');
  }
  assert.doesNotMatch(dashboard,/industry\.html\?module=/,`${project.industry} dashboard still uses generic industry routing`);
  assert.match(combinedRuntime,/\/api\/v1\//,`${project.industry} runtime has no backend API integration`);
@@ -56,4 +92,4 @@ for(const project of manifest.projects){
 assert.equal(results.length,13);
 fs.writeFileSync('all-industry-code-certification.json',JSON.stringify({checkedAt:new Date().toISOString(),deploymentAttempted:false,results},null,2));
 console.table(results);
-console.log('PASS: all 13 industry frontend code branches are complete and certified without Vercel deployment');
+console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified as the isolated Railway full-stack replacement');
