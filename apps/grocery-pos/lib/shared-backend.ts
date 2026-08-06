@@ -28,6 +28,27 @@ export type SharedBackendRequest = Omit<RequestInit, "body"> & {
   businessId?: string;
 };
 
+export type SharedLoginResult = {
+  ok?: boolean;
+  token: string;
+  tokenType?: string;
+  expiresIn?: number;
+  user: {
+    id?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+    roles?: string[];
+  };
+  business: {
+    id: string;
+    slug?: string;
+    name?: string;
+    currency?: string;
+    timezone?: string;
+  };
+};
+
 export function sharedRequestContext(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   const token = authorization.toLowerCase().startsWith("bearer ")
@@ -98,7 +119,7 @@ export async function sharedBackendRequest<T>(
 export const groceryApi = {
   health: () => sharedBackendRequest<unknown>("/health"),
   login: (payload: { businessSlug: string; email: string; password: string }) =>
-    sharedBackendRequest<{ token: string; user: unknown; business: unknown }>("/api/v1/auth/login", {
+    sharedBackendRequest<SharedLoginResult>("/api/v1/auth/login", {
       method: "POST",
       body: payload
     }),
