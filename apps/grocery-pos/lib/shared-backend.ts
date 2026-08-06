@@ -2,7 +2,13 @@ import { z } from "zod";
 
 const errorPayloadSchema = z.object({
   message: z.string().optional(),
-  error: z.string().optional()
+  error: z.union([
+    z.string(),
+    z.object({
+      message: z.string().optional(),
+      code: z.string().optional()
+    }).passthrough()
+  ]).optional()
 }).passthrough();
 
 export class SharedBackendError extends Error {
@@ -21,6 +27,15 @@ export type SharedBackendRequest = Omit<RequestInit, "body"> & {
   body?: unknown;
   businessId?: string;
 };
+
+export function sharedRequestContext(request: Request) {
+  const authorization = request.headers.get("authorization") ?? "";
+  const token = authorization.toLowerCase().startsWith("bearer ")
+    ? authorization.slice(7).trim()
+    : undefined;
+  const businessId = request.headers.get("x-business-id") ?? undefined;
+  return { token, businessId };
+}
 
 function getBaseUrl(): string {
   const raw = process.env.AXTOR_SHARED_BACKEND_URL ?? process.env.NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL;
@@ -59,8 +74,15 @@ export async function sharedBackendRequest<T>(
     let code: string | undefined;
     try {
       const parsed = errorPayloadSchema.parse(await response.json());
-      message = parsed.message ?? parsed.error ?? message;
-      code = parsed.error;
+      if (typeof parsed.error === "string") {
+        code = parsed.error;
+        message = parsed.message ?? parsed.error;
+      } else if (parsed.error) {
+        code = parsed.error.code;
+        message = parsed.error.message ?? parsed.message ?? message;
+      } else {
+        message = parsed.message ?? message;
+      }
     } catch {
       // Preserve the status-based message when the backend returns non-JSON content.
     }
