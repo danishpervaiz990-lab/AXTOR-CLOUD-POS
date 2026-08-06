@@ -1,6 +1,7 @@
 export {
   clearSharedBackendSession,
   getAuthenticatedSession,
+  getRequestSharedBackendCredentials,
   getSharedBackendCredentials,
   requireAuthenticatedSession,
   revokeCurrentSession,
