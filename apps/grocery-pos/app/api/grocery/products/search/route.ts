@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
   SharedBackendError,
-  sharedBackendRequest,
-  sharedRequestContext
+  sharedBackendRequest
 } from "@/lib/shared-backend";
+import { getRequestSharedBackendCredentials } from "@/lib/shared-session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ type SharedProductsPayload = {
 };
 
 export async function GET(request: Request) {
-  const { token, businessId } = sharedRequestContext(request);
+  const { token, businessId } = await getRequestSharedBackendCredentials(request);
   if (!token) {
     return NextResponse.json(
       { error: "AUTHENTICATION_REQUIRED" },
