@@ -7,7 +7,6 @@ export const config = { runtime: "edge" };
 
 const RELEASES = Object.freeze({
   retail: { branch: "frontend-retail", dashboard: "retail-dashboard.html" },
-  grocery: { branch: "frontend-grocery", dashboard: "grocery-dashboard.html" },
   pharmacy: { branch: "frontend-pharmacy", dashboard: "pharmacy-dashboard.html" },
   gym: { branch: "frontend-gym", dashboard: "gym-dashboard.html" },
   school: { branch: "frontend-school", dashboard: "school-dashboard.html" },
@@ -38,12 +37,13 @@ const CONTENT_TYPES = Object.freeze({
   ".pdf": "application/pdf"
 });
 
-const GROCERY_REPAIR_EXCLUDED_PAGES = /(^|\/)(grocery-dashboard|grocery-reports|invoice-view)\.html$/i;
-
 function safePath(value, fallback) {
   let decoded;
-  try { decoded = decodeURIComponent(String(value || "")).replace(/^\/+/, ""); }
-  catch { return null; }
+  try {
+    decoded = decodeURIComponent(String(value || "")).replace(/^\/+/, "");
+  } catch {
+    return null;
+  }
   const selected = decoded || fallback;
   if (!selected || selected.length > 500 || selected.includes("..") || selected.includes("\\") || !/^[A-Za-z0-9._/()-]+$/.test(selected)) return null;
   return selected;
@@ -62,11 +62,14 @@ function numericHeader(headers, name) {
 }
 
 function textResponse(message, status, extraHeaders = {}) {
-  return new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff", ...extraHeaders } });
-}
-
-function shouldInjectGroceryRepair(pathname, html) {
-  return !GROCERY_REPAIR_EXCLUDED_PAGES.test(pathname) && !html.includes("grocery-sidebar-repair.js");
+  return new Response(message, {
+    status,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      ...extraHeaders
+    }
+  });
 }
 
 function developmentRuntime(industry) {
@@ -165,15 +168,6 @@ function injectIndustryRuntime(industry, pathname, bytes, type) {
 
   if (!html.includes("data-axtor-development-runtime")) headScripts.push(developmentRuntime(industry));
 
-  if (industry === "grocery") {
-    if (shouldInjectGroceryRepair(pathname, html)) {
-      bodyScripts.push('<script src="js/grocery-sidebar-repair.js?v=20260803-sidebar-repair1"></script>');
-    }
-    if (!html.includes("grocery-navigation-ui.js")) {
-      bodyScripts.push('<script src="js/grocery-navigation-ui.js?v=20260805-navigation3"></script>');
-    }
-  }
-
   if (industry === "retail") {
     if (/(^|\/)terminal\.html$/i.test(pathname) && !html.includes("retail-terminal-certification.js")) {
       bodyScripts.push('<script src="js/retail-terminal-certification.js?v=20260803-retail-cert1"></script>');
@@ -195,7 +189,9 @@ function injectIndustryRuntime(industry, pathname, bytes, type) {
 }
 
 export default async function industryAsset(request) {
-  if (request.method !== "GET" && request.method !== "HEAD") return textResponse("Method not allowed", 405, { Allow: "GET, HEAD" });
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return textResponse("Method not allowed", 405, { Allow: "GET, HEAD" });
+  }
 
   const requestUrl = new URL(request.url);
   const industry = String(requestUrl.searchParams.get("industry") || "").toLowerCase().trim();
@@ -211,12 +207,14 @@ export default async function industryAsset(request) {
   try {
     const upstream = await fetch(source, {
       method: request.method,
-      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.7" },
+      headers: { Accept: "*/*", "User-Agent": "Axtor-POS-Industry-Delivery/2.8" },
       redirect: "follow",
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
     });
 
-    if (!upstream.ok) return textResponse(upstream.status === 404 ? "Industry asset not found" : "Industry asset source unavailable", upstream.status === 404 ? 404 : 502);
+    if (!upstream.ok) {
+      return textResponse(upstream.status === 404 ? "Industry asset not found" : "Industry asset source unavailable", upstream.status === 404 ? 404 : 502);
+    }
 
     const declaredSize = numericHeader(upstream.headers, "content-length");
     if (declaredSize !== null && declaredSize > MAX_ASSET_BYTES) return textResponse("Industry asset exceeds delivery limit", 413);
@@ -248,7 +246,12 @@ export default async function industryAsset(request) {
     return new Response(body, { status: 200, headers });
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
-    console.error("Industry asset proxy failed", { industry, pathname, timedOut, message: error instanceof Error ? error.message : String(error) });
+    console.error("Industry asset proxy failed", {
+      industry,
+      pathname,
+      timedOut,
+      message: error instanceof Error ? error.message : String(error)
+    });
     return textResponse(timedOut ? "Industry asset source timed out" : "Industry asset source unavailable", 502);
   }
 }
