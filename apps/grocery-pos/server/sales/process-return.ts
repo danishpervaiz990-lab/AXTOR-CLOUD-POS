@@ -47,7 +47,7 @@ export async function processSaleReturn(input: {
   lines: ReturnLineInput[];
   refund?: RefundInput | null;
 }) {
-  requirePermission(input.context, "sales.refund");
+  requirePermission(input.context, "refunds.create");
   if (!input.idempotencyKey || input.idempotencyKey.length > 160) throw new Error("INVALID_IDEMPOTENCY_KEY");
   if (input.lines.length === 0 || input.lines.length > 500) throw new Error("INVALID_RETURN_LINES");
   if (new Set(input.lines.map((line) => line.saleItemId)).size !== input.lines.length) {
@@ -92,7 +92,10 @@ export async function processSaleReturn(input: {
           businessId: input.context.businessId,
           status: { notIn: [SaleStatus.DRAFT, SaleStatus.HELD, SaleStatus.CANCELLED, SaleStatus.FULLY_RETURNED] }
         },
-        include: { items: { include: { product: true } } }
+        include: {
+          business: { select: { currencyCode: true } },
+          items: { include: { product: true } }
+        }
       });
       if (!sale) throw new Error("SALE_NOT_RETURNABLE");
 
@@ -161,7 +164,7 @@ export async function processSaleReturn(input: {
             direction: PaymentDirection.PAYMENT,
             status: PaymentStatus.POSTED,
             amount: refundAmount.toFixed(4),
-            currencyCode: sale.currencyCode ?? "QAR",
+            currencyCode: sale.business.currencyCode,
             reference: input.refund.reference ?? `Refund ${sale.invoiceNumber}`,
             idempotencyKey: `${input.idempotencyKey}:refund`
           }
@@ -260,7 +263,7 @@ export async function processSaleReturn(input: {
         data: {
           businessId: input.context.businessId,
           actorUserId: input.context.userId,
-          action: AuditAction.REFUND,
+          action: AuditAction.RETURN,
           entityType: "SALES_RETURN",
           entityId: input.idempotencyKey,
           beforeData: {
