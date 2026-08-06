@@ -27,37 +27,49 @@ for (const project of manifest.projects) {
     if (project.industry === "grocery") {
       const root = "apps/grocery-pos";
       const pkg = JSON.parse(fs.readFileSync(`${root}/package.json`, "utf8"));
-      const railway = fs.readFileSync(`${root}/railway.toml`, "utf8");
-      const schema = fs.readFileSync(`${root}/prisma/schema.prisma`, "utf8");
+      const vercel = JSON.parse(fs.readFileSync(`${root}/vercel.json`, "utf8"));
       const dashboard = fs.readFileSync(`${root}/app/dashboard/page.tsx`, "utf8");
       const checkout = fs.readFileSync(`${root}/components/checkout-terminal.tsx`, "utf8");
+      const sharedBackend = fs.readFileSync(`${root}/lib/shared-backend.ts`, "utf8");
+      const sharedProxy = fs.readFileSync(`${root}/app/api/shared/[...path]/route.ts`, "utf8");
       const groceryGateway = fs.readFileSync("demo-static/api/grocery-asset.js", "utf8");
       for (const file of [
         "app/login/page.tsx", "app/dashboard/page.tsx", "app/checkout/page.tsx",
         "app/inventory/page.tsx", "app/finance/page.tsx", "app/cheques/page.tsx",
-        "app/api/health/route.ts", "app/api/health/database/route.ts",
-        "prisma/migrations/20260806010000_initial_grocery_foundation/migration.sql"
+        "app/api/auth/login/route.ts", "app/api/auth/logout/route.ts", "app/api/auth/me/route.ts",
+        "app/api/shared/[...path]/route.ts", "lib/shared-backend.ts", "lib/browser-api.ts",
+        "tests/shared-backend.test.ts"
       ]) assert.ok(fs.existsSync(`${root}/${file}`), `Grocery replacement is missing ${file}`);
       assert.match(dashboard, /dashboard/i);
       assert.match(checkout, /\/api\/grocery\/sales\/complete/);
-      assert.match(schema, /model Business/);
-      assert.match(schema, /model Cheque/);
-      assert.match(pkg.scripts?.["release:railway"] || "", /prisma:migrate:deploy/);
-      assert.match(pkg.scripts?.["release:railway"] || "", /prisma:seed/);
-      assert.match(railway, /healthcheckPath\s*=\s*"\/api\/health"/);
-      assert.match(groceryGateway, /axtor-grocery-pos-production\.up\.railway\.app/);
+      assert.match(pkg.description || "", /existing shared backend/i);
+      assert.match(pkg.scripts?.build || "", /next build/);
+      assert.equal(pkg.scripts?.["release:railway"], undefined);
+      assert.equal(pkg.scripts?.["start:railway"], undefined);
+      assert.equal(vercel.framework, "nextjs");
+      assert.match(vercel.buildCommand || "", /npm run build/);
+      assert.match(sharedBackend, /AXTOR_SHARED_BACKEND_URL/);
+      assert.match(sharedBackend, /Authorization/);
+      assert.match(sharedBackend, /X-Business-Id/);
+      assert.match(sharedBackend, /\/api\/v1\/auth\/login/);
+      assert.match(sharedProxy, /allowedRoots/);
+      assert.match(sharedProxy, /\/api\/v1\//);
+      assert.match(sharedProxy, /MODULE_NOT_ALLOWED/);
+      assert.match(groceryGateway, /axtor-grocery-pos\.vercel\.app/);
+      assert.match(groceryGateway, /GROCERY_VERCEL_ORIGIN/);
+      assert.doesNotMatch(groceryGateway, /axtor-grocery-pos-production\.up\.railway\.app|GROCERY_RAILWAY_ORIGIN/);
       assert.doesNotMatch(groceryGateway, /frontend-grocery|raw\.githubusercontent\.com/);
-      assert.equal(project.branch, "cutover/grocery-new-railway-20260806");
-      assert.equal(project.project, "axtor-grocery");
+      assert.equal(project.branch, "main");
+      assert.equal(project.project, "axtor-grocery-pos");
       assert.equal(project.origin, "https://axtorpos.vercel.app/apps/grocery");
-      assert.equal(project.status, "railway_cutover_prepared");
-      assert.equal(project.sourceAlias, "https://axtor-grocery-pos-production.up.railway.app");
+      assert.equal(project.status, "vercel_shared_backend_prepared");
+      assert.equal(project.sourceAlias, "https://axtor-grocery-pos.vercel.app");
       results.push({
         industry: project.industry,
         branch: project.branch,
         certificationRef,
         staticRelease: "RETIRED",
-        deployment: "RAILWAY_CUTOVER_PREPARED"
+        deployment: "VERCEL_SHARED_BACKEND_PREPARED"
       });
       console.log("PASS grocery");
       continue;
@@ -128,7 +140,9 @@ assert.doesNotMatch(router, /searchParams\.set\(["']token/);
 assert.match(proxy, /raw\.githubusercontent\.com/);
 assert.doesNotMatch(proxy, /frontend-grocery/);
 assert.doesNotMatch(proxy, /req\.query\.branch/);
-assert.match(groceryProxy, /axtor-grocery-pos-production\.up\.railway\.app/);
+assert.match(groceryProxy, /axtor-grocery-pos\.vercel\.app/);
+assert.match(groceryProxy, /GROCERY_VERCEL_ORIGIN/);
+assert.doesNotMatch(groceryProxy, /axtor-grocery-pos-production\.up\.railway\.app|GROCERY_RAILWAY_ORIGIN/);
 assert.doesNotMatch(groceryProxy, /frontend-grocery|raw\.githubusercontent\.com/);
 assert.ok(mainVercel.rewrites.some(row => row.source === "/apps/grocery/:path*"));
 assert.ok(mainVercel.rewrites.some(row => row.source === "/apps/:industry/:path*"));
@@ -140,7 +154,7 @@ for (const project of manifest.projects) {
   assert.equal(host?.basePath, `/apps/${project.industry}`, `main router base path mismatch for ${project.industry}`);
   assert.equal(host?.sourceAlias, project.sourceAlias, `main router source alias mismatch for ${project.industry}`);
   if (project.industry === "grocery") {
-    assert.match(groceryProxy, /GROCERY_RAILWAY_ORIGIN/);
+    assert.match(groceryProxy, /GROCERY_VERCEL_ORIGIN/);
   } else {
     assert.match(proxy, new RegExp(project.branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `proxy branch whitelist missing ${project.branch}`);
   }
@@ -150,4 +164,4 @@ assert.deepEqual(manifest.unreleased, []);
 console.log("PASS proposed main SaaS router and delivery layer");
 
 console.table(results);
-console.log(`PASS: ${results.length} industries certified; 12 existing static frontends preserved, Grocery replaced by the isolated Railway application, and secure shared handoff retained`);
+console.log(`PASS: ${results.length} industries certified; 12 existing static frontends preserved, Grocery deployed separately on Vercel using the existing shared backend, and secure shared handoff retained`);
