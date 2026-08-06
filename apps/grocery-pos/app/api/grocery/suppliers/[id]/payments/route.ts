@@ -1,50 +1,63 @@
-import { PaymentMethodType } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { postPartyPayment } from "@/server/finance/post-party-payment";
-import { assertTrustedMutationOrigin } from "@/server/security/origin";
-import { requireTenantContext } from "@/server/tenancy/context";
+import {
+  SharedBackendError,
+  sharedBackendRequest,
+  sharedRequestContext
+} from "@/lib/shared-backend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const schema = z.object({
-  branchId: z.string().uuid(),
-  accountId: z.string().uuid(),
-  methodType: z.nativeEnum(PaymentMethodType),
-  amount: z.union([z.string(), z.number()]).transform(String),
-  reference: z.string().trim().max(160).nullable().optional(),
-  description: z.string().trim().max(500).nullable().optional()
-});
-
-export async function POST(request: Request, routeContext: { params: Promise<{ id: string }> }) {
-  try { assertTrustedMutationOrigin(request); } catch {
-    return NextResponse.json({ error: "UNTRUSTED_ORIGIN" }, { status: 403 });
+export async function POST(
+  request: Request,
+  routeContext: { params: Promise<{ id: string }> }
+) {
+  const { id } = await routeContext.params;
+  const { token, businessId } = sharedRequestContext(request);
+  if (!token) {
+    return NextResponse.json(
+      { error: "AUTHENTICATION_REQUIRED" },
+      { status: 401, headers: { "Cache-Control": "no-store" } }
+    );
   }
+
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json(
+      { error: "INVALID_REQUEST" },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   const idempotencyKey = request.headers.get("idempotency-key")?.trim();
-  if (!idempotencyKey) return NextResponse.json({ error: "IDEMPOTENCY_KEY_REQUIRED" }, { status: 400 });
-  const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
+  const headers = new Headers();
+  if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
 
   try {
-    const context = await requireTenantContext();
-    const { id } = await routeContext.params;
-    const data = await postPartyPayment({
-      context,
-      idempotencyKey,
-      type: "SUPPLIER_PAYMENT",
-      partyId: id,
-      ...parsed.data
+    const payload = await sharedBackendRequest<unknown>(
+      "/api/v1/purchases/supplier-payments",
+      {
+        method: "POST",
+        token,
+        businessId,
+        headers,
+        body: { ...body, supplierId: id }
+      }
+    );
+    return NextResponse.json(payload, {
+      status: 201,
+      headers: { "Cache-Control": "no-store" }
     });
-    return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "INTERNAL_ERROR";
-    const status = code === "AUTHENTICATION_REQUIRED" ? 401
-      : code === "PERMISSION_DENIED" ? 403
-      : code === "RESOURCE_NOT_FOUND" ? 404
-      : ["IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST", "REQUEST_ALREADY_IN_PROGRESS"].includes(code) ? 409
-      : ["INVALID_IDEMPOTENCY_KEY", "INVALID_PAYMENT_AMOUNT", "DEDICATED_PAYMENT_WORKFLOW_REQUIRED", "PAYMENT_ACCOUNT_METHOD_MISMATCH"].includes(code) ? 422
-      : 500;
-    return NextResponse.json({ error: status === 500 ? "INTERNAL_ERROR" : code }, { status });
+    if (error instanceof SharedBackendError) {
+      return NextResponse.json(
+        { error: error.code ?? "SHARED_BACKEND_ERROR", message: error.message },
+        { status: error.status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    return NextResponse.json(
+      { error: "BACKEND_UNAVAILABLE", message: "Supplier payment could not be posted." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
   }
 }
