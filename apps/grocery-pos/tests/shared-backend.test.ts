@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SharedBackendError, sharedBackendRequest } from "@/lib/shared-backend";
+import { groceryApi, SharedBackendError, sharedBackendRequest } from "@/lib/shared-backend";
 
 describe("sharedBackendRequest", () => {
   afterEach(() => {
@@ -27,6 +27,30 @@ describe("sharedBackendRequest", () => {
     const headers = new Headers(request?.headers);
     expect(headers.get("Authorization")).toBe("Bearer jwt-token");
     expect(headers.get("X-Business-Id")).toBe("business-1");
+  });
+
+  it("uses the existing backend businessSlug login contract", async () => {
+    process.env.AXTOR_SHARED_BACKEND_URL = "https://backend.example.test";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ token: "jwt", user: {}, business: {} }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+
+    await groceryApi.login({
+      businessSlug: "green-basket",
+      email: "owner@example.com",
+      password: "correct-password"
+    });
+
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://backend.example.test/api/v1/auth/login");
+    expect(JSON.parse(String(request?.body))).toEqual({
+      businessSlug: "green-basket",
+      email: "owner@example.com",
+      password: "correct-password"
+    });
   });
 
   it("surfaces backend errors without hiding the HTTP status", async () => {
