@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { groceryApi, SharedBackendError } from "@/lib/shared-backend";
+import { setSharedBackendSession } from "@/lib/shared-session";
 import { assertTrustedMutationOrigin } from "@/server/security/origin";
 
 export const runtime = "nodejs";
@@ -33,10 +34,24 @@ export async function POST(request: Request) {
       password: input.password
     });
 
-    return NextResponse.json(result, {
-      status: 200,
-      headers: { "Cache-Control": "no-store" }
+    await setSharedBackendSession({
+      token: result.token,
+      businessId: result.business.id,
+      expiresIn: result.expiresIn
     });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        user: result.user,
+        business: result.business,
+        expiresIn: result.expiresIn
+      },
+      {
+        status: 200,
+        headers: { "Cache-Control": "no-store" }
+      }
+    );
   } catch (error) {
     if (error instanceof SharedBackendError) {
       return NextResponse.json(
