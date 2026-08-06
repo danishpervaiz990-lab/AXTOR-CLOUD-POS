@@ -9,7 +9,7 @@ const base='https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-P
 
 async function fetchText(ref,path){
  const url=`${base}/${encodeURIComponent(ref).replaceAll('%2F','/')}/demo-static/${path.split('/').map(encodeURIComponent).join('/')}`;
- const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.2'},signal:AbortSignal.timeout(20000)});
+ const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.3'},signal:AbortSignal.timeout(20000)});
  assert.equal(response.status,200,`${ref}:${path} returned HTTP ${response.status}`);
  return await response.text();
 }
@@ -17,37 +17,46 @@ async function fetchText(ref,path){
 function certifyGrocery(project){
  const root='apps/grocery-pos';
  const required=[
-  'package.json','railway.toml','prisma/schema.prisma',
-  'prisma/migrations/20260806010000_initial_grocery_foundation/migration.sql',
+  'package.json','vercel.json',
   'app/login/page.tsx','app/dashboard/page.tsx','app/checkout/page.tsx',
   'app/inventory/page.tsx','app/finance/page.tsx','app/cheques/page.tsx',
-  'app/api/health/route.ts','app/api/health/database/route.ts',
+  'app/api/auth/login/route.ts','app/api/auth/logout/route.ts','app/api/auth/me/route.ts',
+  'app/api/shared/[...path]/route.ts','lib/shared-backend.ts','lib/browser-api.ts',
   'app/api/grocery/sales/complete/route.ts','app/api/grocery/reports/payment-reconciliation/route.ts',
-  'app/api/grocery/reports/cheques/route.ts'
+  'app/api/grocery/reports/cheques/route.ts','tests/shared-backend.test.ts'
  ];
  for(const file of required)assert.ok(fs.existsSync(`${root}/${file}`),`Grocery replacement is missing ${file}`);
  const pkg=JSON.parse(fs.readFileSync(`${root}/package.json`,'utf8'));
- const railway=fs.readFileSync(`${root}/railway.toml`,'utf8');
- const schema=fs.readFileSync(`${root}/prisma/schema.prisma`,'utf8');
+ const vercel=JSON.parse(fs.readFileSync(`${root}/vercel.json`,'utf8'));
+ const sharedBackend=fs.readFileSync(`${root}/lib/shared-backend.ts`,'utf8');
+ const sharedProxy=fs.readFileSync(`${root}/app/api/shared/[...path]/route.ts`,'utf8');
  const checkout=fs.readFileSync(`${root}/components/checkout-terminal.tsx`,'utf8');
  const gateway=fs.readFileSync('demo-static/api/grocery-asset.js','utf8');
- assert.equal(project.branch,'cutover/grocery-new-railway-20260806');
- assert.equal(project.project,'axtor-grocery');
- assert.equal(project.status,'railway_cutover_prepared');
- assert.equal(project.sourceAlias,'https://axtor-grocery-pos-production.up.railway.app');
- assert.match(pkg.scripts?.['release:railway']||'',/prisma:migrate:deploy/);
- assert.match(pkg.scripts?.['release:railway']||'',/prisma:seed/);
- assert.match(pkg.scripts?.['start:railway']||'',/next start/);
- assert.match(railway,/healthcheckPath\s*=\s*"\/api\/health"/);
- assert.match(railway,/npm run release:railway/);
- assert.match(schema,/@@map\("grocery_businesses"\)/);
- assert.match(schema,/model Cheque/);
+ assert.equal(project.branch,'main');
+ assert.equal(project.project,'axtor-grocery-pos');
+ assert.equal(project.status,'vercel_shared_backend_prepared');
+ assert.equal(project.sourceAlias,'https://axtor-grocery-pos.vercel.app');
+ assert.match(pkg.description||'',/existing shared backend/i);
+ assert.match(pkg.scripts?.build||'',/next build/);
+ assert.equal(pkg.scripts?.['release:railway'],undefined);
+ assert.equal(pkg.scripts?.['start:railway'],undefined);
+ assert.equal(vercel.framework,'nextjs');
+ assert.match(vercel.buildCommand||'',/npm run build/);
+ assert.match(sharedBackend,/AXTOR_SHARED_BACKEND_URL/);
+ assert.match(sharedBackend,/Authorization/);
+ assert.match(sharedBackend,/X-Business-Id/);
+ assert.match(sharedBackend,/\/api\/v1\/auth\/login/);
+ assert.match(sharedProxy,/allowedRoots/);
+ assert.match(sharedProxy,/\/api\/v1\//);
+ assert.match(sharedProxy,/MODULE_NOT_ALLOWED/);
  assert.match(checkout,/\/api\/grocery\/sales\/complete/);
  assert.match(checkout,/Idempotency-Key/);
- assert.match(gateway,/axtor-grocery-pos-production\.up\.railway\.app/);
+ assert.match(gateway,/axtor-grocery-pos\.vercel\.app/);
+ assert.match(gateway,/GROCERY_VERCEL_ORIGIN/);
  assert.match(gateway,/X-Axtor-Legacy-Grocery/);
+ assert.doesNotMatch(gateway,/axtor-grocery-pos-production\.up\.railway\.app|GROCERY_RAILWAY_ORIGIN/);
  assert.doesNotMatch(gateway,/frontend-grocery|raw\.githubusercontent\.com/);
- return {industry:'grocery',ref:project.branch,dashboard:'app/dashboard/page.tsx',runtime:'Next.js full-stack Railway service',status:'PASS'};
+ return {industry:'grocery',ref:project.branch,dashboard:'app/dashboard/page.tsx',runtime:'Next.js Vercel application using existing shared backend',status:'PASS'};
 }
 
 function runtimeFilesFor(industry){
@@ -92,4 +101,4 @@ for(const project of manifest.projects){
 assert.equal(results.length,13);
 fs.writeFileSync('all-industry-code-certification.json',JSON.stringify({checkedAt:new Date().toISOString(),deploymentAttempted:false,results},null,2));
 console.table(results);
-console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified as the isolated Railway full-stack replacement');
+console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified as a dedicated Vercel application using the existing shared backend');
