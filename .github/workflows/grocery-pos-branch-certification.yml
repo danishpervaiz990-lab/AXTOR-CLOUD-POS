@@ -1,0 +1,104 @@
+name: Grocery POS Branch Certification
+
+on:
+  push:
+    branches: [feat/grocery-total-rebuild]
+    paths:
+      - "apps/grocery-pos/**"
+      - ".github/workflows/grocery-pos-branch-certification.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: grocery-pos-branch-certification
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/grocery-pos
+    env:
+      GROCERY_DATABASE_URL: postgresql://grocery_ci:grocery_ci@127.0.0.1:5432/grocery_ci
+      GROCERY_SESSION_SECRET: ci-session-secret-that-is-longer-than-thirty-two-characters
+      GROCERY_APP_URL: http://localhost:3000
+      GROCERY_ENVIRONMENT: test
+      GROCERY_LOG_LEVEL: error
+      GROCERY_CRON_SECRET: ci-cron-secret-that-is-longer-than-twenty-four-characters
+      GROCERY_FILE_STORAGE_PROVIDER: vercel-blob
+      GROCERY_EMAIL_FROM_NAME: AXTOR Grocery POS Cloud CI
+      GROCERY_EMAIL_FROM_ADDRESS: no-reply@example.com
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/grocery-total-rebuild
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Prisma validate
+        run: npm run prisma:validate
+
+      - name: Prisma generate
+        run: npm run prisma:generate
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Unit tests with JSON evidence
+        run: npx vitest run --reporter=json --outputFile=../../grocery-test-results.json
+
+      - name: Production build
+        run: npm run build
+
+      - name: Write certification evidence
+        working-directory: .
+        run: |
+          mkdir -p docs/grocery/ci-evidence
+          node <<'NODE'
+          const fs = require('fs');
+          const result = JSON.parse(fs.readFileSync('grocery-test-results.json', 'utf8'));
+          const evidence = {
+            application: 'AXTOR Grocery POS Cloud',
+            branch: process.env.GITHUB_REF_NAME,
+            commitSha: process.env.GITHUB_SHA,
+            certifiedAt: new Date().toISOString(),
+            prismaValidate: 'passed',
+            prismaGenerate: 'passed',
+            typecheck: 'passed',
+            productionBuild: 'passed',
+            tests: {
+              success: result.success,
+              testSuites: result.numTotalTestSuites,
+              passedTestSuites: result.numPassedTestSuites,
+              failedTestSuites: result.numFailedTestSuites,
+              tests: result.numTotalTests,
+              passedTests: result.numPassedTests,
+              failedTests: result.numFailedTests
+            }
+          };
+          fs.writeFileSync('docs/grocery/ci-evidence/latest.json', JSON.stringify(evidence, null, 2) + '\n');
+          NODE
+
+      - name: Commit evidence
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/grocery/ci-evidence/latest.json
+          if git diff --cached --quiet; then
+            echo "Certification evidence is unchanged"
+            exit 0
+          fi
+          git commit -m "test(grocery): record green branch certification"
+          git push origin HEAD:feat/grocery-total-rebuild
