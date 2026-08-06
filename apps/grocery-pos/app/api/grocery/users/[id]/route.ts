@@ -1,105 +1,79 @@
-import { AuditAction, RoleKey, UserStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { getDatabase } from "@/lib/db";
-import { requirePermission } from "@/server/permissions/permissions";
-import { assertTrustedMutationOrigin } from "@/server/security/origin";
-import { requireTenantContext } from "@/server/tenancy/context";
+import { SharedBackendError, sharedBackendRequest } from "@/lib/shared-backend";
+import { getRequestSharedBackendCredentials } from "@/lib/shared-session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const updateSchema = z.object({
-  displayName: z.string().trim().min(2).max(160).optional(),
-  role: z.nativeEnum(RoleKey).optional(),
-  status: z.nativeEnum(UserStatus).optional()
-}).refine((value) => Object.keys(value).length > 0, { message: "At least one change is required" });
+type AccessRole = { id: string; name: string };
+type AccessEnvelope = { data?: { roles?: AccessRole[] } };
 
-export async function PATCH(request: Request, routeContext: { params: Promise<{ id: string }> }) {
-  try { assertTrustedMutationOrigin(request); } catch {
-    return NextResponse.json({ error: "UNTRUSTED_ORIGIN" }, { status: 403 });
+const roleNames: Record<string, string[]> = {
+  OWNER: ["Owner"],
+  ADMINISTRATOR: ["Administrator", "Admin"],
+  MANAGER: ["Manager", "Grocery Manager", "Store Manager"],
+  CASHIER: ["Cashier"],
+  INVENTORY_MANAGER: ["Inventory Manager", "Inventory"],
+  ACCOUNTANT: ["Accountant", "Accounts"],
+  SALESPERSON: ["Salesperson", "Salesman", "Sales"],
+  VIEWER_AUDITOR: ["Viewer", "Auditor", "Viewer / Auditor"]
+};
+
+export async function PATCH(
+  request: Request,
+  routeContext: { params: Promise<{ id: string }> }
+) {
+  const { token, businessId } = await getRequestSharedBackendCredentials(request);
+  if (!token) return NextResponse.json({ error: "AUTHENTICATION_REQUIRED" }, { status: 401 });
+  const { id } = await routeContext.params;
+  const input = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!input) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
+  if (input.displayName !== undefined || input.status !== undefined) {
+    return NextResponse.json(
+      {
+        error: "UNSUPPORTED_USER_CHANGE",
+        message: "This shared backend currently supports Grocery role changes here; name and status changes require the central access-control screen."
+      },
+      { status: 422, headers: { "Cache-Control": "no-store" } }
+    );
   }
-  const parsed = updateSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST", details: parsed.error.flatten() }, { status: 400 });
 
   try {
-    const context = await requireTenantContext();
-    requirePermission(context, "users.manage");
-    const { id } = await routeContext.params;
-    if (parsed.data.role === RoleKey.OWNER && context.role !== RoleKey.OWNER) {
-      return NextResponse.json({ error: "OWNER_ROLE_REQUIRES_OWNER" }, { status: 403 });
-    }
-
-    const user = await getDatabase().$transaction(async (transaction) => {
-      const existing = await transaction.user.findFirst({
-        where: { id, businessId: context.businessId }
-      });
-      if (!existing) throw new Error("RESOURCE_NOT_FOUND");
-
-      const removingOwner = existing.role === RoleKey.OWNER && (
-        (parsed.data.role && parsed.data.role !== RoleKey.OWNER) ||
-        (parsed.data.status && parsed.data.status !== UserStatus.ACTIVE)
-      );
-      if (removingOwner) {
-        const activeOwners = await transaction.user.count({
-          where: { businessId: context.businessId, role: RoleKey.OWNER, status: UserStatus.ACTIVE }
-        });
-        if (activeOwners <= 1) throw new Error("LAST_ACTIVE_OWNER_REQUIRED");
-      }
-
-      const updated = await transaction.user.update({
-        where: { id: existing.id },
-        data: parsed.data
-      });
-      const authorizationChanged = (
-        parsed.data.role !== undefined && parsed.data.role !== existing.role
-      ) || (
-        parsed.data.status !== undefined && parsed.data.status !== existing.status
-      );
-      if (authorizationChanged) {
-        await transaction.session.updateMany({
-          where: { businessId: context.businessId, userId: existing.id, revokedAt: null },
-          data: { revokedAt: new Date() }
-        });
-      }
-      await transaction.auditLog.create({
-        data: {
-          businessId: context.businessId,
-          actorUserId: context.userId,
-          action: AuditAction.UPDATE,
-          entityType: "USER",
-          entityId: existing.id,
-          beforeData: {
-            displayName: existing.displayName,
-            role: existing.role,
-            status: existing.status
-          },
-          afterData: {
-            displayName: updated.displayName,
-            role: updated.role,
-            status: updated.status,
-            sessionsRevoked: authorizationChanged
-          }
-        }
-      });
-      return updated;
+    const access = await sharedBackendRequest<AccessEnvelope>("/api/v1/access-control", {
+      token,
+      businessId
     });
-
-    return NextResponse.json({ data: {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      role: user.role,
-      status: user.status,
-      updatedAt: user.updatedAt.toISOString()
-    } });
+    const requested = String(input.role ?? "").toUpperCase();
+    const candidates = roleNames[requested] ?? [];
+    const roleId = (access.data?.roles ?? []).find((role) =>
+      candidates.some((candidate) => candidate.toLowerCase() === role.name.toLowerCase())
+    )?.id;
+    if (!roleId) {
+      return NextResponse.json(
+        { error: "ROLE_NOT_AVAILABLE", message: "The selected Grocery role is not configured." },
+        { status: 422 }
+      );
+    }
+    const payload = await sharedBackendRequest<unknown>(
+      `/api/v1/access-control/users/${encodeURIComponent(id)}/roles`,
+      {
+        method: "PATCH",
+        token,
+        businessId,
+        body: { roleIds: [roleId] }
+      }
+    );
+    return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "INTERNAL_ERROR";
-    const status = code === "AUTHENTICATION_REQUIRED" ? 401
-      : code === "PERMISSION_DENIED" ? 403
-      : code === "RESOURCE_NOT_FOUND" ? 404
-      : code === "LAST_ACTIVE_OWNER_REQUIRED" ? 409
-      : 500;
-    return NextResponse.json({ error: status === 500 ? "INTERNAL_ERROR" : code }, { status });
+    if (error instanceof SharedBackendError) {
+      return NextResponse.json(
+        { error: error.code ?? "SHARED_BACKEND_ERROR", message: error.message },
+        { status: error.status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    return NextResponse.json(
+      { error: "BACKEND_UNAVAILABLE", message: "User role could not be updated." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
   }
 }
