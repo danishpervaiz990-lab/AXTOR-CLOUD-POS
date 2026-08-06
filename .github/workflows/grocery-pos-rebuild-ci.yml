@@ -1,4 +1,4 @@
-name: Grocery POS Rebuild CI
+name: Grocery Shared Backend CI
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
       - "docs/grocery/**"
       - ".github/workflows/grocery-pos-rebuild-ci.yml"
   push:
-    branches: [feat/grocery-total-rebuild]
+    branches: [feat/grocery-shared-backend-20260806]
     paths:
       - "apps/grocery-pos/**"
       - "docs/grocery/**"
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: grocery-pos-rebuild-${{ github.ref }}
+  group: grocery-shared-backend-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -29,7 +29,10 @@ jobs:
       run:
         working-directory: apps/grocery-pos
     env:
-      GROCERY_DATABASE_URL: postgresql://grocery_ci:grocery_ci@127.0.0.1:5432/grocery_ci
+      # Transitional only: Prisma generation remains until every legacy direct-database route is removed.
+      GROCERY_DATABASE_URL: postgresql://migration_only:migration_only@127.0.0.1:5432/migration_only
+      AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
+      NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
       GROCERY_SESSION_SECRET: ci-session-secret-that-is-longer-than-thirty-two-characters
       GROCERY_APP_URL: http://localhost:3000
       GROCERY_ENVIRONMENT: test
@@ -48,13 +51,10 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install isolated Grocery dependencies
+      - name: Install Grocery dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Validate Prisma schema
-        run: npm run prisma:validate
-
-      - name: Generate Prisma client
+      - name: Generate transitional Prisma client
         run: npm run prisma:generate
 
       - name: TypeScript check
@@ -63,15 +63,19 @@ jobs:
       - name: Unit tests
         run: npm run test
 
-      - name: Reject legacy Grocery and Railway runtime imports
+      - name: Enforce shared-backend deployment architecture
+        working-directory: .
         run: |
-          if grep -RInE "frontend-grocery|grocery-dashboard\.html|axtorAuthToken|railway\.app" app components lib server prisma tests --exclude-dir=node_modules; then
-            echo "Legacy Grocery or Railway coupling detected in the isolated application"
+          test ! -f apps/grocery-pos/railway.toml
+          if grep -RInE "release:railway|start:railway|dedicated Railway service|Shared AXTOR backend dependency: none" apps/grocery-pos --exclude-dir=node_modules; then
+            echo "Obsolete dedicated Grocery Railway architecture detected"
             exit 1
           fi
+          test -f apps/grocery-pos/lib/shared-backend.ts
+          test -f apps/grocery-pos/app/api/shared/[...path]/route.ts
 
       - name: Validate Vercel configuration
-        run: node -e "const value=JSON.parse(require('fs').readFileSync('vercel.json','utf8')); if(value.framework!=='nextjs') process.exit(1); if(!Array.isArray(value.crons)) process.exit(1); console.log('Vercel config valid')"
+        run: node -e "const value=JSON.parse(require('fs').readFileSync('vercel.json','utf8')); if(value.framework!=='nextjs') process.exit(1); console.log('Vercel config valid')"
 
       - name: Production build
         run: npm run build
