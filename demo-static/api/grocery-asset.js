@@ -1,4 +1,4 @@
-const DEFAULT_RAILWAY_ORIGIN = "https://axtor-grocery-pos-production.up.railway.app";
+const DEFAULT_VERCEL_ORIGIN = "https://axtor-grocery-pos.vercel.app";
 
 export const runtime = "edge";
 export const config = { runtime: "edge" };
@@ -60,7 +60,7 @@ function retiredResponse(message, status) {
       "Cache-Control": "no-store, max-age=0",
       "X-Content-Type-Options": "nosniff",
       "X-Axtor-Industry": "grocery",
-      "X-Axtor-Grocery-Release": "20260806-new-railway-cutover"
+      "X-Axtor-Grocery-Release": "20260806-vercel-shared-backend-cutover"
     }
   });
 }
@@ -72,11 +72,11 @@ export default function groceryAsset(request) {
 
   const incoming = new URL(request.url);
   const legacyPath = safePath(incoming.searchParams.get("path"));
-  const configuredOrigin = safeOrigin(process.env.GROCERY_RAILWAY_ORIGIN);
-  const targetOrigin = configuredOrigin || DEFAULT_RAILWAY_ORIGIN;
+  const configuredOrigin = safeOrigin(process.env.GROCERY_VERCEL_ORIGIN);
+  const targetOrigin = configuredOrigin || DEFAULT_VERCEL_ORIGIN;
 
   if (!targetOrigin) {
-    return retiredResponse("The replacement Grocery service has not been configured.", 503);
+    return retiredResponse("The replacement Grocery Vercel application has not been configured.", 503);
   }
 
   const fileName = legacyPath.split("/").pop() || "";
@@ -86,7 +86,7 @@ export default function groceryAsset(request) {
   for (const [key, value] of incoming.searchParams.entries()) {
     if (key !== "path") target.searchParams.append(key, value);
   }
-  target.searchParams.set("source", "axtor-grocery-cutover");
+  target.searchParams.set("source", "axtor-grocery-vercel-cutover");
 
   return new Response(null, {
     status: 307,
@@ -96,7 +96,7 @@ export default function groceryAsset(request) {
       "X-Content-Type-Options": "nosniff",
       "X-Robots-Tag": "noindex",
       "X-Axtor-Industry": "grocery",
-      "X-Axtor-Grocery-Release": "20260806-new-railway-cutover",
+      "X-Axtor-Grocery-Release": "20260806-vercel-shared-backend-cutover",
       "X-Axtor-Legacy-Grocery": "retired"
     }
   });
