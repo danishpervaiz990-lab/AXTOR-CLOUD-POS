@@ -1,1 +1,103 @@
-const RAW="https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-POS/frontend-grocery/demo-static/";const MAX_BYTES=20*1024*1024;export const runtime="edge";export const config={runtime:"edge"};const MASTER=new Set(["grocery-suppliers.html","grocery-promotions.html","grocery-loyalty.html","grocery-expenses.html","grocery-accounts.html","grocery-users.html"]);const OPS=new Set(["grocery-labels.html","grocery-shifts.html","grocery-notifications.html","grocery-settings.html"]);const FULL=new Set(["grocery-dashboard.html","grocery-terminal.html","grocery-products.html","grocery-batches.html","grocery-expiry.html","grocery-receiving.html","grocery-waste.html","grocery-recalls.html","grocery-reports.html","grocery-customers.html","grocery-inventory.html"]);const TYPES={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".svg":"image/svg+xml",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".ico":"image/x-icon",".woff":"font/woff",".woff2":"font/woff2",".pdf":"application/pdf"};function safePath(v){let d;try{d=decodeURIComponent(String(v||"")).replace(/^\/+/,"")}catch{return null}const s=d||"grocery-dashboard.html";return s.length>500||s.includes("..")||s.includes("\\")||!/^[A-Za-z0-9._/()-]+$/.test(s)?null:s}function ext(p){const m=p.toLowerCase().match(/(\.[a-z0-9]+)$/);return m?m[1]:""}function text(m,s){return new Response(m,{status:s,headers:{"Content-Type":"text/plain; charset=utf-8","Cache-Control":"no-store"}})}function inject(h,c){return /<\/body>/i.test(h)?h.replace(/<\/body>/i,c+"</body>"):h+c}function strip(h){return h.replace(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*><\/script>/gi,"")}function removeCore(h){return h.replace(/<script\b[^>]*\bsrc=["'][^"']*grocery-app\.js[^"']*["'][^>]*><\/script>/gi,"")}function removeNav(h){return h.replace(/<script\b[^>]*\bsrc=["'][^"']*grocery-navigation-ui\.js[^"']*["'][^>]*><\/script>/gi,"")}function removeDom(h){return h.replace(/<script\b[^>]*\bsrc=["'][^"']*grocery-dom-contract\.js[^"']*["'][^>]*><\/script>/gi,"")}function addShell(h){return /class=["'][^"']*g-shell/.test(h)?h:h.replace(/<body([^>]*)>/i,'<body$1><div class="g-shell"><aside class="g-nav"></aside><main class="g-main"><div id="app"></div></main></div>')}function prepare(path,html){const page=path.split("/").pop(),base='<script src="/apps/grocery/js/axtor-api.js?v=20260805-complete6"></script>',dom='<script src="/apps/grocery/js/grocery-dom-contract.js?v=20260805-complete6"></script>',fix='<script src="/apps/grocery/js/grocery-runtime-fixes-v1.js?v=20260805-complete6"></script>',nav='<script src="/apps/grocery/js/grocery-navigation-ui.js?v=20260805-complete6"></script>';html=removeDom(removeNav(html));if(page==="grocery-categories.html")return inject(strip(html),dom+base+'<script src="/apps/grocery/js/grocery-categories-v3.js?v=20260805-complete6"></script>'+nav);if(MASTER.has(page))return inject(strip(html),dom+base+'<script src="/apps/grocery/js/grocery-masterdata-v2.js?v=20260805-complete6"></script>'+fix+nav);if(OPS.has(page))return inject(strip(html),dom+base+'<script src="/apps/grocery/js/grocery-operations-v2.js?v=20260805-complete6"></script>'+fix+nav);if(page==="grocery-sales.html"||page==="grocery-purchases.html"){html=addShell(removeCore(html));return inject(html,dom+nav)}if(FULL.has(page))return inject(html,dom+nav);return inject(html,dom+nav)}export default async function groceryAsset(request){if(request.method!=="GET"&&request.method!=="HEAD")return text("Method not allowed",405);const u=new URL(request.url),path=safePath(u.searchParams.get("path"));if(!path)return text("Invalid Grocery asset path",400);const source=RAW+path.split("/").map(encodeURIComponent).join("/")+"?release=20260805-complete6";try{const up=await fetch(source,{method:request.method,cache:"no-store",headers:{Accept:"*/*","User-Agent":"Axtor-Grocery-Delivery/5.5"},redirect:"follow",signal:AbortSignal.timeout(15000)});if(!up.ok)return text(up.status===404?"Grocery page not found":"Grocery source unavailable",up.status===404?404:502);const type=TYPES[ext(path)]||up.headers.get("content-type")||"application/octet-stream";const headers=new Headers({"Content-Type":type,"Cache-Control":type.startsWith("text/html")?"no-store, max-age=0":"public, max-age=60, must-revalidate","X-Content-Type-Options":"nosniff","X-Frame-Options":"DENY","X-Robots-Tag":"noindex","X-Axtor-Industry":"grocery","X-Axtor-Grocery-Release":"20260805-complete6"});if(request.method==="HEAD")return new Response(null,{status:200,headers});const bytes=new Uint8Array(await up.arrayBuffer());if(bytes.byteLength>MAX_BYTES)return text("Grocery asset exceeds delivery limit",413);if(!type.startsWith("text/html"))return new Response(bytes,{status:200,headers});return new Response(prepare(path,new TextDecoder().decode(bytes)),{status:200,headers})}catch(e){console.error("Grocery asset delivery failed",{path,message:e instanceof Error?e.message:String(e)});return text("Grocery source unavailable",502)}}
+const DEFAULT_RAILWAY_ORIGIN = "https://axtor-grocery-pos-production.up.railway.app";
+
+export const runtime = "edge";
+export const config = { runtime: "edge" };
+
+const ROUTES = new Map([
+  ["", "/login"],
+  ["grocery-dashboard.html", "/dashboard"],
+  ["grocery-terminal.html", "/checkout"],
+  ["grocery-shifts.html", "/checkout"],
+  ["grocery-products.html", "/inventory"],
+  ["grocery-categories.html", "/inventory"],
+  ["grocery-batches.html", "/inventory"],
+  ["grocery-expiry.html", "/inventory"],
+  ["grocery-inventory.html", "/inventory"],
+  ["grocery-receiving.html", "/inventory"],
+  ["grocery-waste.html", "/inventory"],
+  ["grocery-recalls.html", "/inventory"],
+  ["grocery-sales.html", "/finance"],
+  ["grocery-purchases.html", "/finance"],
+  ["grocery-expenses.html", "/finance"],
+  ["grocery-accounts.html", "/finance"],
+  ["grocery-reports.html", "/finance"],
+  ["grocery-cheques.html", "/cheques"],
+  ["grocery-customers.html", "/dashboard"],
+  ["grocery-suppliers.html", "/dashboard"],
+  ["grocery-promotions.html", "/dashboard"],
+  ["grocery-loyalty.html", "/dashboard"],
+  ["grocery-labels.html", "/dashboard"],
+  ["grocery-notifications.html", "/dashboard"],
+  ["grocery-settings.html", "/dashboard"],
+  ["grocery-users.html", "/dashboard"]
+]);
+
+function safeOrigin(value) {
+  try {
+    const parsed = new URL(String(value || "").trim());
+    return parsed.protocol === "https:" ? parsed.origin : "";
+  } catch {
+    return "";
+  }
+}
+
+function safePath(value) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(String(value || "")).replace(/^\/+/, "");
+  } catch {
+    return "";
+  }
+  if (decoded.length > 500 || decoded.includes("..") || decoded.includes("\\")) return "";
+  return decoded;
+}
+
+function retiredResponse(message, status) {
+  return new Response(message, {
+    status,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
+      "X-Axtor-Industry": "grocery",
+      "X-Axtor-Grocery-Release": "20260806-new-railway-cutover"
+    }
+  });
+}
+
+export default function groceryAsset(request) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return retiredResponse("Method not allowed", 405);
+  }
+
+  const incoming = new URL(request.url);
+  const legacyPath = safePath(incoming.searchParams.get("path"));
+  const configuredOrigin = safeOrigin(process.env.GROCERY_RAILWAY_ORIGIN);
+  const targetOrigin = configuredOrigin || DEFAULT_RAILWAY_ORIGIN;
+
+  if (!targetOrigin) {
+    return retiredResponse("The replacement Grocery service has not been configured.", 503);
+  }
+
+  const fileName = legacyPath.split("/").pop() || "";
+  const route = ROUTES.get(fileName) || "/login";
+  const target = new URL(route, targetOrigin);
+
+  for (const [key, value] of incoming.searchParams.entries()) {
+    if (key !== "path") target.searchParams.append(key, value);
+  }
+  target.searchParams.set("source", "axtor-grocery-cutover");
+
+  return new Response(null, {
+    status: 307,
+    headers: {
+      Location: target.toString(),
+      "Cache-Control": "no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
+      "X-Robots-Tag": "noindex",
+      "X-Axtor-Industry": "grocery",
+      "X-Axtor-Grocery-Release": "20260806-new-railway-cutover",
+      "X-Axtor-Legacy-Grocery": "retired"
+    }
+  });
+}
