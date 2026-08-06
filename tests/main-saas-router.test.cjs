@@ -36,14 +36,15 @@ assert.deepEqual(Object.keys(hosts.frontends).sort(),expected.slice().sort(),'Ro
 for(const code of expected){
   const entry=hosts.frontends[code];
   assert.ok(entry,`${code} router entry missing`);
-  assert.equal(entry.project,`axtor-${code}`,`${code} project mismatch`);
   assert.equal(entry.dashboard,`${code}-dashboard.html`,`${code} dashboard mismatch`);
   assert.equal(entry.delivery,'same_origin_branch_proxy',`${code} delivery mode mismatch`);
   assert.equal(entry.basePath,`/apps/${code}`,`${code} base path mismatch`);
   if(code==='grocery'){
-    assert.equal(entry.branch,'cutover/grocery-new-railway-20260806','grocery replacement branch mismatch');
-    assert.equal(entry.sourceAlias,'https://axtor-grocery-pos-production.up.railway.app','grocery Railway source alias mismatch');
+    assert.equal(entry.project,'axtor-grocery-pos','grocery project mismatch');
+    assert.equal(entry.branch,'main','grocery replacement branch mismatch');
+    assert.equal(entry.sourceAlias,'https://axtor-grocery-pos.vercel.app','grocery Vercel source alias mismatch');
   }else{
+    assert.equal(entry.project,`axtor-${code}`,`${code} project mismatch`);
     assert.equal(entry.branch,`frontend-${code}`,`${code} branch mismatch`);
     assert.match(entry.sourceAlias,new RegExp(`^https://axtorpos-git-frontend-${code}-`),`${code} source alias mismatch`);
   }
@@ -55,9 +56,10 @@ assert.deepEqual(manifest.unreleased,[],'No industry should remain marked unrele
 for(const item of manifest.projects){
   assert.equal(item.dashboard,`${item.industry}-dashboard.html`);
   if(item.industry==='grocery'){
-    assert.equal(item.branch,'cutover/grocery-new-railway-20260806');
-    assert.equal(item.sourceAlias,'https://axtor-grocery-pos-production.up.railway.app');
-    assert.equal(item.status,'railway_cutover_prepared');
+    assert.equal(item.project,'axtor-grocery-pos');
+    assert.equal(item.branch,'main');
+    assert.equal(item.sourceAlias,'https://axtor-grocery-pos.vercel.app');
+    assert.equal(item.status,'vercel_shared_backend_prepared');
   }else{
     assert.equal(item.branch,`frontend-${item.industry}`);
     assert.equal(item.status,'code_complete_not_deployed');
@@ -93,9 +95,11 @@ assert.doesNotMatch(proxy,/module\.exports/);
 assert.doesNotMatch(proxy,/Buffer\.from/);
 assert.doesNotMatch(proxy,/url\.parse\s*\(/);
 
-assert.match(groceryProxy,/axtor-grocery-pos-production\.up\.railway\.app/);
-assert.match(groceryProxy,/GROCERY_RAILWAY_ORIGIN/);
+assert.match(groceryProxy,/axtor-grocery-pos\.vercel\.app/);
+assert.match(groceryProxy,/GROCERY_VERCEL_ORIGIN/);
 assert.match(groceryProxy,/X-Axtor-Legacy-Grocery/);
+assert.doesNotMatch(groceryProxy,/axtor-grocery-pos-production\.up\.railway\.app/);
+assert.doesNotMatch(groceryProxy,/GROCERY_RAILWAY_ORIGIN/);
 assert.doesNotMatch(groceryProxy,/frontend-grocery/);
 assert.doesNotMatch(groceryProxy,/raw\.githubusercontent\.com/);
 
@@ -122,4 +126,4 @@ for(const rule of loginHeaderRules){
   assert.match(values['cache-control']||'',/no-store/);
   assert.equal(values.pragma,'no-cache');
 }
-console.log('PASS: main SaaS router preserves 12 existing industries and routes Grocery only to the isolated Railway replacement');
+console.log('PASS: main SaaS router preserves 12 existing industries and routes Grocery only to the dedicated Vercel shared-backend application');
