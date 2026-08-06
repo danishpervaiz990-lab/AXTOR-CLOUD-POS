@@ -1,73 +1,150 @@
 import { NextResponse } from "next/server";
-import { getDatabase } from "@/lib/db";
-import { requirePermission } from "@/server/permissions/permissions";
-import { requireTenantContext } from "@/server/tenancy/context";
+import {
+  SharedBackendError,
+  sharedBackendRequest,
+  sharedRequestContext
+} from "@/lib/shared-backend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+type SharedEnvelope<T> = { ok?: boolean; data?: T } & Record<string, unknown>;
+
+type SharedBranch = {
+  id: string;
+  code?: string | null;
+  name: string;
+  active?: boolean;
+  warehouses?: Array<{
+    id: string;
+    branchId?: string | null;
+    code?: string | null;
+    name: string;
+    active?: boolean;
+  }>;
+  counters?: Array<{
+    id: string;
+    branchId?: string | null;
+    code?: string | null;
+    name: string;
+    status?: string | null;
+  }>;
+};
+
+type SharedShift = {
+  id: string;
+  branchId?: string | null;
+  counterId?: string | null;
+  status?: string | null;
+  openingCash?: string | number | null;
+  expectedCash?: string | number | null;
+  openedAt: string;
+};
+
+function unwrap<T>(payload: SharedEnvelope<T> | T): T {
+  if (payload && typeof payload === "object" && "data" in payload) {
+    return (payload as SharedEnvelope<T>).data as T;
+  }
+  return payload as T;
+}
+
+export async function GET(request: Request) {
+  const { token, businessId } = sharedRequestContext(request);
+  if (!token) {
+    return NextResponse.json(
+      { error: "AUTHENTICATION_REQUIRED" },
+      { status: 401, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   try {
-    const context = await requireTenantContext();
-    requirePermission(context, "dashboard.view");
-    const database = getDatabase();
-    const [business, branches, warehouses, registers, currentShifts] = await database.$transaction([
-      database.business.findUnique({
-        where: { id: context.businessId },
-        select: { id: true, slug: true, name: true, currencyCode: true, timezone: true, active: true }
+    const [sessionPayload, branchesPayload, shiftPayload] = await Promise.all([
+      sharedBackendRequest<{
+        ok?: boolean;
+        business: Record<string, unknown>;
+        user: Record<string, unknown>;
+      }>("/api/v1/auth/me", { token, businessId }),
+      sharedBackendRequest<SharedEnvelope<SharedBranch[]>>("/api/v1/branches", {
+        token,
+        businessId
       }),
-      database.branch.findMany({
-        where: { businessId: context.businessId, active: true },
-        select: { id: true, code: true, name: true },
-        orderBy: [{ name: "asc" }, { code: "asc" }]
-      }),
-      database.warehouse.findMany({
-        where: { businessId: context.businessId, active: true },
-        select: { id: true, branchId: true, code: true, name: true },
-        orderBy: [{ name: "asc" }, { code: "asc" }]
-      }),
-      database.register.findMany({
-        where: { businessId: context.businessId, active: true },
-        select: { id: true, branchId: true, warehouseId: true, code: true, name: true },
-        orderBy: [{ name: "asc" }, { code: "asc" }]
-      }),
-      database.cashierShift.findMany({
-        where: {
-          businessId: context.businessId,
-          cashierId: context.userId,
-          status: { in: ["OPEN", "REOPENED"] }
-        },
-        select: {
-          id: true,
-          branchId: true,
-          registerId: true,
-          status: true,
-          openingCash: true,
-          expectedCash: true,
-          openedAt: true
-        },
-        orderBy: { openedAt: "desc" }
+      sharedBackendRequest<SharedEnvelope<SharedShift | null>>("/api/v1/shifts/current", {
+        token,
+        businessId
       })
     ]);
-    if (!business?.active) return NextResponse.json({ error: "WORKSPACE_DISABLED" }, { status: 403 });
 
-    return NextResponse.json({
-      data: {
-        business,
-        branches,
-        warehouses,
-        registers,
-        currentShifts: currentShifts.map((shift) => ({
-          ...shift,
-          openingCash: shift.openingCash.toFixed(4),
-          expectedCash: shift.expectedCash.toFixed(4),
-          openedAt: shift.openedAt.toISOString()
-        }))
-      }
-    }, { headers: { "Cache-Control": "no-store" } });
+    const sharedBusiness = sessionPayload.business ?? {};
+    const branches = unwrap(branchesPayload) ?? [];
+    const currentShift = unwrap(shiftPayload);
+    const status = String(sharedBusiness.status ?? "ACTIVE").toUpperCase();
+
+    return NextResponse.json(
+      {
+        data: {
+          business: {
+            id: String(sharedBusiness.id ?? businessId ?? ""),
+            slug: String(sharedBusiness.slug ?? ""),
+            name: String(sharedBusiness.name ?? "Grocery workspace"),
+            currencyCode: String(
+              sharedBusiness.currencyCode ?? sharedBusiness.currency ?? "QAR"
+            ),
+            timezone: String(sharedBusiness.timezone ?? "Asia/Qatar"),
+            active: status === "ACTIVE" || status === "TRIAL"
+          },
+          branches: branches
+            .filter((branch) => branch.active !== false)
+            .map((branch) => ({
+              id: branch.id,
+              code: branch.code ?? branch.id,
+              name: branch.name
+            })),
+          warehouses: branches.flatMap((branch) =>
+            (branch.warehouses ?? [])
+              .filter((warehouse) => warehouse.active !== false)
+              .map((warehouse) => ({
+                id: warehouse.id,
+                branchId: warehouse.branchId ?? branch.id,
+                code: warehouse.code ?? warehouse.id,
+                name: warehouse.name
+              }))
+          ),
+          registers: branches.flatMap((branch) =>
+            (branch.counters ?? [])
+              .filter((counter) => String(counter.status ?? "ACTIVE").toUpperCase() !== "INACTIVE")
+              .map((counter) => ({
+                id: counter.id,
+                branchId: counter.branchId ?? branch.id,
+                warehouseId: null,
+                code: counter.code ?? counter.id,
+                name: counter.name
+              }))
+          ),
+          currentShifts: currentShift
+            ? [{
+                id: currentShift.id,
+                branchId: currentShift.branchId ?? "",
+                registerId: currentShift.counterId ?? "",
+                status: currentShift.status ?? "OPEN",
+                openingCash: String(currentShift.openingCash ?? "0"),
+                expectedCash: String(currentShift.expectedCash ?? "0"),
+                openedAt: currentShift.openedAt
+              }]
+            : []
+        }
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
-    const code = error instanceof Error ? error.message : "INTERNAL_ERROR";
-    const status = code === "AUTHENTICATION_REQUIRED" ? 401 : code === "PERMISSION_DENIED" ? 403 : 500;
-    return NextResponse.json({ error: status === 500 ? "INTERNAL_ERROR" : code }, { status });
+    if (error instanceof SharedBackendError) {
+      return NextResponse.json(
+        { error: error.code ?? "SHARED_BACKEND_ERROR", message: error.message },
+        { status: error.status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    return NextResponse.json(
+      { error: "BACKEND_UNAVAILABLE", message: "Workspace context could not be loaded." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
   }
 }
