@@ -1,38 +1,71 @@
-import { CashMovementType } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { assertTrustedMutationOrigin } from "@/server/security/origin";
-import { addCashMovement } from "@/server/shifts/manage-shift";
-import { requireTenantContext } from "@/server/tenancy/context";
+import { SharedBackendError, sharedBackendRequest } from "@/lib/shared-backend";
+import { getRequestSharedBackendCredentials } from "@/lib/shared-session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const schema = z.object({
-  shiftId: z.string().uuid(),
-  type: z.nativeEnum(CashMovementType),
-  amount: z.union([z.string(), z.number()]).transform(String),
-  reason: z.string().trim().min(3).max(500)
-});
+type AccountsEnvelope = {
+  data?: {
+    accounts?: Array<{ id: string; name: string; type?: string | null; active?: boolean }>;
+  };
+};
 
 export async function POST(request: Request) {
-  try { assertTrustedMutationOrigin(request); } catch {
-    return NextResponse.json({ error: "UNTRUSTED_ORIGIN" }, { status: 403 });
+  const { token, businessId } = await getRequestSharedBackendCredentials(request);
+  if (!token) return NextResponse.json({ error: "AUTHENTICATION_REQUIRED" }, { status: 401 });
+  const input = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!input) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
+  const shiftId = String(input.shiftId ?? "").trim();
+  const amount = Math.abs(Number(input.amount));
+  if (!shiftId || !Number.isFinite(amount) || amount <= 0) {
+    return NextResponse.json({ error: "INVALID_CASH_MOVEMENT" }, { status: 422 });
   }
-  const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
 
   try {
-    const context = await requireTenantContext();
-    const result = await addCashMovement({ context, ...parsed.data });
-    return NextResponse.json({ data: result }, { status: 201 });
+    const accounts = await sharedBackendRequest<AccountsEnvelope>("/api/v1/accounts?active=true", {
+      token,
+      businessId
+    });
+    const cashAccount = (accounts.data?.accounts ?? []).find((account) =>
+      account.active !== false && String(account.type ?? account.name).toLowerCase().includes("cash")
+    );
+    if (!cashAccount) {
+      return NextResponse.json(
+        { error: "CASH_ACCOUNT_REQUIRED", message: "Create an active cash account before posting shift movements." },
+        { status: 422 }
+      );
+    }
+    const movementType = String(input.type ?? "PAID_IN").toUpperCase();
+    const inward = ["PAID_IN", "CASH_IN", "DEPOSIT", "FLOAT_IN"].includes(movementType);
+    const payload = await sharedBackendRequest<unknown>("/api/v1/accounts/transactions", {
+      method: "POST",
+      token,
+      businessId,
+      body: {
+        accountId: cashAccount.id,
+        type: inward ? "deposit" : "withdrawal",
+        amount,
+        description: input.reason ?? "Cashier shift cash movement",
+        sourceType: "shift_cash_movement",
+        sourceId: shiftId,
+        transactionDate: new Date().toISOString()
+      }
+    });
+    return NextResponse.json(
+      { data: payload },
+      { status: 201, headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
-    const code = error instanceof Error ? error.message : "INTERNAL_ERROR";
-    const status = code === "AUTHENTICATION_REQUIRED" ? 401
-      : code === "PERMISSION_DENIED" ? 403
-      : code === "OPEN_SHIFT_NOT_FOUND" ? 404
-      : ["INVALID_CASH_AMOUNT", "OPENING_MOVEMENT_NOT_ALLOWED"].includes(code) ? 422
-      : 500;
-    return NextResponse.json({ error: status === 500 ? "INTERNAL_ERROR" : code }, { status });
+    if (error instanceof SharedBackendError) {
+      return NextResponse.json(
+        { error: error.code ?? "SHARED_BACKEND_ERROR", message: error.message },
+        { status: error.status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    return NextResponse.json(
+      { error: "BACKEND_UNAVAILABLE", message: "Cash movement could not be posted." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
   }
 }
