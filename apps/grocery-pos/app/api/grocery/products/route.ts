@@ -1,62 +1,45 @@
-import { AuditAction, Prisma, ProductType } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { getDatabase } from "@/lib/db";
-import { assertNonNegativeMoney, formatMoneyForStorage } from "@/lib/money";
-import { requirePermission } from "@/server/permissions/permissions";
+import { SharedBackendError, sharedBackendRequest } from "@/lib/shared-backend";
 import { assertTrustedMutationOrigin } from "@/server/security/origin";
-import { requireTenantContext } from "@/server/tenancy/context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const decimalString = z.union([z.string(), z.number()]).transform((value, context) => {
-  try {
-    return assertNonNegativeMoney(String(value)).toFixed(4);
-  } catch {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid non-negative decimal amount" });
-    return z.NEVER;
-  }
-});
+function requestContext(request: Request) {
+  const authorization = request.headers.get("authorization") ?? "";
+  const token = authorization.toLowerCase().startsWith("bearer ")
+    ? authorization.slice(7).trim()
+    : undefined;
+  const businessId = request.headers.get("x-business-id") ?? undefined;
+  return { token, businessId };
+}
 
-const createProductSchema = z.object({
-  categoryId: z.string().uuid().nullable().optional(),
-  baseUnitId: z.string().uuid(),
-  sku: z.string().trim().min(1).max(80),
-  plu: z.string().trim().min(1).max(30).nullable().optional(),
-  name: z.string().trim().min(1).max(200),
-  localName: z.string().trim().max(200).nullable().optional(),
-  type: z.nativeEnum(ProductType).default(ProductType.STANDARD),
-  barcodes: z.array(z.string().trim().regex(/^\d{4,32}$/)).max(20).default([]),
-  costPrice: decimalString,
-  retailPrice: decimalString,
-  wholesalePrice: decimalString.nullable().optional(),
-  memberPrice: decimalString.nullable().optional(),
-  minimumStock: decimalString.default("0"),
-  reorderQuantity: decimalString.default("0"),
-  taxRate: z.union([z.string(), z.number()]).transform((value) => String(value)).default("0"),
-  trackInventory: z.boolean().default(true),
-  trackBatches: z.boolean().default(false),
-  trackExpiry: z.boolean().default(false),
-  allowNegativeStock: z.boolean().default(false),
-  allowPriceOverride: z.boolean().default(false),
-  allowDiscount: z.boolean().default(true)
-}).superRefine((value, context) => {
-  if (new Set(value.barcodes).size !== value.barcodes.length) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["barcodes"],
-      message: "Duplicate barcodes are not allowed"
-    });
+function backendFailure(error: unknown) {
+  if (error instanceof SharedBackendError) {
+    return NextResponse.json(
+      { error: error.code ?? "SHARED_BACKEND_ERROR", message: error.message },
+      { status: error.status, headers: { "Cache-Control": "no-store" } }
+    );
   }
-  if (value.trackExpiry && !value.trackBatches) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["trackBatches"],
-      message: "Expiry tracking requires batch tracking"
+  return NextResponse.json(
+    { error: "BACKEND_UNAVAILABLE", message: "The shared POS backend is unavailable." },
+    { status: 503, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
+export async function GET(request: Request) {
+  const { token, businessId } = requestContext(request);
+  try {
+    const query = new URL(request.url).search;
+    const payload = await sharedBackendRequest<unknown>(`/api/v1/products${query}`, {
+      token,
+      businessId
     });
+    return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return backendFailure(error);
   }
-});
+}
 
 export async function POST(request: Request) {
   try {
@@ -65,109 +48,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "UNTRUSTED_ORIGIN" }, { status: 403 });
   }
 
-  const context = await requireTenantContext();
-  requirePermission(context, "products.manage");
-
-  const parsed = createProductSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "INVALID_REQUEST", details: parsed.error.flatten() },
-      { status: 400 }
-    );
-  }
-
-  const input = parsed.data;
-  const database = getDatabase();
-  const [unit, category] = await Promise.all([
-    database.unit.findFirst({ where: { id: input.baseUnitId, businessId: context.businessId } }),
-    input.categoryId
-      ? database.category.findFirst({ where: { id: input.categoryId, businessId: context.businessId } })
-      : Promise.resolve(null)
-  ]);
-
-  if (!unit || (input.categoryId && !category)) {
-    return NextResponse.json({ error: "RESOURCE_NOT_FOUND" }, { status: 404 });
-  }
-
+  const { token, businessId } = requestContext(request);
   try {
-    const product = await database.$transaction(async (transaction) => {
-      const created = await transaction.product.create({
-        data: {
-          businessId: context.businessId,
-          categoryId: input.categoryId,
-          baseUnitId: input.baseUnitId,
-          sku: input.sku,
-          plu: input.plu,
-          name: input.name,
-          localName: input.localName,
-          type: input.type,
-          costPrice: input.costPrice,
-          retailPrice: input.retailPrice,
-          wholesalePrice: input.wholesalePrice,
-          memberPrice: input.memberPrice,
-          minimumStock: input.minimumStock,
-          reorderQuantity: input.reorderQuantity,
-          taxRate: input.taxRate,
-          trackInventory: input.trackInventory,
-          trackBatches: input.trackBatches,
-          trackExpiry: input.trackExpiry,
-          allowNegativeStock: input.allowNegativeStock,
-          allowPriceOverride: input.allowPriceOverride,
-          allowDiscount: input.allowDiscount,
-          barcodes: {
-            create: input.barcodes.map((barcode, index) => ({
-              businessId: context.businessId,
-              barcode,
-              isPrimary: index === 0
-            }))
-          }
-        },
-        include: { barcodes: true, baseUnit: true, category: true }
-      });
-
-      await transaction.auditLog.create({
-        data: {
-          businessId: context.businessId,
-          actorUserId: context.userId,
-          action: AuditAction.CREATE,
-          entityType: "PRODUCT",
-          entityId: created.id,
-          afterData: {
-            sku: created.sku,
-            name: created.name,
-            type: created.type,
-            barcodeCount: created.barcodes.length
-          }
-        }
-      });
-
-      return created;
+    const payload = await sharedBackendRequest<unknown>("/api/v1/products", {
+      method: "POST",
+      token,
+      businessId,
+      body: await request.json()
     });
-
-    return NextResponse.json(
-      {
-        data: {
-          id: product.id,
-          sku: product.sku,
-          plu: product.plu,
-          name: product.name,
-          type: product.type,
-          costPrice: formatMoneyForStorage(product.costPrice.toString(), 4),
-          retailPrice: formatMoneyForStorage(product.retailPrice.toString(), 4),
-          category: product.category,
-          baseUnit: product.baseUnit,
-          barcodes: product.barcodes
-        }
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(payload, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return NextResponse.json(
-        { error: "DUPLICATE_PRODUCT_IDENTITY", message: "SKU, PLU or barcode already exists in this workspace." },
-        { status: 409 }
-      );
-    }
-    throw error;
+    return backendFailure(error);
   }
 }
