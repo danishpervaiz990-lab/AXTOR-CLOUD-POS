@@ -3,7 +3,7 @@
   "deploymentMode": "same_origin_branch_proxy",
   "frontends": {
     "retail": { "project": "axtor-retail", "delivery": "same_origin_branch_proxy", "basePath": "/apps/retail", "sourceAlias": "https://axtorpos-git-frontend-retail-axtor1.vercel.app", "dashboard": "retail-dashboard.html", "branch": "frontend-retail" },
-    "grocery": { "project": "axtor-grocery-pos", "delivery": "same_origin_branch_proxy", "basePath": "/apps/grocery", "sourceAlias": "https://axtor-grocery-pos-production.up.railway.app", "dashboard": "grocery-dashboard.html", "branch": "cutover/grocery-new-railway-20260806" },
+    "grocery": { "project": "axtor-grocery", "delivery": "same_origin_branch_proxy", "basePath": "/apps/grocery", "sourceAlias": "https://axtor-grocery-pos-production.up.railway.app", "dashboard": "grocery-dashboard.html", "branch": "cutover/grocery-new-railway-20260806" },
     "pharmacy": { "project": "axtor-pharmacy", "delivery": "same_origin_branch_proxy", "basePath": "/apps/pharmacy", "sourceAlias": "https://axtorpos-git-frontend-pharmacy-axtor1.vercel.app", "dashboard": "pharmacy-dashboard.html", "branch": "frontend-pharmacy" },
     "gym": { "project": "axtor-gym", "delivery": "same_origin_branch_proxy", "basePath": "/apps/gym", "sourceAlias": "https://axtorpos-git-frontend-gym-axtor1.vercel.app", "dashboard": "gym-dashboard.html", "branch": "frontend-gym" },
     "school": { "project": "axtor-school", "delivery": "same_origin_branch_proxy", "basePath": "/apps/school", "sourceAlias": "https://axtorpos-git-frontend-school-axtor1.vercel.app", "dashboard": "school-dashboard.html", "branch": "frontend-school" },
