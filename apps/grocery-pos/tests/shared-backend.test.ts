@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { groceryApi, SharedBackendError, sharedBackendRequest } from "@/lib/shared-backend";
+import { groceryApi, sharedBackendRequest } from "@/lib/shared-backend";
 
 describe("sharedBackendRequest", () => {
   afterEach(() => {
@@ -62,7 +62,7 @@ describe("sharedBackendRequest", () => {
       })
     );
 
-    await expect(sharedBackendRequest("/api/v1/reports")).rejects.toMatchObject<SharedBackendError>({
+    await expect(sharedBackendRequest("/api/v1/reports")).rejects.toMatchObject({
       status: 403,
       code: "FORBIDDEN",
       message: "Permission denied"
