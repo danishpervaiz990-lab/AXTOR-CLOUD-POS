@@ -75,7 +75,7 @@ export async function sharedBackendRequest<T>(
 
 export const groceryApi = {
   health: () => sharedBackendRequest<unknown>("/health"),
-  login: (payload: { workspace: string; email: string; password: string }) =>
+  login: (payload: { businessSlug: string; email: string; password: string }) =>
     sharedBackendRequest<{ token: string; user: unknown; business: unknown }>("/api/v1/auth/login", {
       method: "POST",
       body: payload
@@ -84,6 +84,8 @@ export const groceryApi = {
     sharedBackendRequest<T>(path, { token, businessId }),
   post: <T>(path: string, body: unknown, token: string, businessId?: string) =>
     sharedBackendRequest<T>(path, { method: "POST", body, token, businessId }),
+  put: <T>(path: string, body: unknown, token: string, businessId?: string) =>
+    sharedBackendRequest<T>(path, { method: "PUT", body, token, businessId }),
   patch: <T>(path: string, body: unknown, token: string, businessId?: string) =>
     sharedBackendRequest<T>(path, { method: "PATCH", body, token, businessId }),
   delete: <T>(path: string, token: string, businessId?: string) =>
