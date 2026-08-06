@@ -1,32 +1,33 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedSession } from "@/server/auth/session";
-import { permissionsForRole } from "@/server/permissions/permissions";
+import { SharedBackendError, groceryApi } from "@/lib/shared-backend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const session = await getAuthenticatedSession();
-  if (!session) {
-    return NextResponse.json({ error: "AUTHENTICATION_REQUIRED" }, { status: 401 });
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const businessId = request.headers.get("x-business-id") ?? undefined;
+
+  if (!token) {
+    return NextResponse.json(
+      { error: "AUTHENTICATION_REQUIRED" },
+      { status: 401, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
-  return NextResponse.json(
-    {
-      user: {
-        id: session.userId,
-        displayName: session.displayName,
-        email: session.email,
-        role: session.role
-      },
-      tenant: {
-        businessId: session.businessId
-      },
-      permissions: permissionsForRole(session.role),
-      session: {
-        expiresAt: session.expiresAt.toISOString()
-      }
-    },
-    { headers: { "Cache-Control": "no-store" } }
-  );
+  try {
+    const payload = await groceryApi.get<unknown>("/api/v1/auth/me", token, businessId);
+    return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    if (error instanceof SharedBackendError) {
+      return NextResponse.json(
+        { error: error.code ?? "AUTHENTICATION_REQUIRED", message: error.message },
+        { status: error.status, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    return NextResponse.json(
+      { error: "INTERNAL_ERROR", message: "Session could not be verified." },
+      { status: 500, headers: { "Cache-Control": "no-store" } }
+    );
+  }
 }
