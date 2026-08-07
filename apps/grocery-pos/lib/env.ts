@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const environmentSchema = z.object({
-  AXTOR_SHARED_BACKEND_URL: z.string().url(),
+  AXTOR_SHARED_BACKEND_URL: z.string().url().default("https://axtor-cloud-pos-production.up.railway.app"),
   GROCERY_SESSION_SECRET: z.string().min(32),
   GROCERY_APP_URL: z.string().url(),
   GROCERY_ENVIRONMENT: z.enum(["development", "test", "preview", "production"]).default("development"),
