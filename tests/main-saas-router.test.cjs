@@ -93,8 +93,8 @@ assert.doesNotMatch(proxy,/module\.exports/);
 assert.doesNotMatch(proxy,/Buffer\.from/);
 assert.doesNotMatch(proxy,/url\.parse\s*\(/);
 
-assert.match(groceryProxy,/axtor-grocery-pos-production\.up\.railway\.app/);
-assert.match(groceryProxy,/GROCERY_RAILWAY_ORIGIN/);
+assert.match(groceryProxy,/X-Axtor-Grocery-Backend["']:\s*["']shared-production["']/);
+assert.doesNotMatch(groceryProxy,/GROCERY_RAILWAY_ORIGIN/);
 assert.match(groceryProxy,/X-Axtor-Legacy-Grocery/);
 assert.doesNotMatch(groceryProxy,/frontend-grocery/);
 assert.doesNotMatch(groceryProxy,/raw\.githubusercontent\.com/);
@@ -122,4 +122,4 @@ for(const rule of loginHeaderRules){
   assert.match(values['cache-control']||'',/no-store/);
   assert.equal(values.pragma,'no-cache');
 }
-console.log('PASS: main SaaS router preserves 12 existing industries and routes Grocery only to the isolated Railway replacement');
+console.log('PASS: main SaaS router preserves 12 existing industries and routes Grocery only to the isolated shared-backend replacement');
