@@ -31,7 +31,6 @@ import {
   saveGroceryCounterProfile,
   saveGroceryProductProfile,
   transitionGroceryJournal,
-  transitionGroceryTransfer,
   updateGroceryStockCount,
   updateGroceryVan,
   approveGroceryStockCount,
@@ -41,8 +40,8 @@ import {
   createGroceryVanDamage,
   createGroceryVanReturn,
   createGroceryVanSale,
-  groceryVanReconciliation,
 } from "../controllers/grocery-van.controller.js";
+import { guardedGroceryTransferTransition, groceryVanReconciliationV2 } from "../controllers/grocery-operations-guards.controller.js";
 import {
   groceryChequeCreate,
   groceryChequeGenerateReminders,
@@ -106,11 +105,11 @@ router.post("/vans/:id/sales", requirePermission("sales_documents.create"), crea
 router.post("/vans/:id/collections", requirePermission("payments.create"), createGroceryVanCollection);
 router.post("/vans/:id/returns", requireAnyPermission("sales_returns.create", "sales_documents.create"), createGroceryVanReturn);
 router.post("/vans/:id/damaged", requirePermission("inventory.adjust"), createGroceryVanDamage);
-router.get("/vans/:id/reconciliation", requireAnyPermission("inventory.view", "reports.view"), groceryVanReconciliation);
+router.get("/vans/:id/reconciliation", requireAnyPermission("inventory.view", "reports.view"), groceryVanReconciliationV2);
 
 router.get("/transfers", requirePermission("inventory.view"), groceryTransfers);
 router.post("/transfers", requirePermission("inventory.transfer"), createGroceryTransfer);
-router.patch("/transfers/:id/status", requirePermission("inventory.transfer"), transitionGroceryTransfer);
+router.patch("/transfers/:id/status", requirePermission("inventory.transfer"), guardedGroceryTransferTransition);
 
 router.post("/stock-counts", requirePermission("inventory.count"), createGroceryStockCount);
 router.patch("/stock-counts/:id", requirePermission("inventory.count"), updateGroceryStockCount);
