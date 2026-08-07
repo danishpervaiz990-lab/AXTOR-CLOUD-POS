@@ -3,6 +3,7 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 import { requireIndustry } from "../middleware/industry-guard.middleware.js";
 import { requireAnyPermission, requirePermission } from "../middleware/permission.middleware.js";
 import { createSalesDocument } from "../controllers/sales-documents.controller.js";
+import { groceryReceivePurchaseWithAccounting } from "../controllers/grocery-purchase-receive.controller.js";
 import {
   groceryChequeCreate,
   groceryChequeGenerateReminders,
@@ -19,7 +20,6 @@ import {
   groceryHeldSaleDelete,
   groceryHeldSaleList,
   groceryPurchaseStatus,
-  groceryReceivePurchase,
   grocerySalesGuard,
   grocerySupplierOverview,
   saveGroceryCustomerProfile,
@@ -42,7 +42,7 @@ router.get("/expiry", requirePermission("inventory.view"), groceryExpiry);
 
 router.post("/purchase-orders", requirePermission("purchases.create"), groceryCreatePurchaseOrder);
 router.patch("/purchase-orders/:id/status", requirePermission("purchases.create"), groceryPurchaseStatus);
-router.post("/purchase-orders/:id/receive", requirePermission("purchases.receive"), groceryReceivePurchase);
+router.post("/purchase-orders/:id/receive", requirePermission("purchases.receive"), groceryReceivePurchaseWithAccounting);
 
 router.get("/held-sales", requirePermission("sales_documents.view"), groceryHeldSaleList);
 router.post("/held-sales", requirePermission("sales_documents.create"), groceryHeldSaleCreate);
