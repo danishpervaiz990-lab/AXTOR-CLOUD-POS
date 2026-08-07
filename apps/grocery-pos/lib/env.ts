@@ -1,10 +1,7 @@
 import { z } from "zod";
 
 const environmentSchema = z.object({
-  GROCERY_DATABASE_URL: z.string().url().refine(
-    (value) => value.startsWith("postgresql://") || value.startsWith("postgres://"),
-    "GROCERY_DATABASE_URL must be a PostgreSQL URL"
-  ),
+  AXTOR_SHARED_BACKEND_URL: z.string().url(),
   GROCERY_SESSION_SECRET: z.string().min(32),
   GROCERY_APP_URL: z.string().url(),
   GROCERY_ENVIRONMENT: z.enum(["development", "test", "preview", "production"]).default("development"),
@@ -22,9 +19,7 @@ export type ServerEnvironment = z.infer<typeof environmentSchema>;
 let cachedEnvironment: ServerEnvironment | undefined;
 
 export function getServerEnvironment(): ServerEnvironment {
-  if (cachedEnvironment) {
-    return cachedEnvironment;
-  }
+  if (cachedEnvironment) return cachedEnvironment;
 
   const result = environmentSchema.safeParse(process.env);
   if (!result.success) {
