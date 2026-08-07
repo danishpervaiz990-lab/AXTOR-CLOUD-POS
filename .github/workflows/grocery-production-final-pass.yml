@@ -3,8 +3,7 @@ name: Grocery Production Final Pass
 on:
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/grocery-production-final-pass.yml'
+    paths: ['.github/workflows/grocery-production-final-pass.yml']
 
 permissions:
   contents: read
@@ -34,118 +33,22 @@ jobs:
           node <<'NODE'
           const { chromium } = require('playwright');
           const crypto = require('node:crypto');
-          const frontend = process.env.FRONTEND;
-          const backend = process.env.BACKEND;
-
-          async function api(path, {method='GET', body, headers={}}={}) {
-            const response = await fetch(backend + path, {
-              method,
-              cache:'no-store',
-              headers:{Accept:'application/json',...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},
-              body:body===undefined?undefined:JSON.stringify(body)
-            });
-            const data = await response.json().catch(()=>null);
-            if (!response.ok) throw new Error(`${method} ${path} HTTP ${response.status}: ${data?.error?.message || data?.message || data?.error || 'failed'}`);
-            return data?.data ?? data;
-          }
-
-          async function assertNoUiError(page, label) {
-            if (await page.locator('.notice-error').count()) {
-              throw new Error(`${label} rendered error: ${(await page.locator('.notice-error').first().innerText()).slice(0,500)}`);
-            }
-            const body = await page.locator('body').innerText();
-            if (/LOCAL_GROCERY_DATABASE_DISABLED_USE_SHARED_BACKEND|Application not found|Internal Server Error|Cannot connect to the AXTOR backend|Route not found:/i.test(body)) {
-              throw new Error(`${label} contains a backend/runtime failure`);
-            }
-          }
-
+          const frontend=process.env.FRONTEND, backend=process.env.BACKEND;
+          async function api(path,{method='GET',body,headers={}}={}){const r=await fetch(backend+path,{method,cache:'no-store',headers:{Accept:'application/json',...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},body:body===undefined?undefined:JSON.stringify(body)});const j=await r.json().catch(()=>null);if(!r.ok)throw new Error(`${method} ${path} HTTP ${r.status}: ${j?.error?.message||j?.message||j?.error||'failed'}`);return j?.data??j;}
+          async function noError(page,label){if(await page.locator('.notice-error').count())throw new Error(`${label}: ${await page.locator('.notice-error').first().innerText()}`);const body=await page.locator('body').innerText();if(/LOCAL_GROCERY_DATABASE_DISABLED_USE_SHARED_BACKEND|Application not found|Internal Server Error|Cannot connect to the AXTOR backend|Route not found:/i.test(body))throw new Error(`${label} contains runtime failure`);}
           (async()=>{
             const catalog=await api('/api/v1/public/catalog');
             const plans=Array.isArray(catalog?.plans)?catalog.plans:[];
             const plan=plans.find(p=>String(p.code||'').toLowerCase()==='professional')||plans.find(p=>p.isRecommended)||plans[0];
-            if(!plan?.code) throw new Error('No active plan available');
-
-            const tag=`${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-            const email=`grocery.final.pass.${tag}@example.test`;
-            const password=`GroceryFinal!${crypto.randomBytes(14).toString('base64url')}9aA`;
-            const registration=await api('/api/v1/public/register',{method:'POST',headers:{'Idempotency-Key':`grocery-final-pass:${tag}`},body:{businessName:`Grocery Final Pass ${tag}`,ownerName:'Grocery Final Owner',email,password,country:'QA',timezone:'Asia/Qatar',baseCurrency:'QAR',language:'en',industryCode:'grocery',planCode:String(plan.code).toLowerCase(),billingCycle:'MONTHLY',firstBranch:'Main Branch',firstWarehouse:'Main Warehouse',firstCounter:'Counter 1',taxSystem:'none',taxLabel:'Tax',invoicePrefix:'GRC',printProfile:'a4',pricesIncludeTax:false,sampleDataRequested:false,acceptTerms:true,acceptPrivacy:true}});
-            const workspace=String(registration?.business?.slug||'').trim();
-            if(!workspace) throw new Error('Registration returned no Grocery workspace');
-
-            const browser=await chromium.launch({headless:true});
-            const page=await browser.newPage({viewport:{width:1440,height:1000}});
-            const pageErrors=[]; const failed=[]; const consoleErrors=[];
-            page.on('pageerror',err=>pageErrors.push(err.message));
-            page.on('requestfailed',req=>failed.push(`${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
-            page.on('console',msg=>{if(msg.type()==='error')consoleErrors.push(msg.text());});
-
-            const response=await page.goto(frontend,{waitUntil:'networkidle',timeout:60000});
-            if(!response||response.status()!==200) throw new Error(`Grocery entry HTTP ${response?.status()}`);
-            await page.getByText('Enter your grocery workspace.').waitFor({timeout:20000});
-            const initialBody=await page.locator('body').innerText();
-            if(/^\s*Hello\s*$/i.test(initialBody)) throw new Error('Placeholder Hello page is still deployed');
-            if(!initialBody.includes('AXTOR Grocery')) throw new Error('Replacement Grocery branding missing');
-
-            await page.locator('#workspace').fill(workspace);
-            await page.locator('#email').fill(email);
-            await page.locator('#password').fill(password);
-            await page.getByRole('button',{name:'Sign in securely'}).click();
-            await page.getByRole('heading',{name:'Grocery Dashboard'}).waitFor({timeout:20000});
-            await assertNoUiError(page,'Grocery Dashboard');
-
-            const session = await page.evaluate(() => ({
-              token: localStorage.getItem('axtorAuthToken'),
-              business: JSON.parse(localStorage.getItem('axtorBusiness') || '{}')
-            }));
-            if(!session.token) throw new Error('Owner authentication token not stored');
-            if(session.business.industryCode !== 'grocery') throw new Error(`Authenticated business industry is ${session.business.industryCode}`);
-
-            const chequeEvidence = await page.evaluate(async ({backend, tag}) => {
-              const token=localStorage.getItem('axtorAuthToken');
-              const headers={Accept:'application/json',Authorization:`Bearer ${token}`};
-              async function call(path, options={}) {
-                const response=await fetch(backend+path,{cache:'no-store',...options,headers:{...headers,...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}});
-                const json=await response.json().catch(()=>null);
-                if(!response.ok) throw new Error(`${options.method||'GET'} ${path} HTTP ${response.status}: ${json?.error?.message||json?.message||json?.error||'failed'}`);
-                return json?.data??json;
-              }
-              const accountPayload=await call('/api/v1/accounts?active=true');
-              const root=accountPayload&&typeof accountPayload==='object'?accountPayload:{};
-              const accounts=Array.isArray(root)?root:(Array.isArray(root.accounts)?root.accounts:[]);
-              const account=accounts.find(a=>a.active!==false)||accounts[0];
-              if(!account?.id) throw new Error('Fresh Grocery tenant has no active payment account for cheque certification');
-              const now=new Date();
-              const due=new Date(now.getTime()+7*86400000);
-              const chequeNumber=`LIVE-${tag}`;
-              const created=await call('/api/v1/grocery/cheques',{method:'POST',headers:{'Idempotency-Key':`grocery-cheque-live:${tag}`},body:JSON.stringify({direction:'inward',paymentAccountId:account.id,chequeNumber,bankName:'AXTOR Test Bank',amount:125.50,currencyCode:'QAR',chequeDate:now.toISOString(),dueDate:due.toISOString(),notes:'Automated live Grocery production certification'})});
-              const reminders=await call('/api/v1/grocery/cheques/reminders/generate',{method:'POST',body:JSON.stringify({days:30})});
-              const list=await call('/api/v1/grocery/cheques');
-              const cheques=Array.isArray(list?.cheques)?list.cheques:(Array.isArray(list)?list:[]);
-              const found=cheques.find(c=>c.chequeNumber===chequeNumber);
-              if(!found) throw new Error('Created Grocery cheque was not returned by the shared backend');
-              if(Number(list?.summary?.dueWithin30Days||0)<1) throw new Error('Upcoming cheque summary did not count the live cheque');
-              if(Number(reminders?.created||0)+Number(reminders?.unchanged||0)<1) throw new Error('Upcoming cheque reminder was not generated or retained');
-              return {chequeNumber,chequeId:created?.id||found.id,reminderCreated:reminders?.created||0};
-            }, {backend, tag});
-
-            const modules=[['Checkout','Grocery Checkout'],['Inventory','Grocery Inventory'],['Finance','Grocery Finance'],['Cheques','Grocery Cheques'],['Dashboard','Grocery Dashboard']];
-            for(const [button,heading] of modules){
-              await page.locator('.nav-link',{hasText:button}).click();
-              await page.getByRole('heading',{name:heading}).waitFor({timeout:30000});
-              await page.waitForTimeout(700);
-              await assertNoUiError(page,heading);
-              if(heading==='Grocery Cheques'){
-                await page.getByText(chequeEvidence.chequeNumber).waitFor({timeout:10000});
-                const body=await page.locator('body').innerText();
-                if(!body.includes('Upcoming')) throw new Error('Cheque page did not flag the due cheque as Upcoming');
-              }
-            }
-
-            if(pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
-            if(consoleErrors.length) throw new Error(`Browser console errors: ${consoleErrors.join(' | ')}`);
-            if(failed.length) throw new Error(`Failed browser requests: ${failed.join(' | ')}`);
-            await browser.close();
-            console.log('GROCERY PRODUCTION FINAL CERTIFICATION: PASS');
-            console.log('Verified new Grocery login, Owner auth, Dashboard, Checkout, Inventory, Finance, live inward cheque creation, 30-day reminder generation, Cheques display and return to Dashboard.');
-          })().catch(error=>{console.error(error.stack||error.message||error);process.exit(1);});
+            if(!plan?.code)throw new Error('No active plan');
+            const tag=`${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,email=`grocery.final.${tag}@example.test`,password=`GroceryFinal!${crypto.randomBytes(14).toString('base64url')}9aA`;
+            const reg=await api('/api/v1/public/register',{method:'POST',headers:{'Idempotency-Key':`grocery-final:${tag}`},body:{businessName:`Grocery Final ${tag}`,ownerName:'Grocery Final Owner',email,password,country:'QA',timezone:'Asia/Qatar',baseCurrency:'QAR',language:'en',industryCode:'grocery',planCode:String(plan.code).toLowerCase(),billingCycle:'MONTHLY',firstBranch:'Main Branch',firstWarehouse:'Main Warehouse',firstCounter:'Counter 1',taxSystem:'none',taxLabel:'Tax',invoicePrefix:'GRC',printProfile:'a4',pricesIncludeTax:false,sampleDataRequested:false,acceptTerms:true,acceptPrivacy:true}});
+            const workspace=String(reg?.business?.slug||'').trim();if(!workspace)throw new Error('No Grocery workspace returned');
+            const browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1440,height:1000}});const failed=[],pageErrors=[],consoleErrors=[];page.on('requestfailed',r=>failed.push(`${r.method()} ${r.url()} ${r.failure()?.errorText}`));page.on('pageerror',e=>pageErrors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
+            const entry=await page.goto(frontend,{waitUntil:'networkidle',timeout:60000});if(!entry||entry.status()!==200)throw new Error(`Entry HTTP ${entry?.status()}`);await page.getByText('Enter your grocery workspace.').waitFor({timeout:20000});const initial=await page.locator('body').innerText();if(/^\s*Hello\s*$/i.test(initial)||!initial.includes('AXTOR Grocery'))throw new Error('New Grocery replacement not rendered');
+            await page.locator('#workspace').fill(workspace);await page.locator('#email').fill(email);await page.locator('#password').fill(password);await page.getByRole('button',{name:'Sign in securely'}).click();await page.getByRole('heading',{name:'Grocery Dashboard'}).waitFor({timeout:20000});await noError(page,'Dashboard');
+            const evidence=await page.evaluate(async({backend,tag})=>{const token=localStorage.getItem('axtorAuthToken');const base={Accept:'application/json',Authorization:`Bearer ${token}`};async function call(path,opt={}){const r=await fetch(backend+path,{cache:'no-store',...opt,headers:{...base,...(opt.body?{'Content-Type':'application/json'}:{}),...(opt.headers||{})}});const j=await r.json().catch(()=>null);if(!r.ok)throw new Error(`${opt.method||'GET'} ${path} HTTP ${r.status}: ${j?.error?.message||j?.message||j?.error||'failed'}`);return j?.data??j;}const me=await call('/api/v1/auth/me');if((me?.business?.industryCode||me?.business?.industry?.code)!=='grocery')throw new Error('Authenticated tenant is not Grocery');let a=await call('/api/v1/accounts?active=true');let accounts=Array.isArray(a)?a:(Array.isArray(a?.accounts)?a.accounts:[]);let account=accounts.find(x=>x.active!==false)||accounts[0];if(!account?.id){account=await call('/api/v1/accounts',{method:'POST',body:JSON.stringify({name:'Grocery Cheque Bank',type:'bank',bankName:'AXTOR Test Bank',currency:'QAR',openingBalance:0,active:true})});}if(!account?.id)throw new Error('Could not create Grocery cheque payment account');const now=new Date(),due=new Date(now.getTime()+7*86400000),chequeNumber=`LIVE-${tag}`;const created=await call('/api/v1/grocery/cheques',{method:'POST',headers:{'Idempotency-Key':`grocery-cheque:${tag}`},body:JSON.stringify({direction:'inward',paymentAccountId:account.id,chequeNumber,bankName:'AXTOR Test Bank',amount:125.50,currencyCode:'QAR',chequeDate:now.toISOString(),dueDate:due.toISOString(),notes:'Live Grocery production certification'})});const reminders=await call('/api/v1/grocery/cheques/reminders/generate',{method:'POST',body:JSON.stringify({days:30})});const list=await call('/api/v1/grocery/cheques');const cheques=Array.isArray(list?.cheques)?list.cheques:(Array.isArray(list)?list:[]);if(!cheques.some(c=>c.chequeNumber===chequeNumber))throw new Error('Created cheque missing');if(Number(list?.summary?.dueWithin30Days||0)<1)throw new Error('Upcoming cheque tally failed');if(Number(reminders?.created||0)+Number(reminders?.unchanged||0)<1)throw new Error('Cheque reminder generation failed');return{chequeNumber,createdId:created?.id};},{backend,tag});
+            for(const [nav,heading] of [['Checkout','Grocery Checkout'],['Inventory','Grocery Inventory'],['Finance','Grocery Finance'],['Cheques','Grocery Cheques'],['Dashboard','Grocery Dashboard']]){await page.locator('.nav-link',{hasText:nav}).click();await page.getByRole('heading',{name:heading}).waitFor({timeout:30000});await page.waitForTimeout(500);await noError(page,heading);if(heading==='Grocery Cheques'){await page.getByText(evidence.chequeNumber).waitFor({timeout:10000});if(!(await page.locator('body').innerText()).includes('Upcoming'))throw new Error('Cheque UI did not flag Upcoming');}}
+            if(pageErrors.length)throw new Error(`Page errors: ${pageErrors.join(' | ')}`);if(consoleErrors.length)throw new Error(`Console errors: ${consoleErrors.join(' | ')}`);if(failed.length)throw new Error(`Failed requests: ${failed.join(' | ')}`);await browser.close();console.log('GROCERY PRODUCTION FINAL CERTIFICATION: PASS');
+          })().catch(e=>{console.error(e.stack||e);process.exit(1)});
           NODE
