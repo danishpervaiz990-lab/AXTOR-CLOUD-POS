@@ -1,0 +1,173 @@
+name: Provision Grocery Final Owner
+
+on:
+  pull_request:
+    branches:
+      - backend
+    paths:
+      - '.github/workflows/provision-grocery-final-owner.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  provision-owner:
+    runs-on: ubuntu-latest
+    env:
+      AXTOR_BACKEND_ORIGIN: https://axtor-cloud-pos-production.up.railway.app
+      AXTOR_ACCOUNT_OUTPUT: grocery-final-owner-credentials.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Provision and verify fresh Grocery owner
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const base = process.env.AXTOR_BACKEND_ORIGIN;
+          const output = process.env.AXTOR_ACCOUNT_OUTPUT;
+          const runTag = String(process.env.GITHUB_RUN_ID || Date.now()).replace(/[^0-9A-Za-z]/g, '').slice(-14);
+          const password = `GroceryOwner!${crypto.randomBytes(14).toString('base64url')}9aA`;
+          const email = `axtor.grocery.final.owner.${runTag}@example.test`;
+          const businessName = `AXTOR Grocery Final Live ${runTag}`;
+
+          async function req(path, {method='GET', token, body, expected=[200], retries=4, headers={}}={}) {
+            let last;
+            for (let i=0; i<=retries; i++) {
+              try {
+                const response = await fetch(base + path, {
+                  method,
+                  cache: 'no-store',
+                  headers: {
+                    Accept: 'application/json',
+                    ...(token ? {Authorization: `Bearer ${token}`} : {}),
+                    ...(body !== undefined ? {'Content-Type':'application/json'} : {}),
+                    ...headers,
+                  },
+                  body: body === undefined ? undefined : JSON.stringify(body),
+                });
+                const payload = await response.json().catch(() => null);
+                if (!expected.includes(response.status)) {
+                  const e = new Error(`${method} ${path} -> HTTP ${response.status}: ${payload?.error?.message || 'request failed'}`);
+                  e.retryable = response.status === 429 || response.status >= 500;
+                  throw e;
+                }
+                return payload;
+              } catch (e) {
+                last = e;
+                if (i === retries || e.retryable === false) break;
+                await new Promise(r => setTimeout(r, 1500 * (i + 1)));
+              }
+            }
+            throw last;
+          }
+
+          function dataOf(payload) { return payload?.data ?? payload; }
+
+          (async () => {
+            await req('/health', {expected:[200], retries:6});
+            await req('/api/v1/health/db', {expected:[200], retries:6});
+
+            const catalog = dataOf(await req('/api/v1/public/catalog', {expected:[200], retries:6}));
+            const plans = Array.isArray(catalog?.plans) ? catalog.plans : [];
+            const plan = plans.find(p => String(p.code || '').toLowerCase() === 'professional')
+              || plans.find(p => p.isRecommended)
+              || plans.find(p => Number(p.maxUsers || 0) >= 8)
+              || plans[0];
+            if (!plan?.code) throw new Error('No active plan available');
+
+            const registration = dataOf(await req('/api/v1/public/register', {
+              method:'POST', expected:[201], retries:8,
+              headers:{'Idempotency-Key':`grocery-final:${runTag}:${crypto.randomBytes(6).toString('hex')}`},
+              body:{
+                businessName,
+                ownerName:'AXTOR Grocery Final Owner',
+                email,
+                password,
+                country:'QA',
+                timezone:'Asia/Qatar',
+                baseCurrency:'QAR',
+                language:'en',
+                industryCode:'grocery',
+                planCode:String(plan.code).toLowerCase(),
+                billingCycle:'MONTHLY',
+                firstBranch:'Main Branch',
+                firstWarehouse:'Main Warehouse',
+                firstCounter:'Counter 1',
+                taxSystem:'none',
+                taxLabel:'Tax',
+                invoicePrefix:'GRC',
+                printProfile:'a4',
+                pricesIncludeTax:false,
+                sampleDataRequested:false,
+                acceptTerms:true,
+                acceptPrivacy:true,
+              }
+            }));
+
+            const businessSlug = String(registration?.business?.slug || '').trim();
+            if (!businessSlug) throw new Error('Registration did not return business slug');
+
+            const login = await req('/api/v1/auth/login', {
+              method:'POST', expected:[200], retries:5,
+              body:{businessSlug, email, password}
+            });
+            const token = login?.token;
+            if (!token) throw new Error('Login did not return token');
+
+            const me = dataOf(await req('/api/v1/auth/me', {token, expected:[200]}));
+            const resolvedSlug = String(me?.business?.slug || '').toLowerCase();
+            if (resolvedSlug !== businessSlug.toLowerCase()) throw new Error('Owner resolved to wrong tenant');
+
+            const registry = await req('/api/v1/industry/registry', {token, expected:[200]});
+            if (!JSON.stringify(registry).toLowerCase().includes('grocery')) throw new Error('Industry registry did not resolve Grocery');
+
+            await req('/api/v1/dashboard/summary', {token, expected:[200]});
+            await req('/api/v1/products?active=true&limit=5', {token, expected:[200]});
+            await req('/api/v1/reports/options', {token, expected:[200]});
+
+            const report = {
+              createdAt: new Date().toISOString(),
+              backendOrigin: base,
+              industry: 'grocery',
+              businessName,
+              businessSlug,
+              owner: {
+                name:'AXTOR Grocery Final Owner',
+                email,
+                password,
+                role:'Owner'
+              },
+              verification: {
+                railwayHealth:'PASS',
+                postgresqlHealth:'PASS',
+                registration:'PASS',
+                login:'PASS',
+                tenantResolution:'PASS',
+                groceryIndustryResolution:'PASS',
+                dashboardSummary:'PASS',
+                products:'PASS',
+                reports:'PASS'
+              }
+            };
+            fs.writeFileSync(output, JSON.stringify(report, null, 2), {mode:0o600});
+            console.log('Fresh Grocery owner provisioning PASS; credentials stored only in protected artifact.');
+          })().catch(err => { console.error(err.message); process.exit(1); });
+          NODE
+      - name: Validate protected credential output
+        shell: bash
+        run: |
+          test -s "$AXTOR_ACCOUNT_OUTPUT"
+          chmod 600 "$AXTOR_ACCOUNT_OUTPUT"
+          node -e "const r=require('./'+process.env.AXTOR_ACCOUNT_OUTPUT); if(r.industry!=='grocery'||!r.businessSlug||!r.owner?.email||!r.owner?.password||r.verification?.login!=='PASS') process.exit(1); console.log('Protected Grocery credential artifact structure PASS')"
+      - name: Upload credential artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grocery-final-owner-${{ github.run_id }}
+          path: grocery-final-owner-credentials.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 9
