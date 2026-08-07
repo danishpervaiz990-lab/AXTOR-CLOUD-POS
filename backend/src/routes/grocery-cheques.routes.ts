@@ -4,6 +4,7 @@ import { requireIndustry } from "../middleware/industry-guard.middleware.js";
 import { requireAnyPermission, requirePermission } from "../middleware/permission.middleware.js";
 import { groceryCreateSale } from "../controllers/grocery-sales.controller.js";
 import { groceryReceivePurchaseWithAccounting } from "../controllers/grocery-purchase-receive.controller.js";
+import { groceryCustomerDetail } from "../controllers/grocery-customer-detail.controller.js";
 import {
   groceryChequeCreate,
   groceryChequeGenerateReminders,
@@ -14,7 +15,6 @@ import {
   groceryAgeing,
   groceryContext,
   groceryCreatePurchaseOrder,
-  groceryCustomerOverview,
   groceryExpiry,
   groceryHeldSaleCreate,
   groceryHeldSaleDelete,
@@ -33,7 +33,7 @@ const chequeRead = requireAnyPermission("payments.view", "accounts.view", "repor
 const chequeWrite = requireAnyPermission("payments.create", "accounts.manage", "purchases.pay");
 
 router.get("/context", requireAnyPermission("dashboard.view", "sales_documents.view", "inventory.view"), groceryContext);
-router.get("/customers/:id/overview", requirePermission("customers.view"), groceryCustomerOverview);
+router.get("/customers/:id/overview", requirePermission("customers.view"), groceryCustomerDetail);
 router.patch("/customers/:id/profile", requirePermission("customers.manage"), saveGroceryCustomerProfile);
 router.get("/suppliers/:id/overview", requirePermission("suppliers.view"), grocerySupplierOverview);
 router.patch("/suppliers/:id/profile", requirePermission("suppliers.manage"), saveGrocerySupplierProfile);
