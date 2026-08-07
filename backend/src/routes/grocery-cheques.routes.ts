@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { requireIndustry } from "../middleware/industry-guard.middleware.js";
 import { requireAnyPermission, requirePermission } from "../middleware/permission.middleware.js";
-import { createSalesDocument } from "../controllers/sales-documents.controller.js";
+import { groceryCreateSale } from "../controllers/grocery-sales.controller.js";
 import { groceryReceivePurchaseWithAccounting } from "../controllers/grocery-purchase-receive.controller.js";
 import {
   groceryChequeCreate,
@@ -47,7 +47,7 @@ router.post("/purchase-orders/:id/receive", requirePermission("purchases.receive
 router.get("/held-sales", requirePermission("sales_documents.view"), groceryHeldSaleList);
 router.post("/held-sales", requirePermission("sales_documents.create"), groceryHeldSaleCreate);
 router.delete("/held-sales/:id", requirePermission("sales_documents.create"), groceryHeldSaleDelete);
-router.post("/sales", grocerySalesGuard, createSalesDocument);
+router.post("/sales", grocerySalesGuard, groceryCreateSale);
 
 router.get("/cheques", chequeRead, groceryChequeList);
 router.post("/cheques", chequeWrite, groceryChequeCreate);
