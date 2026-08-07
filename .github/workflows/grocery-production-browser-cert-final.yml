@@ -1,0 +1,114 @@
+name: Grocery Production Browser Certification Final
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/grocery-production-browser-cert-final.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check Grocery replacement
+        run: |
+          node --check demo-static/js/grocery-browser-compat.js
+          node --check demo-static/js/grocery-new.js
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Live production Grocery browser smoke
+        env:
+          FRONTEND: https://axtorpos.vercel.app/apps/grocery
+          BACKEND: https://axtor-cloud-pos-production.up.railway.app
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          const crypto = require('node:crypto');
+          const frontend = process.env.FRONTEND;
+          const backend = process.env.BACKEND;
+
+          async function api(path, {method='GET', body, headers={}}={}) {
+            const response = await fetch(backend + path, {
+              method,
+              cache:'no-store',
+              headers:{Accept:'application/json',...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},
+              body:body===undefined?undefined:JSON.stringify(body)
+            });
+            const data = await response.json().catch(()=>null);
+            if (!response.ok) throw new Error(`${method} ${path} HTTP ${response.status}: ${data?.error?.message || data?.message || data?.error || 'failed'}`);
+            return data?.data ?? data;
+          }
+
+          async function assertNoUiError(page, label) {
+            if (await page.locator('.notice-error').count()) {
+              throw new Error(`${label} rendered error: ${(await page.locator('.notice-error').first().innerText()).slice(0,500)}`);
+            }
+            const body = await page.locator('body').innerText();
+            if (/LOCAL_GROCERY_DATABASE_DISABLED_USE_SHARED_BACKEND|Application not found|Internal Server Error|Cannot connect to the AXTOR backend/i.test(body)) {
+              throw new Error(`${label} contains a backend/runtime failure`);
+            }
+          }
+
+          (async()=>{
+            const catalog=await api('/api/v1/public/catalog');
+            const plans=Array.isArray(catalog?.plans)?catalog.plans:[];
+            const plan=plans.find(p=>String(p.code||'').toLowerCase()==='professional')||plans.find(p=>p.isRecommended)||plans[0];
+            if(!plan?.code) throw new Error('No active plan available');
+            const tag=`${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+            const email=`grocery.browser.final.${tag}@example.test`;
+            const password=`GroceryBrowser!${crypto.randomBytes(14).toString('base64url')}9aA`;
+            const registration=await api('/api/v1/public/register',{method:'POST',headers:{'Idempotency-Key':`grocery-browser-final:${tag}`},body:{businessName:`Grocery Browser Final ${tag}`,ownerName:'Grocery Browser Owner',email,password,country:'QA',timezone:'Asia/Qatar',baseCurrency:'QAR',language:'en',industryCode:'grocery',planCode:String(plan.code).toLowerCase(),billingCycle:'MONTHLY',firstBranch:'Main Branch',firstWarehouse:'Main Warehouse',firstCounter:'Counter 1',taxSystem:'none',taxLabel:'Tax',invoicePrefix:'GRC',printProfile:'a4',pricesIncludeTax:false,sampleDataRequested:false,acceptTerms:true,acceptPrivacy:true}});
+            const workspace=String(registration?.business?.slug||'').trim();
+            if(!workspace) throw new Error('Registration returned no Grocery workspace');
+
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({viewport:{width:1440,height:1000}});
+            const pageErrors=[]; const failed=[]; const consoleErrors=[];
+            page.on('pageerror',err=>pageErrors.push(err.message));
+            page.on('requestfailed',req=>failed.push(`${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
+            page.on('console',msg=>{if(msg.type()==='error')consoleErrors.push(msg.text());});
+
+            const response=await page.goto(frontend,{waitUntil:'networkidle',timeout:60000});
+            if(!response||response.status()!==200) throw new Error(`Grocery entry HTTP ${response?.status()}`);
+            await page.getByText('Enter your grocery workspace.').waitFor({timeout:20000});
+            if(/^\s*Hello\s*$/i.test(await page.locator('body').innerText())) throw new Error('Placeholder Hello page is still deployed');
+            if(!(await page.locator('body').innerText()).includes('AXTOR Grocery')) throw new Error('Replacement Grocery branding missing');
+
+            await page.locator('#workspace').fill(workspace);
+            await page.locator('#email').fill(email);
+            await page.locator('#password').fill(password);
+            await page.getByRole('button',{name:'Sign in securely'}).click();
+            await page.getByRole('heading',{name:'Grocery Dashboard'}).waitFor({timeout:20000});
+            await assertNoUiError(page,'Grocery Dashboard');
+
+            const modules=[['Checkout','Grocery Checkout'],['Inventory','Grocery Inventory'],['Finance','Grocery Finance'],['Cheques','Grocery Cheques'],['Dashboard','Grocery Dashboard']];
+            for(const [button,heading] of modules){
+              await page.locator('.nav-link',{hasText:button}).click();
+              await page.getByRole('heading',{name:heading}).waitFor({timeout:30000});
+              await page.waitForTimeout(700);
+              await assertNoUiError(page,heading);
+            }
+
+            const industry = await page.evaluate(() => JSON.parse(localStorage.getItem('axtorBusiness') || '{}').industryCode);
+            const storedToken = await page.evaluate(() => Boolean(localStorage.getItem('axtorAuthToken')));
+            if(industry !== 'grocery') throw new Error(`Authenticated business industry is ${industry}`);
+            if(!storedToken) throw new Error('Owner authentication token not stored');
+            if(pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
+            if(consoleErrors.length) throw new Error(`Browser console errors: ${consoleErrors.join(' | ')}`);
+            if(failed.length) throw new Error(`Failed browser requests: ${failed.join(' | ')}`);
+
+            await browser.close();
+            console.log('GROCERY PRODUCTION BROWSER CERTIFICATION: PASS');
+            console.log('Verified production /apps/grocery, fresh Grocery Owner login, Dashboard, Checkout, Inventory, Finance and Cheques with no UI/runtime errors.');
+          })().catch(error=>{console.error(error.stack||error.message||error);process.exit(1);});
+          NODE
