@@ -36,6 +36,8 @@ import platformFeaturesRoutes from "./routes/platform-features.routes.js";
 import developerApiRoutes from "./routes/developer-api.routes.js";
 import industryRoutes from "./routes/industry.routes.js";
 import publicCatalogRoutes from "./routes/public-catalog.routes.js";
+import groceryRoutes from "./routes/grocery.routes.js";
+import groceryChequesRoutes from "./routes/grocery-cheques.routes.js";
 import { clinicRouter, gymRouter, schoolRouter } from "./routes/release-ab.routes.js";
 import { hardwareRouter, paintRouter, restaurantRouter } from "./routes/release-c.routes.js";
 import { furnitureRouter, wholesaleRouter, workshopRouter } from "./routes/release-d.routes.js";
@@ -74,7 +76,7 @@ export function createApp() {
     notifications: "/api/v1/notifications", approvals: "/api/v1/approvals", settings: "/api/v1/settings",
     communications: "/api/v1/communications", commercial: "/api/v1/commercial", platformAdmin: "/api/v1/platform-admin",
     platformFeatures: "/api/v1/platform-features", developer: "/api/v1/developer", industry: "/api/v1/industry", publicCatalog: "/api/v1/public",
-    gym: "/api/v1/gym", school: "/api/v1/school", clinic: "/api/v1/clinic", restaurant: "/api/v1/restaurant",
+    grocery: "/api/v1/grocery", gym: "/api/v1/gym", school: "/api/v1/school", clinic: "/api/v1/clinic", restaurant: "/api/v1/restaurant",
     hardware: "/api/v1/hardware", paint: "/api/v1/paint", furniture: "/api/v1/furniture", workshop: "/api/v1/workshop",
     wholesale: "/api/v1/wholesale", manufacturing: "/api/v1/manufacturing",
   };
@@ -122,6 +124,8 @@ export function createApp() {
   app.use("/api/v1/platform-admin", platformAdminRoutes);
   app.use("/api/v1/platform-features", platformFeaturesRoutes);
   app.use("/api/v1/industry", industryRoutes);
+  app.use("/api/v1/grocery", groceryRoutes);
+  app.use("/api/v1/grocery", groceryChequesRoutes);
   app.use("/api/v1/gym", gymRouter);
   app.use("/api/v1/school", schoolRouter);
   app.use("/api/v1/clinic", clinicRouter);
