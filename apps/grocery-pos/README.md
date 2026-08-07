@@ -20,7 +20,7 @@ Retail and every other industry remain unchanged. Grocery UI and workflows remai
 
 ## Migration compatibility
 
-The application is being migrated from an earlier standalone Next.js/Prisma implementation. During migration, legacy `/api/grocery/*` URLs remain as compatibility bridges, but each bridge must delegate to the existing `/api/v1/*` backend. New code must not add direct Prisma writes, local tenant authority, local financial records or a second source of truth.
+The application was migrated from an earlier standalone Next.js/Prisma implementation. Legacy `/api/grocery/*` URLs remain only as compatibility bridges and delegate to the existing `/api/v1/*` backend. New code must not add direct Prisma writes, local tenant authority, local financial records or a second source of truth.
 
 ## Local setup
 
@@ -31,7 +31,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Set `AXTOR_SHARED_BACKEND_URL` to the existing backend origin. Do not configure `GROCERY_DATABASE_URL` for the target shared-backend deployment.
+Set `AXTOR_SHARED_BACKEND_URL` to the existing backend origin.
 
 ## Quality commands
 
@@ -44,7 +44,7 @@ npm run build
 The migration is production-ready only when:
 
 1. All Grocery routes delegate to the shared backend.
-2. No production runtime requires `GROCERY_DATABASE_URL`.
+2. No production runtime opens a local Grocery database connection.
 3. Authentication and tenant isolation tests pass.
 4. Products, customers, suppliers, inventory, purchases, sales, payments, returns, reports and cheques pass browser tests.
 5. Owner, manager, cashier, salesman, accountant, inventory and viewer roles are certified live.
