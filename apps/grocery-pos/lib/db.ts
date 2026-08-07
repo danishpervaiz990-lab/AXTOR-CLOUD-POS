@@ -1,26 +1,13 @@
-import { PrismaClient } from "@prisma/client";
-import { getServerEnvironment } from "@/lib/env";
+import type { PrismaClient } from "@prisma/client";
 
-type PrismaGlobal = typeof globalThis & {
-  groceryPrisma?: PrismaClient;
-};
-
-const prismaGlobal = globalThis as PrismaGlobal;
-
+/**
+ * Transitional compile-time compatibility only.
+ *
+ * The Grocery frontend no longer owns or opens a PostgreSQL connection. All
+ * production reads/writes must go through the existing shared AXTOR backend.
+ * Any remaining legacy caller that reaches this function is a migration bug
+ * and must fail closed instead of creating a second source of truth.
+ */
 export function getDatabase(): PrismaClient {
-  if (prismaGlobal.groceryPrisma) {
-    return prismaGlobal.groceryPrisma;
-  }
-
-  const environment = getServerEnvironment();
-  const client = new PrismaClient({
-    datasourceUrl: environment.GROCERY_DATABASE_URL,
-    log: environment.GROCERY_ENVIRONMENT === "development" ? ["warn", "error"] : ["error"]
-  });
-
-  if (environment.GROCERY_ENVIRONMENT !== "production") {
-    prismaGlobal.groceryPrisma = client;
-  }
-
-  return client;
+  throw new Error("LOCAL_GROCERY_DATABASE_DISABLED_USE_SHARED_BACKEND");
 }
