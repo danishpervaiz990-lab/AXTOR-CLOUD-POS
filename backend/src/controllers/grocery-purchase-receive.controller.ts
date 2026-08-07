@@ -13,6 +13,22 @@ function asDate(value: unknown): Date | null { if (!value) return null; const d 
 function json(value: unknown): Record<string, any> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {}; }
 function dayStart(date = new Date()) { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; }
 function fail(res: Response, message: string, status = 400, code = "PURCHASE_RECEIVE_FAILED") { return res.status(status).json({ ok: false, error: { code, message } }); }
+function receivedCoverage(purchase: any) {
+  const ordered = new Map<string, number>();
+  for (const item of purchase.items || []) {
+    if (!item.productId) continue;
+    const id = String(item.productId);
+    ordered.set(id, round3((ordered.get(id) || 0) + num(item.qty)));
+  }
+  const received = new Map<string, number>();
+  for (const receipt of purchase.goodsReceipts || []) for (const item of receipt.items || []) {
+    if (!item.productId) continue;
+    const id = String(item.productId);
+    received.set(id, round3((received.get(id) || 0) + num(item.qty)));
+  }
+  const fullyReceived = ordered.size > 0 && [...ordered.entries()].every(([productId, qty]) => (received.get(productId) || 0) + 0.0001 >= qty);
+  return { ordered, received, fullyReceived };
+}
 
 export async function groceryReceivePurchaseWithAccounting(req: Request, res: Response) {
   try {
@@ -29,37 +45,25 @@ export async function groceryReceivePurchaseWithAccounting(req: Request, res: Re
       });
       if (!purchase) throw new Error("Purchase not found");
       if (purchase.status === "CANCELLED") throw new Error("Cancelled purchase cannot be received");
-      if (purchase.status === "POSTED" && purchase.receivedAt) throw new Error("Purchase is already fully received");
+      if (purchase.status === "POSTED") throw new Error("Posted purchase invoice cannot receive additional goods");
 
       const warehouseId = text(req.body?.warehouseId || purchase.warehouseId);
       const warehouse = await tx.warehouse.findFirst({ where: { id: warehouseId, businessId, active: true } });
       if (!warehouse) throw new Error("Valid receiving warehouse is required");
 
-      const orderedByProduct = new Map<string, number>();
-      for (const item of purchase.items) {
-        if (!item.productId) continue;
-        const id = String(item.productId);
-        orderedByProduct.set(id, round3((orderedByProduct.get(id) || 0) + num(item.qty)));
-      }
-      const receivedBefore = new Map<string, number>();
-      for (const receipt of purchase.goodsReceipts) {
-        for (const item of receipt.items || []) {
-          if (!item.productId) continue;
-          const id = String(item.productId);
-          receivedBefore.set(id, round3((receivedBefore.get(id) || 0) + num(item.qty)));
-        }
-      }
+      const coverageBefore = receivedCoverage(purchase);
+      if (coverageBefore.fullyReceived) throw new Error("Purchase order is already fully received; post the purchase invoice instead");
 
       const normalized: any[] = [];
       const requestedTotals = new Map<string, number>();
       for (const raw of rawItems) {
         const productId = text(raw.productId);
         const product = await tx.product.findFirst({ where: { id: productId, businessId, active: true, deleted: false } });
-        if (!product || !orderedByProduct.has(productId)) throw new Error("One received product is not on this purchase order");
+        if (!product || !coverageBefore.ordered.has(productId)) throw new Error("One received product is not on this purchase order");
         const qty = round3(num(raw.quantity ?? raw.qty));
         if (qty <= 0) throw new Error(`Received quantity must be positive for ${product.name}`);
         const requested = round3((requestedTotals.get(productId) || 0) + qty);
-        const available = round3((orderedByProduct.get(productId) || 0) - (receivedBefore.get(productId) || 0));
+        const available = round3((coverageBefore.ordered.get(productId) || 0) - (coverageBefore.received.get(productId) || 0));
         if (requested > available + 0.0001) throw new Error(`Received quantity exceeds remaining PO quantity for ${product.name}. Remaining: ${available}`);
         requestedTotals.set(productId, requested);
         const ordered = purchase.items.find((item: any) => String(item.productId) === productId);
@@ -158,43 +162,98 @@ export async function groceryReceivePurchaseWithAccounting(req: Request, res: Re
         });
       }
 
-      const receivedAfter = new Map(receivedBefore);
+      const receivedAfter = new Map(coverageBefore.received);
       for (const [productId, qty] of requestedTotals) receivedAfter.set(productId, round3((receivedAfter.get(productId) || 0) + qty));
-      const fullyReceived = [...orderedByProduct.entries()].every(([productId, qty]) => (receivedAfter.get(productId) || 0) + 0.0001 >= qty);
-      const oldMetadata = json(purchase.metadata);
+      const fullyReceived = [...coverageBefore.ordered.entries()].every(([productId, qty]) => (receivedAfter.get(productId) || 0) + 0.0001 >= qty);
       const workflowStatus = fullyReceived ? "FULLY_RECEIVED" : "PARTIALLY_RECEIVED";
-      const updateData: any = {
-        warehouseId: warehouse.id,
-        metadata: { ...oldMetadata, workflowStatus, lastReceiptNo: receiptNo, lastReceivedAt: new Date().toISOString() },
-      };
-      let accounting: any = null;
-      if (fullyReceived) {
-        updateData.status = "POSTED";
-        updateData.receivedAt = new Date();
-        if (purchase.supplierId) await tx.supplier.update({ where: { id: purchase.supplierId }, data: { balance: { increment: num(purchase.balance) } } });
-        accounting = await postGroceryPurchaseAccounting(tx, {
-          businessId,
-          userId,
-          purchaseId: purchase.id,
-          purchaseNo: purchase.purchaseNo,
-          purchaseDate: purchase.purchaseDate,
-          amount: num(purchase.total),
-        });
-        updateData.metadata = { ...updateData.metadata, accountingPosted: true, accountingAmount: num(purchase.total), accountingPostedAt: new Date().toISOString() };
-      }
-      const updated = await tx.purchase.update({ where: { id: purchase.id }, data: updateData });
+      const oldMetadata = json(purchase.metadata);
+      const updated = await tx.purchase.update({
+        where: { id: purchase.id },
+        data: {
+          warehouseId: warehouse.id,
+          ...(fullyReceived ? { receivedAt: new Date() } : {}),
+          metadata: { ...oldMetadata, workflowStatus, lastReceiptNo: receiptNo, lastReceivedAt: new Date().toISOString(), readyForPurchaseInvoice: fullyReceived },
+        },
+      });
       await writeAudit(tx, req, {
         businessId,
         userId,
         action: "grocery.purchase.receive",
         entityType: "Purchase",
         entityId: purchase.id,
-        after: { receiptNo, workflowStatus, fullyReceived, accounting, items: normalized.map(item => ({ productId: item.product.id, quantity: item.qty, batchNo: item.batchNo, unitCost: item.cost })) },
+        after: { receiptNo, workflowStatus, fullyReceived, items: normalized.map(item => ({ productId: item.product.id, quantity: item.qty, batchNo: item.batchNo, unitCost: item.cost })) },
       });
-      return { purchase: updated, receipt, workflowStatus, fullyReceived, accounting, receivedByProduct: Object.fromEntries(receivedAfter) };
+      return { purchase: updated, receipt, workflowStatus, fullyReceived, accounting: null, receivedByProduct: Object.fromEntries(receivedAfter) };
     });
     return res.status(201).json({ ok: true, data: result });
   } catch (error: any) {
     return fail(res, error?.message || "Failed to receive purchase", 400);
+  }
+}
+
+export async function groceryPostPurchaseInvoice(req: Request, res: Response) {
+  try {
+    const businessId = req.tenant?.businessId;
+    const userId = req.tenant?.userId;
+    if (!businessId || !userId) return fail(res, "Authenticated tenant and user are required", 401, "UNAUTHORIZED");
+    const result = await db.$transaction(async (tx: any) => {
+      const purchase = await tx.purchase.findFirst({
+        where: { id: req.params.id, businessId },
+        include: { items: true, goodsReceipts: { include: { items: true } } },
+      });
+      if (!purchase) throw new Error("Purchase not found");
+      if (purchase.status === "CANCELLED") throw new Error("Cancelled purchase cannot be invoiced");
+      if (purchase.status === "POSTED") {
+        return { purchase, accounting: { duplicate: true }, workflowStatus: json(purchase.metadata).workflowStatus || "PURCHASE_INVOICE" };
+      }
+      const coverage = receivedCoverage(purchase);
+      if (!coverage.fullyReceived) throw new Error("Purchase invoice can be posted only after the PO is fully received");
+      const oldMetadata = json(purchase.metadata);
+      const supplierInvoiceNumber = text(req.body?.supplierInvoiceNumber || oldMetadata.supplierInvoiceNumber);
+      if (!supplierInvoiceNumber) throw new Error("Supplier invoice number is required before posting the purchase invoice");
+      const dueDate = asDate(req.body?.dueDate) || purchase.dueDate;
+      const accounting = await postGroceryPurchaseAccounting(tx, {
+        businessId,
+        userId,
+        purchaseId: purchase.id,
+        purchaseNo: purchase.purchaseNo,
+        purchaseDate: purchase.purchaseDate,
+        amount: num(purchase.total),
+      });
+      if (purchase.supplierId && num(purchase.balance) > 0) {
+        await tx.supplier.update({ where: { id: purchase.supplierId }, data: { balance: { increment: num(purchase.balance) } } });
+      }
+      const updated = await tx.purchase.update({
+        where: { id: purchase.id },
+        data: {
+          status: "POSTED",
+          dueDate,
+          referenceNo: supplierInvoiceNumber,
+          metadata: {
+            ...oldMetadata,
+            workflowStatus: "PURCHASE_INVOICE",
+            supplierInvoiceNumber,
+            readyForPurchaseInvoice: false,
+            payableStatus: num(purchase.balance) > 0 ? "OPEN" : "PAID",
+            accountingPosted: true,
+            accountingAmount: num(purchase.total),
+            accountingPostedAt: new Date().toISOString(),
+            purchaseInvoicePostedAt: new Date().toISOString(),
+          },
+        },
+      });
+      await writeAudit(tx, req, {
+        businessId,
+        userId,
+        action: "grocery.purchase.invoice.post",
+        entityType: "Purchase",
+        entityId: purchase.id,
+        after: { supplierInvoiceNumber, dueDate, total: num(purchase.total), balance: num(purchase.balance), accounting },
+      });
+      return { purchase: updated, accounting, workflowStatus: "PURCHASE_INVOICE" };
+    });
+    return res.status(201).json({ ok: true, data: result });
+  } catch (error: any) {
+    return fail(res, error?.message || "Failed to post purchase invoice", 400, "PURCHASE_INVOICE_POST_FAILED");
   }
 }
