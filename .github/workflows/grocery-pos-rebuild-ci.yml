@@ -29,8 +29,6 @@ jobs:
       run:
         working-directory: apps/grocery-pos
     env:
-      # Transitional only. The migration audit fails until all runtime database dependencies are removed.
-      GROCERY_DATABASE_URL: postgresql://migration_only:migration_only@127.0.0.1:5432/migration_only
       AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
       NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
       GROCERY_SESSION_SECRET: ci-session-secret-that-is-longer-than-thirty-two-characters
@@ -70,7 +68,7 @@ jobs:
         working-directory: .
         run: |
           test ! -f apps/grocery-pos/railway.toml
-          if grep -RInE "release:railway|start:railway|dedicated Railway service|Shared AXTOR backend dependency: none" apps/grocery-pos --exclude-dir=node_modules; then
+          if grep -RInE "release:railway|start:railway|dedicated Railway service|Shared AXTOR backend dependency: none" apps/grocery-pos --exclude-dir=node_modules --exclude=audit-shared-backend-migration.mjs; then
             echo "Obsolete dedicated Grocery Railway architecture detected"
             exit 1
           fi
