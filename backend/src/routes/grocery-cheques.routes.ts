@@ -5,6 +5,7 @@ import { requireAnyPermission, requirePermission } from "../middleware/permissio
 import { groceryCreateSale } from "../controllers/grocery-sales.controller.js";
 import { groceryReceivePurchaseWithAccounting } from "../controllers/grocery-purchase-receive.controller.js";
 import { groceryCustomerDetail } from "../controllers/grocery-customer-detail.controller.js";
+import { groceryHeldSaleCreateV2, groceryHeldSaleDeleteV2, groceryHeldSaleListV2 } from "../controllers/grocery-held-sales.controller.js";
 import {
   groceryChequeCreate,
   groceryChequeGenerateReminders,
@@ -16,9 +17,6 @@ import {
   groceryContext,
   groceryCreatePurchaseOrder,
   groceryExpiry,
-  groceryHeldSaleCreate,
-  groceryHeldSaleDelete,
-  groceryHeldSaleList,
   groceryPurchaseStatus,
   grocerySalesGuard,
   grocerySupplierOverview,
@@ -44,9 +42,9 @@ router.post("/purchase-orders", requirePermission("purchases.create"), groceryCr
 router.patch("/purchase-orders/:id/status", requirePermission("purchases.create"), groceryPurchaseStatus);
 router.post("/purchase-orders/:id/receive", requirePermission("purchases.receive"), groceryReceivePurchaseWithAccounting);
 
-router.get("/held-sales", requirePermission("sales_documents.view"), groceryHeldSaleList);
-router.post("/held-sales", requirePermission("sales_documents.create"), groceryHeldSaleCreate);
-router.delete("/held-sales/:id", requirePermission("sales_documents.create"), groceryHeldSaleDelete);
+router.get("/held-sales", requirePermission("sales_documents.view"), groceryHeldSaleListV2);
+router.post("/held-sales", requirePermission("sales_documents.create"), groceryHeldSaleCreateV2);
+router.delete("/held-sales/:id", requirePermission("sales_documents.create"), groceryHeldSaleDeleteV2);
 router.post("/sales", grocerySalesGuard, groceryCreateSale);
 
 router.get("/cheques", chequeRead, groceryChequeList);
