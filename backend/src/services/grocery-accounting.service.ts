@@ -21,7 +21,7 @@ async function settingAccountId(tx: any, businessId: string, keys: string[]) {
   return null;
 }
 
-async function resolveAccount(tx: any, businessId: string, input: {
+async function resolveAccount(tx: any, businessId: string, currency: string, input: {
   settingKeys: string[];
   systemCode: string;
   name: string;
@@ -46,7 +46,7 @@ async function resolveAccount(tx: any, businessId: string, input: {
       businessId,
       name: input.name,
       type: input.type,
-      currency: "QAR",
+      currency,
       openingBalance: 0,
       currentBalance: 0,
       active: true,
@@ -71,14 +71,16 @@ export async function postGroceryPurchaseAccounting(tx: any, input: {
   });
   if (existing) return { duplicate: true, amount };
 
-  const inventory = await resolveAccount(tx, input.businessId, {
+  const business = await tx.business.findUnique({ where: { id: input.businessId }, select: { currency: true } });
+  const currency = String(business?.currency || "QAR").trim().toUpperCase() || "QAR";
+  const inventory = await resolveAccount(tx, input.businessId, currency, {
     settingKeys: ["accounting.inventoryAccountId", "accounting.inventory", "accounting.defaultInventoryAccountId"],
     systemCode: "inventory",
     name: "Inventory",
     type: "asset",
     nameMatches: ["inventory", "inventory asset", "stock", "stock inventory"],
   });
-  const payable = await resolveAccount(tx, input.businessId, {
+  const payable = await resolveAccount(tx, input.businessId, currency, {
     settingKeys: ["accounting.accountsPayableAccountId", "accounting.apAccountId", "accounting.accountsPayable"],
     systemCode: "accounts_payable",
     name: "Accounts Payable",
@@ -100,5 +102,5 @@ export async function postGroceryPurchaseAccounting(tx: any, input: {
   const debit = amount;
   const credit = amount;
   if (Math.abs(debit - credit) > 0.001) throw new Error("Purchase journal is not balanced");
-  return { duplicate: false, amount, debit, credit, inventoryAccountId: inventory.id, payableAccountId: payable.id };
+  return { duplicate: false, amount, debit, credit, currency, inventoryAccountId: inventory.id, payableAccountId: payable.id };
 }
