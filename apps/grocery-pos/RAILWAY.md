@@ -15,7 +15,7 @@ The Grocery POS must **not** be deployed as a separate Railway service.
 Do not create:
 
 - A dedicated Grocery Railway project or service
-- A `GROCERY_DATABASE_URL` production database
+- A second Grocery production database
 - A second Prisma migration history for Grocery production data
 - A separate Grocery authentication or tenant authority
 - A local copy of sales, payments, inventory, credit/debit or cheque records
