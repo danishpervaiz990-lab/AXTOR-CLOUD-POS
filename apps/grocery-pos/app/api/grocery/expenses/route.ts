@@ -5,6 +5,9 @@ import { getRequestSharedBackendCredentials } from "@/lib/shared-session";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type ExpenseBackendRecord = Record<string, unknown>;
+type ExpenseBackendResponse = ExpenseBackendRecord & { data?: ExpenseBackendRecord };
+
 export async function POST(request: Request) {
   const { token, businessId } = await getRequestSharedBackendCredentials(request);
   if (!token) return NextResponse.json({ error: "AUTHENTICATION_REQUIRED" }, { status: 401 });
@@ -15,7 +18,7 @@ export async function POST(request: Request) {
   if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
 
   try {
-    const payload = await sharedBackendRequest<{ data?: Record<string, unknown> }>("/api/v1/expenses", {
+    const payload = await sharedBackendRequest<ExpenseBackendResponse>("/api/v1/expenses", {
       method: "POST",
       token,
       businessId,
@@ -35,7 +38,7 @@ export async function POST(request: Request) {
         }
       }
     });
-    const data = payload.data ?? payload;
+    const data: ExpenseBackendRecord = payload.data ?? payload;
     return NextResponse.json(
       {
         data: {
