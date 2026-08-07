@@ -1,28 +1,21 @@
-name: Grocery Shared Backend CI
+name: Grocery Replacement Production Certification
 
 on:
   pull_request:
     branches: [main]
     paths:
       - "apps/grocery-pos/**"
-      - "docs/grocery/**"
-      - ".github/workflows/grocery-pos-rebuild-ci.yml"
-  push:
-    branches: [feat/grocery-shared-backend-20260806]
-    paths:
-      - "apps/grocery-pos/**"
-      - "docs/grocery/**"
       - ".github/workflows/grocery-pos-rebuild-ci.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: grocery-shared-backend-${{ github.ref }}
+  group: grocery-replacement-certification-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  validate:
+  validate-and-certify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -31,9 +24,10 @@ jobs:
     env:
       AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
       NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
+      GROCERY_FRONTEND_ORIGIN: https://axtor-grocery-pos-production.up.railway.app
       GROCERY_SESSION_SECRET: ci-session-secret-that-is-longer-than-thirty-two-characters
-      GROCERY_APP_URL: http://localhost:3000
-      GROCERY_ENVIRONMENT: test
+      GROCERY_APP_URL: https://axtor-grocery-pos-production.up.railway.app
+      GROCERY_ENVIRONMENT: production
       GROCERY_LOG_LEVEL: error
       GROCERY_CRON_SECRET: ci-cron-secret-that-is-longer-than-twenty-four-characters
       GROCERY_FILE_STORAGE_PROVIDER: vercel-blob
@@ -61,22 +55,178 @@ jobs:
       - name: Unit tests
         run: npm run test
 
-      - name: Audit complete shared-backend migration
+      - name: Audit shared-backend migration
         run: node scripts/audit-shared-backend-migration.mjs
 
-      - name: Enforce shared-backend deployment architecture
-        working-directory: .
+      - name: Reject active Grocery page/API local database access
         run: |
-          test ! -f apps/grocery-pos/railway.toml
-          if grep -RInE "release:railway|start:railway|dedicated Railway service|Shared AXTOR backend dependency: none" apps/grocery-pos --exclude-dir=node_modules --exclude=audit-shared-backend-migration.mjs; then
-            echo "Obsolete dedicated Grocery Railway architecture detected"
+          if grep -RInE 'from "@/lib/db"|from '\''@/lib/db'\''' app components --exclude-dir=node_modules; then
+            echo "Active Grocery page/API still depends on the disabled local database"
             exit 1
           fi
-          test -f apps/grocery-pos/lib/shared-backend.ts
-          test -f apps/grocery-pos/app/api/shared/[...path]/route.ts
-
-      - name: Validate Vercel configuration
-        run: node -e "const value=JSON.parse(require('fs').readFileSync('vercel.json','utf8')); if(value.framework!=='nextjs') process.exit(1); console.log('Vercel config valid')"
+          if grep -RInE 'release:railway|prisma:migrate:deploy.*start|prisma:seed.*start' package.json railway.toml; then
+            echo "Grocery host must not run local database migrations or seeds"
+            exit 1
+          fi
+          grep -q 'startCommand = "npm run start:railway"' railway.toml
+          grep -q 'axtor-cloud-pos-production.up.railway.app' lib/shared-backend.ts
 
       - name: Production build
         run: npm run build
+
+      - name: Live Grocery replacement certification
+        working-directory: .
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const frontend = process.env.GROCERY_FRONTEND_ORIGIN.replace(/\/$/, '');
+          const backend = process.env.AXTOR_SHARED_BACKEND_URL.replace(/\/$/, '');
+
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+          async function waitFor(url, test, attempts = 48) {
+            let last = 'no response';
+            for (let i = 0; i < attempts; i++) {
+              try {
+                const response = await fetch(url, {cache: 'no-store', redirect: 'manual'});
+                const body = await response.text();
+                last = `HTTP ${response.status}`;
+                if (await test(response, body)) return {response, body};
+              } catch (error) {
+                last = error?.message || String(error);
+              }
+              await sleep(5000);
+            }
+            throw new Error(`Timed out certifying ${url}: ${last}`);
+          }
+
+          async function jsonRequest(origin, path, {method='GET', token, body, headers={}}={}) {
+            const response = await fetch(origin + path, {
+              method,
+              cache: 'no-store',
+              headers: {
+                Accept: 'application/json',
+                ...(token ? {Authorization: `Bearer ${token}`} : {}),
+                ...(body !== undefined ? {'Content-Type': 'application/json'} : {}),
+                ...headers
+              },
+              body: body === undefined ? undefined : JSON.stringify(body)
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+              throw new Error(`${method} ${path} -> HTTP ${response.status}: ${payload?.message || payload?.error?.message || payload?.error || 'request failed'}`);
+            }
+            return payload?.data ?? payload;
+          }
+
+          function cookieHeader(response) {
+            const values = typeof response.headers.getSetCookie === 'function'
+              ? response.headers.getSetCookie()
+              : [response.headers.get('set-cookie')].filter(Boolean);
+            return values.map(value => value.split(';', 1)[0]).join('; ');
+          }
+
+          (async () => {
+            await waitFor(frontend + '/api/health', (response, body) => response.status === 200 && !/^\s*hello\s*$/i.test(body));
+
+            const loginPage = await waitFor(frontend + '/login', (response, body) =>
+              response.status === 200 &&
+              body.includes('Enter your grocery workspace.') &&
+              body.includes('AXTOR Grocery') &&
+              !/^\s*hello\s*$/i.test(body)
+            );
+            if (loginPage.body.length < 500) throw new Error('Replacement Grocery login page is unexpectedly small');
+
+            const catalog = await jsonRequest(backend, '/api/v1/public/catalog');
+            const plans = Array.isArray(catalog?.plans) ? catalog.plans : [];
+            const plan = plans.find(p => String(p.code || '').toLowerCase() === 'professional')
+              || plans.find(p => p.isRecommended)
+              || plans[0];
+            if (!plan?.code) throw new Error('No active SaaS plan available for Grocery certification');
+
+            const tag = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+            const email = `grocery.cutover.${tag}@example.test`;
+            const password = `GroceryCutover!${crypto.randomBytes(16).toString('base64url')}9aA`;
+            const registration = await jsonRequest(backend, '/api/v1/public/register', {
+              method: 'POST',
+              headers: {'Idempotency-Key': `grocery-cutover:${tag}`},
+              body: {
+                businessName: `Grocery Cutover Certification ${tag}`,
+                ownerName: 'Grocery Cutover Owner',
+                email,
+                password,
+                country: 'QA',
+                timezone: 'Asia/Qatar',
+                baseCurrency: 'QAR',
+                language: 'en',
+                industryCode: 'grocery',
+                planCode: String(plan.code).toLowerCase(),
+                billingCycle: 'MONTHLY',
+                firstBranch: 'Main Branch',
+                firstWarehouse: 'Main Warehouse',
+                firstCounter: 'Counter 1',
+                taxSystem: 'none',
+                taxLabel: 'Tax',
+                invoicePrefix: 'GRC',
+                printProfile: 'a4',
+                pricesIncludeTax: false,
+                sampleDataRequested: false,
+                acceptTerms: true,
+                acceptPrivacy: true
+              }
+            });
+            const workspace = String(registration?.business?.slug || '').trim();
+            if (!workspace) throw new Error('Temporary Grocery tenant registration did not return a workspace');
+
+            const loginResponse = await fetch(frontend + '/api/auth/login', {
+              method: 'POST',
+              redirect: 'manual',
+              headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                Origin: frontend,
+                Referer: frontend + '/login'
+              },
+              body: JSON.stringify({workspace, email, password})
+            });
+            const loginBody = await loginResponse.text();
+            if (loginResponse.status !== 200) throw new Error(`Frontend Grocery login failed: HTTP ${loginResponse.status} ${loginBody.slice(0, 200)}`);
+            const cookies = cookieHeader(loginResponse);
+            if (!cookies.includes('axtorGroceryAuthToken=') || !cookies.includes('axtorGroceryBusinessId=')) {
+              throw new Error('Frontend Grocery login did not establish shared-backend session cookies');
+            }
+
+            for (const [path, marker] of [
+              ['/dashboard', 'Grocery operations'],
+              ['/checkout', 'AXTOR Grocery'],
+              ['/inventory', 'AXTOR Grocery'],
+              ['/finance', 'AXTOR Grocery'],
+              ['/cheques', 'AXTOR Grocery']
+            ]) {
+              const response = await fetch(frontend + path, {
+                cache: 'no-store',
+                redirect: 'manual',
+                headers: {Cookie: cookies}
+              });
+              const body = await response.text();
+              if (response.status !== 200) throw new Error(`${path} failed after Grocery login: HTTP ${response.status}`);
+              if (!body.includes(marker)) throw new Error(`${path} did not render the replacement Grocery UI marker: ${marker}`);
+              if (/LOCAL_GROCERY_DATABASE_DISABLED_USE_SHARED_BACKEND|Internal Server Error/i.test(body)) {
+                throw new Error(`${path} exposed a legacy/local-database runtime failure`);
+              }
+            }
+
+            const gateway = await fetch('https://axtorpos.vercel.app/apps/grocery', {redirect: 'manual', cache: 'no-store'});
+            const location = gateway.headers.get('location') || '';
+            if (![307, 308].includes(gateway.status)) throw new Error(`Existing Grocery gateway returned HTTP ${gateway.status}`);
+            if (!location.startsWith(frontend + '/login')) throw new Error(`Existing Grocery gateway does not target the replacement app: ${location}`);
+
+            console.log('GROCERY REPLACEMENT LIVE CERTIFICATION: PASS');
+            console.log(`Frontend: ${frontend}`);
+            console.log('Verified: health, replacement login UI, shared-backend owner login, dashboard, checkout, inventory, finance, cheques, existing Grocery gateway.');
+          })().catch(error => {
+            console.error(error.stack || error.message || error);
+            process.exit(1);
+          });
+          NODE
