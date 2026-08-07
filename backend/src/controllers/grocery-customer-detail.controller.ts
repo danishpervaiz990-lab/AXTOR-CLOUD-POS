@@ -26,7 +26,8 @@ function bucket(days: number, cuts: number[]) {
   if (days <= cuts[4]) return `${cuts[3] + 1}–${cuts[4]} days`;
   return `${cuts[4]}+ days`;
 }
-function invoiceProfit(invoice: any) {
+type ProfitMetric = { grossProfit: number; cogs: number; exact: boolean; basis: string };
+function invoiceProfit(invoice: any): ProfitMetric {
   const snapshot = json(json(invoice.metadata).groceryCostSnapshot);
   if (num(snapshot.version) >= 1 && Number.isFinite(Number(snapshot.totalCogs))) {
     const netSales = round2(num(invoice.subtotal) - num(invoice.discount));
@@ -63,9 +64,9 @@ export async function groceryCustomerDetail(req: Request, res: Response) {
       db.salesReturn.findMany({ where: { businessId, customerId: customer.id }, include: { items: true }, orderBy: { returnDate: "desc" }, take: 1000 }),
       ageingCuts(businessId),
     ]);
-    const productIds = [...new Set(invoices.flatMap((invoice: any) => (invoice.items || []).map((item: any) => item.productId).filter(Boolean)))];
+    const productIds = [...new Set<string>(invoices.flatMap((invoice: any) => (invoice.items || []).map((item: any) => String(item.productId || "")).filter(Boolean)))];
     const products = productIds.length ? await db.product.findMany({ where: { businessId, id: { in: productIds } } }) : [];
-    const productById = new Map(products.map((p: any) => [String(p.id), p]));
+    const productById = new Map<string, any>(products.map((p: any): [string, any] => [String(p.id), p]));
     for (const invoice of invoices) for (const item of invoice.items || []) item.product = item.productId ? productById.get(String(item.productId)) : null;
 
     const totalPurchases = round2(invoices.reduce((s: number, x: any) => s + num(x.total), 0));
@@ -78,9 +79,9 @@ export async function groceryCustomerDetail(req: Request, res: Response) {
     const creditLimit = num(customer.creditLimit);
     const availableCredit = creditLimit > 0 ? Math.max(0, round2(creditLimit - outstanding)) : null;
 
-    const profits = invoices.map(invoiceProfit);
-    const grossProfitGenerated = round2(profits.reduce((s, p) => s + p.grossProfit, 0) - totalReturns);
-    const exactProfitInvoices = profits.filter(p => p.exact).length;
+    const profits: ProfitMetric[] = invoices.map((invoice: any) => invoiceProfit(invoice));
+    const grossProfitGenerated = round2(profits.reduce((sum: number, metric: ProfitMetric) => sum + metric.grossProfit, 0));
+    const exactProfitInvoices = profits.filter((metric: ProfitMetric) => metric.exact).length;
     const profitCoveragePercentage = invoices.length ? round2(exactProfitInvoices / invoices.length * 100) : 100;
 
     const productMap = new Map<string, any>();
@@ -106,7 +107,7 @@ export async function groceryCustomerDetail(req: Request, res: Response) {
 
     return res.json({ ok: true, data: {
       customer: { ...customer, creditLimit, creditDays: num(customer.creditDays), openingBalance: num(customer.openingBalance), balance: num(customer.balance), ...customerProfile(customer) },
-      summary: { totalPurchases, totalReturns, totalPayments, totalOutstanding: outstanding, overdueAmount, availableCredit, averageInvoiceValue: invoices.length ? round2(totalPurchases / invoices.length) : 0, grossProfitGenerated, profitCoveragePercentage, profitBasis: profitCoveragePercentage === 100 ? "sale_cost_snapshot" : "snapshot_plus_cost_fallback", lastPurchase: invoices[0]?.issuedAt || invoices[0]?.createdAt || null },
+      summary: { totalPurchases, totalReturns, totalPayments, totalOutstanding: outstanding, overdueAmount, availableCredit, averageInvoiceValue: invoices.length ? round2(totalPurchases / invoices.length) : 0, grossProfitGenerated, grossProfitReturnsAdjustmentIncluded: returns.length === 0, profitCoveragePercentage, profitBasis: profitCoveragePercentage === 100 ? "sale_cost_snapshot" : "snapshot_plus_cost_fallback", lastPurchase: invoices[0]?.issuedAt || invoices[0]?.createdAt || null },
       mostPurchasedProducts: [...productMap.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 20),
       paymentHistory: payments,
       invoiceHistory: cleanInvoices,
