@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const DEFAULT_SHARED_BACKEND_URL = "https://axtor-cloud-pos-production.up.railway.app";
+
 const errorPayloadSchema = z.object({
   message: z.string().optional(),
   error: z.union([
@@ -59,10 +61,7 @@ export function sharedRequestContext(request: Request) {
 }
 
 function getBaseUrl(): string {
-  const raw = process.env.AXTOR_SHARED_BACKEND_URL ?? process.env.NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL;
-  if (!raw) {
-    throw new Error("AXTOR_SHARED_BACKEND_URL is required");
-  }
+  const raw = process.env.AXTOR_SHARED_BACKEND_URL ?? process.env.NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL ?? DEFAULT_SHARED_BACKEND_URL;
   return raw.replace(/\/$/, "");
 }
 
