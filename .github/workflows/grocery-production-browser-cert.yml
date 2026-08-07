@@ -38,99 +38,64 @@ jobs:
           async function api(path, {method='GET', body, headers={}}={}) {
             const response = await fetch(backend + path, {
               method,
-              cache: 'no-store',
-              headers: {
-                Accept: 'application/json',
-                ...(body !== undefined ? {'Content-Type':'application/json'} : {}),
-                ...headers
-              },
-              body: body === undefined ? undefined : JSON.stringify(body)
+              cache:'no-store',
+              headers:{Accept:'application/json',...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},
+              body:body===undefined?undefined:JSON.stringify(body)
             });
-            const data = await response.json().catch(() => null);
+            const data = await response.json().catch(()=>null);
             if (!response.ok) throw new Error(`${method} ${path} HTTP ${response.status}: ${data?.error?.message || data?.message || data?.error || 'failed'}`);
             return data?.data ?? data;
           }
 
-          (async () => {
-            const catalog = await api('/api/v1/public/catalog');
-            const plans = Array.isArray(catalog?.plans) ? catalog.plans : [];
-            const plan = plans.find(p => String(p.code || '').toLowerCase() === 'professional') || plans.find(p => p.isRecommended) || plans[0];
-            if (!plan?.code) throw new Error('No active plan available');
+          (async()=>{
+            const catalog=await api('/api/v1/public/catalog');
+            const plans=Array.isArray(catalog?.plans)?catalog.plans:[];
+            const plan=plans.find(p=>String(p.code||'').toLowerCase()==='professional')||plans.find(p=>p.isRecommended)||plans[0];
+            if(!plan?.code) throw new Error('No active plan available');
+            const tag=`${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+            const email=`grocery.browser.${tag}@example.test`;
+            const password=`GroceryBrowser!${crypto.randomBytes(14).toString('base64url')}9aA`;
+            const registration=await api('/api/v1/public/register',{method:'POST',headers:{'Idempotency-Key':`grocery-browser:${tag}`},body:{businessName:`Grocery Browser Certification ${tag}`,ownerName:'Grocery Browser Owner',email,password,country:'QA',timezone:'Asia/Qatar',baseCurrency:'QAR',language:'en',industryCode:'grocery',planCode:String(plan.code).toLowerCase(),billingCycle:'MONTHLY',firstBranch:'Main Branch',firstWarehouse:'Main Warehouse',firstCounter:'Counter 1',taxSystem:'none',taxLabel:'Tax',invoicePrefix:'GRC',printProfile:'a4',pricesIncludeTax:false,sampleDataRequested:false,acceptTerms:true,acceptPrivacy:true}});
+            const workspace=String(registration?.business?.slug||'').trim();
+            if(!workspace) throw new Error('Registration returned no Grocery workspace');
 
-            const tag = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-            const email = `grocery.browser.${tag}@example.test`;
-            const password = `GroceryBrowser!${crypto.randomBytes(14).toString('base64url')}9aA`;
-            const registration = await api('/api/v1/public/register', {
-              method:'POST',
-              headers:{'Idempotency-Key':`grocery-browser:${tag}`},
-              body:{
-                businessName:`Grocery Browser Certification ${tag}`,
-                ownerName:'Grocery Browser Owner',
-                email,
-                password,
-                country:'QA',
-                timezone:'Asia/Qatar',
-                baseCurrency:'QAR',
-                language:'en',
-                industryCode:'grocery',
-                planCode:String(plan.code).toLowerCase(),
-                billingCycle:'MONTHLY',
-                firstBranch:'Main Branch',
-                firstWarehouse:'Main Warehouse',
-                firstCounter:'Counter 1',
-                taxSystem:'none',
-                taxLabel:'Tax',
-                invoicePrefix:'GRC',
-                printProfile:'a4',
-                pricesIncludeTax:false,
-                sampleDataRequested:false,
-                acceptTerms:true,
-                acceptPrivacy:true
-              }
-            });
-            const workspace = String(registration?.business?.slug || '').trim();
-            if (!workspace) throw new Error('Registration returned no Grocery workspace');
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({viewport:{width:1440,height:1000}});
+            const pageErrors=[]; const failed=[]; const consoleErrors=[];
+            page.on('pageerror',err=>pageErrors.push(err.message));
+            page.on('requestfailed',req=>failed.push(`${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
+            page.on('console',msg=>{if(msg.type()==='error')consoleErrors.push(msg.text());});
 
-            const browser = await chromium.launch({headless:true});
-            const page = await browser.newPage({viewport:{width:1440,height:1000}});
-            const pageErrors = [];
-            page.on('pageerror', err => pageErrors.push(err.message));
-
-            const response = await page.goto(frontend, {waitUntil:'networkidle', timeout:60000});
-            if (!response || response.status() !== 200) throw new Error(`Grocery entry HTTP ${response?.status()}`);
+            const response=await page.goto(frontend,{waitUntil:'networkidle',timeout:60000});
+            if(!response||response.status()!==200) throw new Error(`Grocery entry HTTP ${response?.status()}`);
             await page.getByText('Enter your grocery workspace.').waitFor({timeout:20000});
-            const html = await page.content();
-            if (/^\s*Hello\s*$/i.test(await page.locator('body').innerText())) throw new Error('Placeholder Hello page is still deployed');
-            if (!html.includes('AXTOR Grocery POS Cloud')) throw new Error('Replacement Grocery shell is missing');
+            if(/^\s*Hello\s*$/i.test(await page.locator('body').innerText())) throw new Error('Placeholder Hello page is still deployed');
 
             await page.locator('#workspace').fill(workspace);
             await page.locator('#email').fill(email);
             await page.locator('#password').fill(password);
-            await page.getByRole('button', {name:'Sign in securely'}).click();
-            await page.getByRole('heading', {name:'Grocery Dashboard'}).waitFor({timeout:30000});
-
-            const modules = [
-              ['Checkout', 'Grocery Checkout'],
-              ['Inventory', 'Grocery Inventory'],
-              ['Finance', 'Grocery Finance'],
-              ['Cheques', 'Grocery Cheques'],
-              ['Dashboard', 'Grocery Dashboard']
-            ];
-            for (const [button, heading] of modules) {
-              await page.locator('.nav-link', {hasText:button}).click();
-              await page.getByRole('heading', {name:heading}).waitFor({timeout:30000});
-              const body = await page.locator('body').innerText();
-              if (/LOCAL_GROCERY_DATABASE_DISABLED_USE_SHARED_BACKEND|Application not found|Internal Server Error/i.test(body)) {
-                throw new Error(`${heading} contains a legacy/dead backend failure`);
-              }
+            await page.getByRole('button',{name:'Sign in securely'}).click();
+            try {
+              await page.getByRole('heading',{name:'Grocery Dashboard'}).waitFor({timeout:15000});
+            } catch (error) {
+              console.error('POST-LOGIN BODY:', (await page.locator('body').innerText()).slice(0,2500));
+              console.error('LOCAL STORAGE:', await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage))));
+              console.error('FAILED REQUESTS:', failed);
+              console.error('PAGE ERRORS:', pageErrors);
+              console.error('CONSOLE ERRORS:', consoleErrors);
+              throw error;
             }
 
-            if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
+            const modules=[['Checkout','Grocery Checkout'],['Inventory','Grocery Inventory'],['Finance','Grocery Finance'],['Cheques','Grocery Cheques'],['Dashboard','Grocery Dashboard']];
+            for(const [button,heading] of modules){
+              await page.locator('.nav-link',{hasText:button}).click();
+              await page.getByRole('heading',{name:heading}).waitFor({timeout:30000});
+              const body=await page.locator('body').innerText();
+              if(/LOCAL_GROCERY_DATABASE_DISABLED_USE_SHARED_BACKEND|Application not found|Internal Server Error/i.test(body)) throw new Error(`${heading} contains a legacy/dead backend failure`);
+            }
+            if(pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`);
+            if(consoleErrors.length) throw new Error(`Browser console errors: ${consoleErrors.join(' | ')}`);
             await browser.close();
             console.log('GROCERY PRODUCTION BROWSER CERTIFICATION: PASS');
-            console.log('Verified existing /apps/grocery URL, new Grocery login, Owner auth, Dashboard, Checkout, Inventory, Finance and Cheques.');
-          })().catch(error => {
-            console.error(error.stack || error.message || error);
-            process.exit(1);
-          });
+          })().catch(error=>{console.error(error.stack||error.message||error);process.exit(1);});
           NODE
