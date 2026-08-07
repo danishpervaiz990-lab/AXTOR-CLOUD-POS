@@ -1,45 +1,34 @@
-const DEFAULT_RAILWAY_ORIGIN = "https://axtor-grocery-pos-production.up.railway.app";
-
 export const runtime = "edge";
 export const config = { runtime: "edge" };
 
 const ROUTES = new Map([
-  ["", "/login"],
-  ["grocery-dashboard.html", "/dashboard"],
-  ["grocery-terminal.html", "/checkout"],
-  ["grocery-shifts.html", "/checkout"],
-  ["grocery-products.html", "/inventory"],
-  ["grocery-categories.html", "/inventory"],
-  ["grocery-batches.html", "/inventory"],
-  ["grocery-expiry.html", "/inventory"],
-  ["grocery-inventory.html", "/inventory"],
-  ["grocery-receiving.html", "/inventory"],
-  ["grocery-waste.html", "/inventory"],
-  ["grocery-recalls.html", "/inventory"],
-  ["grocery-sales.html", "/finance"],
-  ["grocery-purchases.html", "/finance"],
-  ["grocery-expenses.html", "/finance"],
-  ["grocery-accounts.html", "/finance"],
-  ["grocery-reports.html", "/finance"],
-  ["grocery-cheques.html", "/cheques"],
-  ["grocery-customers.html", "/dashboard"],
-  ["grocery-suppliers.html", "/dashboard"],
-  ["grocery-promotions.html", "/dashboard"],
-  ["grocery-loyalty.html", "/dashboard"],
-  ["grocery-labels.html", "/dashboard"],
-  ["grocery-notifications.html", "/dashboard"],
-  ["grocery-settings.html", "/dashboard"],
-  ["grocery-users.html", "/dashboard"]
+  ["", "login"],
+  ["grocery-dashboard.html", "dashboard"],
+  ["grocery-terminal.html", "checkout"],
+  ["grocery-shifts.html", "checkout"],
+  ["grocery-products.html", "inventory"],
+  ["grocery-categories.html", "inventory"],
+  ["grocery-batches.html", "inventory"],
+  ["grocery-expiry.html", "inventory"],
+  ["grocery-inventory.html", "inventory"],
+  ["grocery-receiving.html", "inventory"],
+  ["grocery-waste.html", "inventory"],
+  ["grocery-recalls.html", "inventory"],
+  ["grocery-sales.html", "finance"],
+  ["grocery-purchases.html", "finance"],
+  ["grocery-expenses.html", "finance"],
+  ["grocery-accounts.html", "finance"],
+  ["grocery-reports.html", "finance"],
+  ["grocery-cheques.html", "cheques"],
+  ["grocery-customers.html", "finance"],
+  ["grocery-suppliers.html", "inventory"],
+  ["grocery-promotions.html", "dashboard"],
+  ["grocery-loyalty.html", "dashboard"],
+  ["grocery-labels.html", "inventory"],
+  ["grocery-notifications.html", "dashboard"],
+  ["grocery-settings.html", "dashboard"],
+  ["grocery-users.html", "dashboard"]
 ]);
-
-function safeOrigin(value) {
-  try {
-    const parsed = new URL(String(value || "").trim());
-    return parsed.protocol === "https:" ? parsed.origin : "";
-  } catch {
-    return "";
-  }
-}
 
 function safePath(value) {
   let decoded;
@@ -52,7 +41,7 @@ function safePath(value) {
   return decoded;
 }
 
-function retiredResponse(message, status) {
+function plain(message, status) {
   return new Response(message, {
     status,
     headers: {
@@ -60,33 +49,27 @@ function retiredResponse(message, status) {
       "Cache-Control": "no-store, max-age=0",
       "X-Content-Type-Options": "nosniff",
       "X-Axtor-Industry": "grocery",
-      "X-Axtor-Grocery-Release": "20260806-new-railway-cutover"
+      "X-Axtor-Grocery-Release": "20260807-new-grocery-replacement"
     }
   });
 }
 
 export default function groceryAsset(request) {
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return retiredResponse("Method not allowed", 405);
+    return plain("Method not allowed", 405);
   }
 
   const incoming = new URL(request.url);
   const legacyPath = safePath(incoming.searchParams.get("path"));
-  const configuredOrigin = safeOrigin(process.env.GROCERY_RAILWAY_ORIGIN);
-  const targetOrigin = configuredOrigin || DEFAULT_RAILWAY_ORIGIN;
-
-  if (!targetOrigin) {
-    return retiredResponse("The replacement Grocery service has not been configured.", 503);
-  }
-
   const fileName = legacyPath.split("/").pop() || "";
-  const route = ROUTES.get(fileName) || "/login";
-  const target = new URL(route, targetOrigin);
+  const view = ROUTES.get(fileName) || "dashboard";
+  const target = new URL("/grocery-new.html", incoming.origin);
+  target.searchParams.set("view", view);
 
   for (const [key, value] of incoming.searchParams.entries()) {
-    if (key !== "path") target.searchParams.append(key, value);
+    if (key !== "path" && key !== "view") target.searchParams.append(key, value);
   }
-  target.searchParams.set("source", "axtor-grocery-cutover");
+  target.searchParams.set("source", "axtor-grocery-replacement");
 
   return new Response(null, {
     status: 307,
@@ -96,8 +79,9 @@ export default function groceryAsset(request) {
       "X-Content-Type-Options": "nosniff",
       "X-Robots-Tag": "noindex",
       "X-Axtor-Industry": "grocery",
-      "X-Axtor-Grocery-Release": "20260806-new-railway-cutover",
-      "X-Axtor-Legacy-Grocery": "retired"
+      "X-Axtor-Grocery-Release": "20260807-new-grocery-replacement",
+      "X-Axtor-Legacy-Grocery": "replaced",
+      "X-Axtor-Grocery-Backend": "shared-production"
     }
   });
 }
