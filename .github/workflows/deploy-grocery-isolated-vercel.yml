@@ -1,0 +1,156 @@
+name: Deploy Grocery Isolated Vercel
+
+on:
+  pull_request:
+    branches:
+      - backend
+    paths:
+      - '.github/workflows/deploy-grocery-isolated-vercel.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_HMx7VdpLPGeDfZYAaB7V0CFZ
+      VERCEL_PROJECT_NAME: axtor-grocery-pos
+      GROCERY_BRANCH: feat/grocery-shared-backend-20260806
+      AXTOR_SHARED_BACKEND_URL: https://axtor-cloud-pos-production.up.railway.app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/grocery-shared-backend-20260806
+      - name: Verify Vercel deployment authorization
+        shell: bash
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo 'VERCEL_TOKEN is not configured in GitHub Actions secrets.'
+            exit 78
+          fi
+          echo 'Vercel deployment authorization is available.'
+      - name: Create or verify isolated Grocery Vercel project
+        shell: bash
+        run: |
+          set -euo pipefail
+          AUTH="Authorization: Bearer $VERCEL_TOKEN"
+          PROJECT_URL="https://api.vercel.com/v9/projects/$VERCEL_PROJECT_NAME?teamId=$VERCEL_TEAM_ID"
+          STATUS=$(curl -sS -o /tmp/vercel-project.json -w '%{http_code}' -H "$AUTH" "$PROJECT_URL")
+          if [ "$STATUS" = '404' ]; then
+            node - <<'NODE' >/tmp/create-project-body.json
+          console.log(JSON.stringify({
+            name: process.env.VERCEL_PROJECT_NAME,
+            framework: 'nextjs',
+            gitRepository: {
+              type: 'github',
+              repo: 'danishpervaiz990-lab/AXTOR-CLOUD-POS'
+            },
+            rootDirectory: 'apps/grocery-pos'
+          }));
+          NODE
+            STATUS=$(curl -sS -o /tmp/vercel-project.json -w '%{http_code}' \
+              -X POST "https://api.vercel.com/v11/projects?teamId=$VERCEL_TEAM_ID" \
+              -H "$AUTH" -H 'Content-Type: application/json' \
+              --data-binary @/tmp/create-project-body.json)
+          fi
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Vercel project request failed with HTTP $STATUS"
+            node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/vercel-project.json','utf8')); console.log(x?.error?.code||'unknown', x?.error?.message||'project request failed')"
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('/tmp/vercel-project.json','utf8'));
+          if (!p.id || p.name !== process.env.VERCEL_PROJECT_NAME) throw new Error('Unexpected project response');
+          if (p.rootDirectory && p.rootDirectory !== 'apps/grocery-pos') throw new Error(`Unexpected rootDirectory ${p.rootDirectory}`);
+          console.log(`Isolated project verified: ${p.name} (${p.id}), root=${p.rootDirectory || 'apps/grocery-pos'}`);
+          NODE
+      - name: Configure shared backend environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE' >/tmp/vercel-env.json
+          const url=process.env.AXTOR_SHARED_BACKEND_URL;
+          console.log(JSON.stringify([
+            {key:'AXTOR_SHARED_BACKEND_URL',value:url,type:'plain',target:['production','preview']},
+            {key:'NEXT_PUBLIC_AXTOR_SHARED_BACKEND_URL',value:url,type:'plain',target:['production','preview']}
+          ]));
+          NODE
+          STATUS=$(curl -sS -o /tmp/vercel-env-response.json -w '%{http_code}' \
+            -X POST "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_NAME/env?upsert=true&teamId=$VERCEL_TEAM_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/vercel-env.json)
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Vercel environment request failed with HTTP $STATUS"
+            node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/vercel-env-response.json','utf8')); console.log(x?.error?.code||'unknown', x?.error?.message||'environment request failed')"
+            exit 1
+          fi
+          echo 'Shared backend environment configured for production and preview.'
+      - name: Deploy certified Grocery branch to production
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE' >/tmp/vercel-deploy-body.json
+          console.log(JSON.stringify({
+            name: process.env.VERCEL_PROJECT_NAME,
+            project: process.env.VERCEL_PROJECT_NAME,
+            target: 'production',
+            gitSource: {
+              type: 'github',
+              org: 'danishpervaiz990-lab',
+              repo: 'AXTOR-CLOUD-POS',
+              ref: process.env.GROCERY_BRANCH
+            }
+          }));
+          NODE
+          STATUS=$(curl -sS -o /tmp/vercel-deployment.json -w '%{http_code}' \
+            -X POST "https://api.vercel.com/v13/deployments?teamId=$VERCEL_TEAM_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/vercel-deploy-body.json)
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Vercel deployment request failed with HTTP $STATUS"
+            node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/vercel-deployment.json','utf8')); console.log(x?.error?.code||'unknown', x?.error?.message||'deployment request failed')"
+            exit 1
+          fi
+          DEPLOYMENT_ID=$(node -p "require('/tmp/vercel-deployment.json').id")
+          if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = 'undefined' ]; then echo 'Deployment ID missing'; exit 1; fi
+          echo "Deployment accepted: $DEPLOYMENT_ID"
+          READY=''
+          for i in $(seq 1 60); do
+            curl -sS -o /tmp/vercel-deployment-current.json \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID"
+            READY=$(node -p "require('/tmp/vercel-deployment-current.json').readyState || require('/tmp/vercel-deployment-current.json').status || ''")
+            if [ "$READY" = 'READY' ]; then break; fi
+            if [ "$READY" = 'ERROR' ] || [ "$READY" = 'CANCELED' ]; then
+              node -e "const x=require('/tmp/vercel-deployment-current.json'); console.log(x.errorMessage||x.errorCode||'Deployment failed')"
+              exit 1
+            fi
+            sleep 5
+          done
+          if [ "$READY" != 'READY' ]; then echo "Deployment did not reach READY; state=$READY"; exit 1; fi
+          node - <<'NODE'
+          const fs=require('fs');
+          const d=JSON.parse(fs.readFileSync('/tmp/vercel-deployment-current.json','utf8'));
+          const result={
+            project:process.env.VERCEL_PROJECT_NAME,
+            projectRoot:'apps/grocery-pos',
+            sourceBranch:process.env.GROCERY_BRANCH,
+            deploymentId:d.id,
+            readyState:d.readyState || d.status,
+            url:d.url ? `https://${d.url}` : null,
+            aliases:d.alias || d.aliases || []
+          };
+          fs.writeFileSync('grocery-vercel-deployment.json',JSON.stringify(result,null,2));
+          console.log(`Grocery Vercel deployment READY: ${result.url}`);
+          NODE
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grocery-vercel-deployment-${{ github.run_id }}
+          path: grocery-vercel-deployment.json
+          if-no-files-found: ignore
+          retention-days: 2
