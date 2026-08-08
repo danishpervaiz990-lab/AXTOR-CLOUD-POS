@@ -100,7 +100,7 @@ function certifyGrocery(project){
  assert.match(uom,/Inventory is posted automatically in each product's configured base unit/);
  assert.match(uom,/baseQuantityReceived/);
  assert.match(actions,/quantity:num\(l\.saleQty\)\*num\(l\.factor,1\)/);
- assert.match(actions,/unitPrice:num\(l\.price\)\/Math\.max\(\.001,num\(l\.factor,1\)\)/);
+ assert.match(actions,/unitPrice:num\(l\.price\)\/num\(l\.factor,1\)/);
  assert.match(gateway,/X-Axtor-Grocery-Backend["']:\s*["']shared-production["']/);
  assert.match(gateway,/X-Axtor-Legacy-Grocery/);
  assert.doesNotMatch(gateway,/GROCERY_RAILWAY_ORIGIN|frontend-grocery|raw\.githubusercontent\.com/);
