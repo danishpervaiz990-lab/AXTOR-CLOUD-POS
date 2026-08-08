@@ -8,6 +8,62 @@ const fatalBody = /LOCAL_GROCERY_DATABASE_DISABLED_USE_SHARED_BACKEND|Applicatio
 const reportPath = "grocery-live-bug-audit-report.json";
 const screenshotPath = "grocery-live-bug-audit.png";
 
+const EXPECTED_HEADINGS = {
+  dashboard: "Grocery Dashboard",
+  expiry: "Expiry Management",
+  checkout: "Grocery Sale Terminal",
+  "held-sales": "Held Sales",
+  sales: "Sales",
+  "promotions-37": "Promotions & Offers",
+  "returns-39": "Returns / Refunds / Exchange",
+  customers: "Customers",
+  "ageing-customers": "Customer Ageing",
+  "loyalty-38": "Customer Loyalty",
+  inventory: "Inventory",
+  "grocery-products": "Grocery Product Setup",
+  "pricing-40": "Price Management",
+  "labels-43": "Barcode & Shelf Labels",
+  "cost-history-47": "Purchase Cost History",
+  "expiry-near": "Expiry Management",
+  "inventory-low": "Inventory",
+  "stock-transfers": "Stock Transfers",
+  "stock-counts": "Inventory Counts",
+  reorder: "Smart Reorder",
+  "valuation-41": "Stock Valuation",
+  suppliers: "Suppliers",
+  "ageing-suppliers": "Supplier Ageing",
+  purchases: "Purchases",
+  "purchase-payments": "Supplier Payments",
+  warehouses: "Warehouses",
+  counters: "Counters & Shifts",
+  vans: "Van Management",
+  finance: "Finance",
+  cheques: "Cheque Management",
+  "chart-accounts": "Chart of Accounts",
+  journals: "Journal Entries",
+  expenses: "Expenses",
+  vouchers: "Payment / Receipt Vouchers",
+  "accounting-31": "Trial Balance",
+  "balance-sheet-32": "Balance Sheet",
+  "accounting-reports-33": "Accounting Reports",
+  "cheques-34": "Cheque Management",
+  "reports-hub": "Reports Hub",
+  "reports-sales": "Sales Reports",
+  "reports-product": "Product Reports",
+  "reports-customer": "Customer Reports",
+  "reports-payment": "Payment Reports",
+  "reports-purchase": "Purchase Reports",
+  "reports-inventory": "Inventory Reports",
+  "reports-pnl": "Profit & Loss",
+  "access-35": "Users, Roles & Permissions",
+  "audit-36": "Audit Log",
+  "printing-42": "Print Center",
+  "notifications-45": "Notification Center",
+  "settings-46": "Grocery Settings",
+  "bulk-48": "Bulk Import / Export",
+  "search-49": "Global Search",
+};
+
 const report = {
   generatedAt: new Date().toISOString(),
   production: { frontend, backend },
@@ -47,7 +103,7 @@ function unique(items) {
 }
 
 function relevantConsole(message) {
-  return !/favicon|ERR_ABORTED/i.test(message);
+  return !/favicon|ERR_ABORTED|Failed to load resource:\s*the server responded with a status of \d+/i.test(message);
 }
 
 function relevantFailed(request) {
@@ -56,24 +112,26 @@ function relevantFailed(request) {
   return !/favicon|robots\.txt/i.test(url) && !/ERR_ABORTED/i.test(errorText);
 }
 
-async function waitForView(page, view) {
-  await page.waitForFunction(targetView => {
+function relevantHttpResponse(response) {
+  return response.status() >= 400 && !/favicon|robots\.txt/i.test(response.url());
+}
+
+async function waitForView(page, view, expectedHeading) {
+  await page.waitForFunction(({ targetView, targetHeading }) => {
     const current = new URL(location.href).searchParams.get("view") || "dashboard";
     const heading = String(document.querySelector("h1")?.textContent || "").trim();
-    if (current !== targetView || !heading) return false;
-    return targetView === "dashboard" ? heading === "Grocery Dashboard" : heading !== "Grocery Dashboard";
-  }, view, { timeout: 20000 });
+    return current === targetView && heading === targetHeading;
+  }, { targetView: view, targetHeading: expectedHeading }, { timeout: 20000 });
   await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
 }
 
-async function assertCurrentViewHealthy(page, view) {
+async function assertCurrentViewHealthy(page, view, expectedHeading) {
   const body = await page.locator("body").innerText();
   const notice = await page.locator(".notice-error").allInnerTexts();
   const heading = await page.locator("h1").first().innerText().catch(() => "");
   if (fatalBody.test(body)) throw new Error(`${view}: fatal runtime message detected`);
   if (notice.length) throw new Error(`${view}: visible error notice: ${notice.join(" | ")}`);
-  if (!heading.trim()) throw new Error(`${view}: no page heading rendered`);
-  if (view !== "dashboard" && heading.trim() === "Grocery Dashboard") throw new Error(`${view}: fell back to Grocery Dashboard`);
+  if (heading.trim() !== expectedHeading) throw new Error(`${view}: expected heading '${expectedHeading}', received '${heading.trim() || "none"}'`);
   return heading.trim();
 }
 
@@ -137,7 +195,7 @@ try {
     if (relevantFailed(request)) report.errors.failedRequests.push(`${request.method()} ${request.url()} ${request.failure()?.errorText || ""}`);
   });
   page.on("response", response => {
-    if (response.status() >= 500) report.errors.badResponses.push(`${response.status()} ${response.url()}`);
+    if (relevantHttpResponse(response)) report.errors.badResponses.push(`${response.status()} ${response.request().method()} ${response.url()}`);
   });
 
   const entry = await page.goto(frontend, { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -248,11 +306,13 @@ try {
   if (navEntries.length < 10) throw new Error(`Only ${navEntries.length} Grocery navigation views discovered`);
 
   for (const entry of navEntries) {
+    const expectedHeading = EXPECTED_HEADINGS[entry.view];
+    if (!expectedHeading) throw new Error(`Audit has no expected heading contract for Grocery view ${entry.view}`);
     const locator = page.locator(`#side-nav [data-nav="${entry.view}"]`).first();
     await locator.waitFor({ state: "visible", timeout: 10000 });
     await locator.click();
-    await waitForView(page, entry.view);
-    const heading = await assertCurrentViewHealthy(page, entry.view);
+    await waitForView(page, entry.view, expectedHeading);
+    const heading = await assertCurrentViewHealthy(page, entry.view, expectedHeading);
     report.navigationViews.push({ view: entry.view, label: entry.label, heading });
     saveReport();
   }
@@ -263,8 +323,7 @@ try {
   const chequeNav = page.locator('#side-nav [data-nav="cheques"]').first();
   await chequeNav.waitFor({ state: "visible", timeout: 10000 });
   await chequeNav.click();
-  await waitForView(page, "cheques");
-  await page.getByRole("heading", { name: "Cheque Management" }).waitFor({ timeout: 15000 });
+  await waitForView(page, "cheques", EXPECTED_HEADINGS.cheques);
   await page.getByText(chequeNumber, { exact: false }).waitFor({ timeout: 15000 });
   report.liveCheque.displayed = true;
 
@@ -304,6 +363,7 @@ try {
     dashboardFormatting: report.dashboardFormatting,
     mobileDrawer: report.mobileDrawer,
     liveCheque: report.liveCheque,
+    errors: report.errors,
   }, null, 2));
   if (errorCount) throw new Error(`Live Grocery audit found ${errorCount} browser/network/runtime error(s)`);
 } catch (error) {
