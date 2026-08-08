@@ -173,16 +173,16 @@ jobs:
               viewResults.push({view,heading});
             }
 
-            // Mobile/narrow-laptop drawer behavior using the actual production UI.
+            // Mobile/narrow-laptop drawer behavior using the actual production controls.
             await page.setViewportSize({width:412,height:915});
             await page.goto(`${frontend}?view=dashboard`,{waitUntil:'domcontentloaded',timeout:30000});
             await page.getByRole('heading',{name:'Grocery Dashboard'}).waitFor({timeout:20000});
             await page.locator('#mobile-menu').click();
             await page.locator('#side-nav.open').waitFor({timeout:5000});
-            await page.locator('#grocery-sidebar-backdrop').click({position:{x:5,y:5}});
+            await page.locator('.grocery-nav-backdrop.open').click({position:{x:5,y:5}});
             await page.waitForFunction(()=>!document.querySelector('#side-nav')?.classList.contains('open'));
             await page.locator('#mobile-menu').click();
-            await page.locator('#grocery-sidebar-close').click();
+            await page.locator('.grocery-nav-close').click();
             await page.waitForFunction(()=>!document.querySelector('#side-nav')?.classList.contains('open'));
             await page.locator('#mobile-menu').click();
             const firstNav=page.locator('#side-nav [data-nav]').first();
