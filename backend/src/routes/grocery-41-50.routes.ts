@@ -24,6 +24,11 @@ import {
   groceryNumberSettingsSave,
   grocerySalesApprovalQueue,
 } from "../controllers/grocery-enhancement.controller.js";
+import {
+  grocerySalesAdminConvert,
+  grocerySalesAdminDocumentDetail,
+  grocerySalesAdminDocuments,
+} from "../controllers/grocery-sales-admin.controller.js";
 
 const router = Router();
 router.use(requireAuth, requireIndustry("grocery"));
@@ -60,6 +65,9 @@ router.post("/enhancement/numbering/:key/allocate", requireAnyPermission("produc
 router.put("/enhancement/numbering/:key", requirePermission("settings.manage"), groceryNumberSettingsSave);
 router.post("/enhancement/entity-codes/:key/:id", requireAnyPermission("products.manage", "customers.manage", "suppliers.manage", "settings.manage_permissions"), groceryEntityCodeBind);
 
+router.get("/sales-admin/documents", requirePermission("sales_documents.view"), grocerySalesAdminDocuments);
+router.get("/sales-admin/documents/:id", requirePermission("sales_documents.view"), grocerySalesAdminDocumentDetail);
+router.post("/sales-admin/documents/:id/convert", requirePermission("sales_documents.create"), grocerySalesAdminConvert);
 router.get("/sales-admin/approvals", requirePermission("sales_documents.view"), grocerySalesApprovalQueue);
 router.post("/sales-admin/credit-overrides", requirePermission("sales_documents.create"), groceryCreditOverrideRequest);
 router.post("/sales-admin/credit-overrides/:id/approve", requirePermission("sales_documents.view"), groceryCreditOverrideApprove);
