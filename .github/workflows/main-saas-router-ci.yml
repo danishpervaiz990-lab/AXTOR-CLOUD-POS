@@ -21,16 +21,19 @@ jobs:
           node --check demo-static/js/session-handoff.js
           node --check demo-static/js/platform-addons.js
           node --check demo-static/api/industry-asset.js
+          node --check demo-static/js/grocery-runtime-preflight.js
           node --check demo-static/js/grocery-phase4-31-40.js
           node --check demo-static/js/grocery-phase5-41-50.js
           node --check demo-static/js/grocery-phase5-completion.js
-          node --check demo-static/js/grocery-phase5-print-profile.js
+          node --check demo-static/js/grocery-dashboard-format-hotfix.js
+          node --check demo-static/js/grocery-phase5-print-profile-v2.js
           node --check demo-static/js/grocery-phase6-51-62.js
           node --check demo-static/js/grocery-sidebar-hotfix.js
           node --check tests/grocery-31-40-frontend.test.cjs
           node --check tests/grocery-41-50-frontend.test.cjs
           node --check tests/grocery-51-62-frontend.test.cjs
           node --check tests/grocery-sidebar-drawer.test.cjs
+          node --check tests/grocery-live-runtime-regressions.test.cjs
           node --check tests/authenticated-production.e2e.mjs
           node --check scripts/certify-all-industry-code.mjs
       - name: SaaS router release suite
@@ -47,6 +50,8 @@ jobs:
         run: node tests/grocery-51-62-frontend.test.cjs
       - name: Grocery responsive sidebar certification
         run: node tests/grocery-sidebar-drawer.test.cjs
+      - name: Grocery live runtime regression certification
+        run: node tests/grocery-live-runtime-regressions.test.cjs
       - name: All-industry branch code certification
         run: node scripts/certify-all-industry-code.mjs
       - name: Upload code-certification report
