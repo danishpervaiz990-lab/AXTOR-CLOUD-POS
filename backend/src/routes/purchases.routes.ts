@@ -3,27 +3,25 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 import { requirePersistentIdempotency } from "../middleware/idempotency.middleware.js";
 import { requirePermission } from "../middleware/permission.middleware.js";
 import * as c from "../controllers/purchases.controller.js";
+import { createPurchaseReturnByIndustry } from "../controllers/grocery-mutation-dispatch.controller.js";
 
 const router = Router();
 router.use(requireAuth);
-
 router.get("/requests", requirePermission("purchases.view"), c.requests);
 router.post("/requests", requirePermission("purchases.create"), requirePersistentIdempotency("purchase.request.create"), c.createRequest);
 router.post("/requests/:id/convert", requirePermission("purchases.create"), requirePersistentIdempotency("purchase.request.convert"), c.convertRequest);
 router.get("/goods-receipts", requirePermission("purchases.view"), c.receipts);
 router.get("/supplier-payments", requirePermission("purchases.view"), c.payments);
-router.post("/supplier-payments", requirePermission("purchases.pay"), requirePersistentIdempotency("purchase.supplier-payment.create"), c.createPayment);
+router.post("/supplier-payments", requirePermission("supplier_payments.post"), requirePersistentIdempotency("purchase.supplier-payment.create"), c.createPayment);
 router.get("/supplier-statement/:supplierId", requirePermission("suppliers.view"), c.statement);
 router.get("/returns", requirePermission("purchases.view"), c.returns);
-router.post("/returns", requirePermission("purchases.return"), requirePersistentIdempotency("purchase.return.create"), c.createReturn);
-
+router.post("/returns", requirePermission("purchases.return"), requirePersistentIdempotency("purchase.return.create"), createPurchaseReturnByIndustry);
 router.get("/", requirePermission("purchases.view"), c.list);
 router.post("/", requirePermission("purchases.create"), requirePersistentIdempotency("purchase.create"), c.create);
 router.get("/:id", requirePermission("purchases.view"), c.get);
 router.patch("/:id", requirePermission("purchases.create"), requirePersistentIdempotency("purchase.update"), c.update);
 router.post("/:id/receive", requirePermission("purchases.receive"), requirePersistentIdempotency("purchase.receive"), c.receive);
 router.delete("/:id", requirePermission("purchases.cancel"), requirePersistentIdempotency("purchase.cancel"), c.cancel);
-
 export { router };
 export const purchasesRoutes = router;
 export default router;
