@@ -26,8 +26,8 @@ function access(overrides = {}) {
   };
 }
 
-test("R-13 exposes the required seven operational role families", () => {
-  for (const roleName of ["Manager", "Cashier", "Salesperson", "Storekeeper", "Accountant", "Auditor"]) {
+test("R-13 exposes the required operational role families", () => {
+  for (const roleName of ["Manager", "Cashier", "Salesperson", "Storekeeper", "Accountant", "Auditor", "Purchase Manager", "Warehouse Manager"]) {
     assert.ok(byName.has(roleName), `${roleName} role must exist`);
   }
   assert.ok(byName.has("Admin"), "Admin role must remain available");
@@ -113,7 +113,7 @@ test("legacy untouched role permissions upgrade without overriding customized ro
   assert.deepEqual(effectivePermissionsForRole("Retail Manager", customized), [...customized].sort());
 });
 
-test("system role seeding migrates untouched aliases and avoids duplicate role families", async () => {
+test("system role seeding migrates untouched aliases and adds required non-duplicate role families", async () => {
   const existing = [
     { id: "manager", name: "Retail Manager", permissions: byName.get("Manager").legacyPermissions },
     { id: "cashier", name: "Retail Cashier", permissions: byName.get("Cashier").legacyPermissions },
@@ -142,7 +142,7 @@ test("system role seeding migrates untouched aliases and avoids duplicate role f
 
   await ensureSystemRoles(tx, "business-1");
   const createdNames = created.map((role) => role.name).sort();
-  assert.deepEqual(createdNames, ["Accountant", "Admin", "Auditor"]);
+  assert.deepEqual(createdNames, ["Accountant", "Admin", "Auditor", "Purchase Manager", "Warehouse Manager"]);
   assert.equal(createdNames.includes("Manager"), false);
   assert.equal(createdNames.includes("Cashier"), false);
   assert.equal(createdNames.includes("Salesperson"), false);
@@ -182,6 +182,8 @@ test("custom legacy aliases are preserved while canonical roles are added", asyn
   await ensureSystemRoles(tx, "business-1");
   assert.ok(created.some((role) => role.name === "Salesperson"));
   assert.ok(created.some((role) => role.name === "Storekeeper"));
+  assert.ok(created.some((role) => role.name === "Purchase Manager"));
+  assert.ok(created.some((role) => role.name === "Warehouse Manager"));
   assert.equal(updated.find((entry) => entry.id === "custom-salesman")?.data.name, "Salesman");
   assert.equal(updated.find((entry) => entry.id === "custom-warehouse")?.data.name, "Warehouse");
 });

@@ -30,6 +30,7 @@ router.patch(
     "sales_documents.edit_returned",
     "sales_documents.edit_refunded",
   ),
+  validateGrocerySale,
   updateSalesDocument,
 );
 

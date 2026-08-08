@@ -1,244 +1,92 @@
 import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
+import { writeAudit } from "../services/audit.service.js";
 
 const db: any = prisma;
-const ENTITY_TYPE = "grocery_cheque";
-const INDUSTRY_CODE = "grocery";
-const ALLOWED_DIRECTIONS = new Set(["inward", "outward"]);
-const ALLOWED_STATUSES = new Set(["pending", "issued", "deposited", "presented", "cleared", "bounced", "returned", "cancelled"]);
+const ENTITY_TYPE = "grocery_cheque", INDUSTRY_CODE = "grocery", DAY = 86_400_000;
+const DIRECTIONS = new Set(["inward", "outward"]);
+const STORED_STATUSES = new Set(["pending", "deposited", "cleared", "bounced", "cancelled", "replaced"]);
+const LEGACY_STATUS_MAP: Record<string, string> = { issued: "pending", presented: "deposited", returned: "bounced", upcoming: "pending", due_today: "pending" };
 
-function businessId(req: Request): string {
-  return req.tenant!.businessId!;
+function tenant(req: Request) { const businessId = req.tenant?.businessId, userId = req.tenant?.userId; if (!businessId || !userId) throw new Error("Authenticated Grocery tenant is required"); return { businessId, userId }; }
+function ok(res: Response, data: unknown, status = 200) { return res.status(status).json({ ok: true, data }); }
+function fail(res: Response, message: string, status = 400, code = "INVALID_REQUEST") { return res.status(status).json({ ok: false, error: { code, message } }); }
+function date(value: unknown) { if (!value) return null; const d = new Date(String(value)); return Number.isNaN(d.getTime()) ? null : d; }
+function direction(value: unknown): "inward" | "outward" | null { const d = String(value || "").trim().toLowerCase(); return DIRECTIONS.has(d) ? d as any : null; }
+function status(value: unknown) { const raw = String(value || "").trim().toLowerCase(); const mapped = LEGACY_STATUS_MAP[raw] || raw; return STORED_STATUSES.has(mapped) ? mapped : null; }
+function data(row: any): Record<string, any> { return row?.data && typeof row.data === "object" && !Array.isArray(row.data) ? row.data : {}; }
+function dayKey(d: Date) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Qatar", year: "numeric", month: "2-digit", day: "2-digit" }).format(d); }
+function effectiveStatus(row: any) {
+  const saved = String(row.status || "pending").toLowerCase();
+  if (saved !== "pending") return saved;
+  if (!row.dueAt) return "upcoming";
+  const due = new Date(row.dueAt), today = dayKey(new Date()), dueKey = dayKey(due);
+  if (dueKey === today) return "due_today";
+  return due.getTime() < Date.now() ? "overdue" : "upcoming";
 }
-
-function ok(res: Response, data: unknown, status = 200) {
-  return res.status(status).json({ ok: true, data });
+function serialize(row: any) {
+  const d = data(row);
+  return { id: row.id, direction: d.direction || "inward", branchId: d.branchId || null, paymentAccountId: d.paymentAccountId || null, customerId: d.customerId || null, supplierId: d.supplierId || null,
+    chequeNumber: row.referenceNo || d.chequeNumber || row.id, bankName: d.bankName || null, bankBranch: d.bankBranch || null, accountNumber: d.accountNumber || d.maskedAccount || null, maskedAccount: d.maskedAccount || null,
+    drawerOrIssuer: d.drawerOrIssuer || null, payeeOrBeneficiary: d.payeeOrBeneficiary || null, amount: Number(row.amount || 0), currencyCode: row.currency || d.currencyCode || "QAR",
+    issueDate: row.startAt || d.chequeDate || null, chequeDate: row.startAt || d.chequeDate || null, dueDate: row.dueAt || d.dueDate || null, depositDate: d.depositDate || null, clearingDate: d.clearingDate || null,
+    bounceOrReturnDate: d.bounceOrReturnDate || null, cancellationDate: d.cancellationDate || null, replacementDate: d.replacementDate || null, replacementChequeId: d.replacementChequeId || null,
+    status: effectiveStatus(row), storedStatus: row.status, reference: d.reference || null, notes: d.notes || null, allocations: Array.isArray(d.allocations) ? d.allocations : [], createdAt: row.createdAt, updatedAt: row.updatedAt };
 }
-
-function fail(res: Response, message: string, status = 400, code = "INVALID_REQUEST") {
-  return res.status(status).json({ ok: false, error: { code, message } });
-}
-
-function parseDate(value: unknown): Date | null {
-  if (!value) return null;
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function normalizedDirection(value: unknown): "inward" | "outward" | null {
-  const direction = String(value || "").trim().toLowerCase();
-  return ALLOWED_DIRECTIONS.has(direction) ? direction as "inward" | "outward" : null;
-}
-
-function normalizedStatus(value: unknown): string | null {
-  const status = String(value || "").trim().toLowerCase();
-  return ALLOWED_STATUSES.has(status) ? status : null;
-}
-
-function recordData(record: any): Record<string, any> {
-  return record?.data && typeof record.data === "object" && !Array.isArray(record.data) ? record.data : {};
-}
-
-function serializeCheque(record: any) {
-  const data = recordData(record);
-  return {
-    id: record.id,
-    direction: data.direction || "inward",
-    branchId: data.branchId || null,
-    paymentAccountId: data.paymentAccountId || null,
-    customerId: data.customerId || null,
-    supplierId: data.supplierId || null,
-    chequeNumber: record.referenceNo || data.chequeNumber || record.id,
-    bankName: data.bankName || null,
-    bankBranch: data.bankBranch || null,
-    maskedAccount: data.maskedAccount || null,
-    drawerOrIssuer: data.drawerOrIssuer || null,
-    payeeOrBeneficiary: data.payeeOrBeneficiary || null,
-    amount: record.amount?.toString?.() ?? String(record.amount ?? "0"),
-    currencyCode: record.currency || data.currencyCode || "QAR",
-    chequeDate: record.startAt?.toISOString?.() ?? data.chequeDate ?? null,
-    dueDate: record.dueAt?.toISOString?.() ?? data.dueDate ?? null,
-    depositDate: data.depositDate || null,
-    clearingDate: data.clearingDate || null,
-    bounceOrReturnDate: data.bounceOrReturnDate || null,
-    cancellationDate: data.cancellationDate || null,
-    status: record.status,
-    notes: data.notes || null,
-    allocations: Array.isArray(data.allocations) ? data.allocations : [],
-    createdAt: record.createdAt?.toISOString?.() ?? record.createdAt,
-    updatedAt: record.updatedAt?.toISOString?.() ?? record.updatedAt,
-  };
-}
-
-function summaryFor(records: any[]) {
-  const now = Date.now();
-  const in30Days = now + 30 * 86_400_000;
-  let inwardAmount = 0;
-  let outwardAmount = 0;
-  let upcoming = 0;
-  let overdue = 0;
-  let pending = 0;
-
-  for (const record of records) {
-    const data = recordData(record);
-    const amount = Number(record.amount || 0);
-    if (data.direction === "outward") outwardAmount += Number.isFinite(amount) ? amount : 0;
-    else inwardAmount += Number.isFinite(amount) ? amount : 0;
-    const closed = ["cleared", "cancelled"].includes(String(record.status || "").toLowerCase());
-    if (!closed) {
-      pending += 1;
-      const due = record.dueAt ? new Date(record.dueAt).getTime() : NaN;
-      if (Number.isFinite(due)) {
-        if (due < now) overdue += 1;
-        else if (due <= in30Days) upcoming += 1;
-      }
-    }
-  }
-  return { inwardAmount, outwardAmount, pending, dueWithin30Days: upcoming, overdue };
+function summary(rows: any[]) {
+  const result: any = { inwardAmount: 0, outwardAmount: 0, pending: 0, upcoming: 0, dueToday: 0, overdue: 0, deposited: 0, cleared: 0, bounced: 0, cancelled: 0, replaced: 0, dueWithin30Days: 0 };
+  for (const row of rows) { const d = data(row), amount = Number(row.amount || 0); if (d.direction === "outward") result.outwardAmount += amount; else result.inwardAmount += amount; const e = effectiveStatus(row); if (result[e] !== undefined) result[e] += 1; if (["upcoming", "due_today", "overdue", "deposited"].includes(e)) result.pending += 1; const due = row.dueAt ? new Date(row.dueAt).getTime() : NaN; if (["pending", "deposited"].includes(String(row.status)) && Number.isFinite(due) && due >= Date.now() && due <= Date.now() + 30 * DAY) result.dueWithin30Days += 1; }
+  result.inwardAmount = Math.round(result.inwardAmount * 100) / 100; result.outwardAmount = Math.round(result.outwardAmount * 100) / 100; return result;
 }
 
 export async function groceryChequeList(req: Request, res: Response) {
-  const b = businessId(req);
-  const where: any = { businessId: b, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE };
-  const status = req.query.status ? normalizedStatus(req.query.status) : null;
-  if (req.query.status && !status) return fail(res, "Invalid cheque status", 422, "INVALID_CHEQUE_STATUS");
-  if (status) where.status = status;
-
-  const records = await db.industryRecord.findMany({ where, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }], take: 1000 });
-  const direction = req.query.direction ? normalizedDirection(req.query.direction) : null;
-  if (req.query.direction && !direction) return fail(res, "Invalid cheque direction", 422, "INVALID_CHEQUE_DIRECTION");
-  const filtered = direction ? records.filter((record: any) => recordData(record).direction === direction) : records;
-  return ok(res, { cheques: filtered.map(serializeCheque), summary: summaryFor(filtered) });
+  try {
+    const t = tenant(req), where: any = { businessId: t.businessId, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE, archivedAt: null };
+    const requestedDirection = req.query.direction ? direction(req.query.direction) : null; if (req.query.direction && !requestedDirection) return fail(res, "Invalid cheque direction", 422, "INVALID_CHEQUE_DIRECTION");
+    const rows = await db.industryRecord.findMany({ where, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }], take: 2000 });
+    let list = requestedDirection ? rows.filter((r: any) => data(r).direction === requestedDirection) : rows;
+    const requestedStatus = String(req.query.status || "").trim().toLowerCase(); if (requestedStatus) list = list.filter((r: any) => effectiveStatus(r) === requestedStatus || String(r.status) === requestedStatus);
+    return ok(res, { cheques: list.map(serialize), summary: summary(list) });
+  } catch (e: any) { return fail(res, e?.message || "Failed to load cheques"); }
 }
 
 export async function groceryChequeCreate(req: Request, res: Response) {
-  const b = businessId(req);
-  const input = req.body || {};
-  const direction = normalizedDirection(input.direction);
-  const chequeNumber = String(input.chequeNumber || "").trim();
-  const bankName = String(input.bankName || "").trim();
-  const paymentAccountId = String(input.paymentAccountId || "").trim();
-  const amount = Number(input.amount);
-  const chequeDate = parseDate(input.chequeDate);
-  const dueDate = parseDate(input.dueDate);
-  if (!direction) return fail(res, "Cheque direction must be inward or outward", 422, "INVALID_CHEQUE_DIRECTION");
-  if (!chequeNumber) return fail(res, "Cheque number is required", 422, "CHEQUE_NUMBER_REQUIRED");
-  if (!bankName) return fail(res, "Bank name is required", 422, "BANK_NAME_REQUIRED");
-  if (!paymentAccountId) return fail(res, "Payment account is required", 422, "PAYMENT_ACCOUNT_REQUIRED");
-  if (!Number.isFinite(amount) || amount <= 0) return fail(res, "Cheque amount must be positive", 422, "INVALID_CHEQUE_AMOUNT");
-  if (!chequeDate || !dueDate) return fail(res, "Valid cheque and due dates are required", 422, "INVALID_CHEQUE_DATE");
-
-  const account = await db.account.findFirst({ where: { id: paymentAccountId, businessId: b, active: true }, select: { id: true } });
-  if (!account) return fail(res, "Payment account not found", 404, "PAYMENT_ACCOUNT_NOT_FOUND");
-  if (input.customerId) {
-    const customer = await db.customer.findFirst({ where: { id: String(input.customerId), businessId: b }, select: { id: true } });
-    if (!customer) return fail(res, "Customer not found", 404, "CUSTOMER_NOT_FOUND");
-  }
-  if (input.supplierId) {
-    const supplier = await db.supplier.findFirst({ where: { id: String(input.supplierId), businessId: b }, select: { id: true } });
-    if (!supplier) return fail(res, "Supplier not found", 404, "SUPPLIER_NOT_FOUND");
-  }
-
-  const idempotencyKey = String(req.header("Idempotency-Key") || req.header("X-Idempotency-Key") || "").trim() || null;
-  if (idempotencyKey) {
-    const existing = await db.industryRecord.findFirst({ where: { businessId: b, idempotencyKey } });
-    if (existing) return ok(res, serializeCheque(existing));
-  }
-  const duplicate = await db.industryRecord.findFirst({ where: { businessId: b, entityType: ENTITY_TYPE, referenceNo: chequeNumber } });
-  if (duplicate) return fail(res, "Cheque number already exists", 409, "DUPLICATE_CHEQUE_NUMBER");
-
-  const currencyCode = String(input.currencyCode || input.currency || "QAR").trim().toUpperCase().slice(0, 8) || "QAR";
-  const record = await db.industryRecord.create({
-    data: {
-      businessId: b,
-      industryCode: INDUSTRY_CODE,
-      entityType: ENTITY_TYPE,
-      referenceNo: chequeNumber,
-      displayName: `${chequeNumber} · ${bankName}`,
-      status: "pending",
-      relatedEntityId: input.customerId || input.supplierId || null,
-      startAt: chequeDate,
-      dueAt: dueDate,
-      amount,
-      currency: currencyCode,
-      idempotencyKey,
-      data: {
-        direction,
-        branchId: input.branchId || null,
-        paymentAccountId,
-        customerId: input.customerId || null,
-        supplierId: input.supplierId || null,
-        chequeNumber,
-        bankName,
-        bankBranch: input.bankBranch || null,
-        maskedAccount: input.maskedAccount || null,
-        drawerOrIssuer: input.drawerOrIssuer || null,
-        payeeOrBeneficiary: input.payeeOrBeneficiary || null,
-        chequeDate: chequeDate.toISOString(),
-        dueDate: dueDate.toISOString(),
-        notes: input.notes || null,
-        allocations: Array.isArray(input.allocations) ? input.allocations.slice(0, 100) : [],
-      },
-    },
-  });
-  return ok(res, serializeCheque(record), 201);
+  try {
+    const t = tenant(req), input = req.body || {}, dir = direction(input.direction), chequeNumber = String(input.chequeNumber || "").trim(), bankName = String(input.bankName || "").trim(), paymentAccountId = String(input.paymentAccountId || "").trim(), amount = Number(input.amount), issueDate = date(input.issueDate || input.chequeDate), dueDate = date(input.dueDate);
+    if (!dir) return fail(res, "Cheque direction must be inward or outward", 422, "INVALID_CHEQUE_DIRECTION"); if (!chequeNumber) return fail(res, "Cheque number is required", 422, "CHEQUE_NUMBER_REQUIRED"); if (!bankName) return fail(res, "Bank name is required", 422, "BANK_NAME_REQUIRED"); if (!paymentAccountId) return fail(res, "Payment account is required", 422, "PAYMENT_ACCOUNT_REQUIRED"); if (!Number.isFinite(amount) || amount <= 0) return fail(res, "Cheque amount must be positive", 422, "INVALID_CHEQUE_AMOUNT"); if (!issueDate || !dueDate) return fail(res, "Valid issue and due dates are required", 422, "INVALID_CHEQUE_DATE");
+    const account = await db.account.findFirst({ where: { id: paymentAccountId, businessId: t.businessId, active: true } }); if (!account) return fail(res, "Payment account not found", 404, "PAYMENT_ACCOUNT_NOT_FOUND");
+    if (input.customerId && !await db.customer.findFirst({ where: { id: String(input.customerId), businessId: t.businessId } })) return fail(res, "Customer not found", 404, "CUSTOMER_NOT_FOUND");
+    if (input.supplierId && !await db.supplier.findFirst({ where: { id: String(input.supplierId), businessId: t.businessId } })) return fail(res, "Supplier not found", 404, "SUPPLIER_NOT_FOUND");
+    const idempotencyKey = String(req.header("Idempotency-Key") || req.header("X-Idempotency-Key") || "").trim() || null;
+    if (idempotencyKey) { const existing = await db.industryRecord.findFirst({ where: { businessId: t.businessId, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE, idempotencyKey } }); if (existing) return ok(res, serialize(existing)); }
+    if (await db.industryRecord.findFirst({ where: { businessId: t.businessId, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE, referenceNo: chequeNumber, archivedAt: null } })) return fail(res, "Cheque number already exists", 409, "DUPLICATE_CHEQUE_NUMBER");
+    const currency = String(input.currencyCode || input.currency || "QAR").trim().toUpperCase().slice(0, 8) || "QAR";
+    const row = await db.industryRecord.create({ data: { businessId: t.businessId, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE, referenceNo: chequeNumber, displayName: `${chequeNumber} · ${bankName}`, status: "pending", relatedEntityId: input.customerId || input.supplierId || null, startAt: issueDate, dueAt: dueDate, amount, currency, idempotencyKey, data: { direction: dir, branchId: input.branchId || null, paymentAccountId, customerId: input.customerId || null, supplierId: input.supplierId || null, chequeNumber, bankName, bankBranch: input.bankBranch || null, accountNumber: input.accountNumber || null, maskedAccount: input.maskedAccount || null, drawerOrIssuer: input.drawerOrIssuer || null, payeeOrBeneficiary: input.payeeOrBeneficiary || null, reference: input.reference || input.referenceNo || null, chequeDate: issueDate.toISOString(), dueDate: dueDate.toISOString(), notes: input.notes || null, allocations: Array.isArray(input.allocations) ? input.allocations.slice(0, 100) : [] }, createdByUserId: t.userId, updatedByUserId: t.userId } });
+    await writeAudit(db, req, { businessId: t.businessId, userId: t.userId, action: "grocery.cheque.create", entityType: "Cheque", entityId: row.id, after: serialize(row) });
+    return ok(res, serialize(row), 201);
+  } catch (e: any) { return fail(res, e?.message || "Failed to create cheque"); }
 }
 
 export async function groceryChequeTransition(req: Request, res: Response) {
-  const b = businessId(req);
-  const status = normalizedStatus(req.body?.status);
-  if (!status) return fail(res, "Invalid cheque status", 422, "INVALID_CHEQUE_STATUS");
-  const record = await db.industryRecord.findFirst({ where: { id: req.params.id, businessId: b, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE } });
-  if (!record) return fail(res, "Cheque not found", 404, "CHEQUE_NOT_FOUND");
-
-  const data = recordData(record);
-  const timestamp = new Date().toISOString();
-  if (status === "deposited" || status === "presented") data.depositDate = req.body?.effectiveAt || timestamp;
-  if (status === "cleared") data.clearingDate = req.body?.effectiveAt || timestamp;
-  if (status === "bounced" || status === "returned") data.bounceOrReturnDate = req.body?.effectiveAt || timestamp;
-  if (status === "cancelled") data.cancellationDate = req.body?.effectiveAt || timestamp;
-  if (req.body?.notes !== undefined) data.notes = String(req.body.notes || "").slice(0, 1000) || null;
-
-  const updated = await db.industryRecord.update({ where: { id: record.id }, data: { status, data, revision: { increment: 1 } } });
-  return ok(res, serializeCheque(updated));
+  try {
+    const t = tenant(req), next = status(req.body?.status); if (!next || ["upcoming", "due_today"].includes(String(req.body?.status).toLowerCase())) return fail(res, "Invalid cheque transition status", 422, "INVALID_CHEQUE_STATUS");
+    const row = await db.industryRecord.findFirst({ where: { id: req.params.id, businessId: t.businessId, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE, archivedAt: null } }); if (!row) return fail(res, "Cheque not found", 404, "CHEQUE_NOT_FOUND");
+    const before = serialize(row), d = data(row), timestamp = (date(req.body?.effectiveAt) || new Date()).toISOString();
+    if (next === "deposited") d.depositDate = timestamp; if (next === "cleared") d.clearingDate = timestamp; if (next === "bounced") d.bounceOrReturnDate = timestamp; if (next === "cancelled") d.cancellationDate = timestamp;
+    if (next === "replaced") { d.replacementDate = timestamp; d.replacementChequeId = String(req.body?.replacementChequeId || "").trim() || null; if (!d.replacementChequeId) return fail(res, "replacementChequeId is required when replacing a cheque", 422, "REPLACEMENT_CHEQUE_REQUIRED"); const replacement = await db.industryRecord.findFirst({ where: { id: d.replacementChequeId, businessId: t.businessId, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE } }); if (!replacement) return fail(res, "Replacement cheque not found", 404, "REPLACEMENT_CHEQUE_NOT_FOUND"); }
+    if (req.body?.notes !== undefined) d.notes = String(req.body.notes || "").slice(0, 1000) || null;
+    const updated = await db.industryRecord.update({ where: { id: row.id }, data: { status: next, data: d, revision: { increment: 1 }, updatedByUserId: t.userId } });
+    await writeAudit(db, req, { businessId: t.businessId, userId: t.userId, action: `grocery.cheque.${next}`, entityType: "Cheque", entityId: row.id, before, after: serialize(updated) }); return ok(res, serialize(updated));
+  } catch (e: any) { return fail(res, e?.message || "Failed to transition cheque"); }
 }
 
 export async function groceryChequeGenerateReminders(req: Request, res: Response) {
-  const b = businessId(req);
-  const rawDays = Number(req.body?.days ?? 30);
-  const days = Math.min(90, Math.max(1, Number.isFinite(rawDays) ? Math.trunc(rawDays) : 30));
-  const now = new Date();
-  const upper = new Date(now.getTime() + days * 86_400_000);
-  const records = await db.industryRecord.findMany({
-    where: {
-      businessId: b,
-      industryCode: INDUSTRY_CODE,
-      entityType: ENTITY_TYPE,
-      status: { notIn: ["cleared", "cancelled"] },
-      dueAt: { gte: now, lte: upper },
-    },
-    orderBy: { dueAt: "asc" },
-    take: 500,
-  });
-
-  let created = 0;
-  let unchanged = 0;
-  for (const record of records) {
-    const cheque = serializeCheque(record);
-    const dueKey = String(cheque.dueDate || "").slice(0, 10);
-    const type = `grocery_cheque_due_${dueKey}`;
-    const existing = await db.notification.findFirst({ where: { businessId: b, type, entityType: ENTITY_TYPE, entityId: record.id } });
-    if (existing) { unchanged += 1; continue; }
-    await db.notification.create({ data: {
-      businessId: b,
-      userId: null,
-      type,
-      title: `${cheque.direction === "outward" ? "Outgoing" : "Incoming"} cheque due ${dueKey}`,
-      message: `Cheque ${cheque.chequeNumber} from ${cheque.bankName || "bank"} for ${cheque.currencyCode} ${cheque.amount} is due on ${dueKey}.`,
-      entityType: ENTITY_TYPE,
-      entityId: record.id,
-    } });
-    created += 1;
-  }
-  return ok(res, { scanned: records.length, created, unchanged, generatedAt: now.toISOString(), days });
+  try {
+    const t = tenant(req), raw = Number(req.body?.days ?? 30), days = Math.min(90, Math.max(1, Number.isFinite(raw) ? Math.trunc(raw) : 30)), now = new Date(), upper = new Date(now.getTime() + days * DAY);
+    const rows = await db.industryRecord.findMany({ where: { businessId: t.businessId, industryCode: INDUSTRY_CODE, entityType: ENTITY_TYPE, status: { in: ["pending", "deposited"] }, dueAt: { lte: upper }, archivedAt: null }, orderBy: { dueAt: "asc" }, take: 1000 });
+    let created = 0, unchanged = 0;
+    for (const row of rows) { const c = serialize(row), dueKey = c.dueDate ? dayKey(new Date(c.dueDate)) : "unknown", effective = c.status, type = `grocery_cheque_${effective}_${dueKey}`; if (await db.notification.findFirst({ where: { businessId: t.businessId, type, entityType: ENTITY_TYPE, entityId: row.id } })) { unchanged += 1; continue; } await db.notification.create({ data: { businessId: t.businessId, userId: null, type, title: `${c.direction === "outward" ? "Outgoing" : "Incoming"} cheque ${effective.replace("_", " ")}`, message: `Cheque ${c.chequeNumber} from ${c.bankName || "bank"} for ${c.currencyCode} ${Number(c.amount).toFixed(2)} is due ${dueKey}.`, entityType: ENTITY_TYPE, entityId: row.id } }); created += 1; }
+    await writeAudit(db, req, { businessId: t.businessId, userId: t.userId, action: "grocery.cheque.reminders.generate", entityType: "ChequeNotification", after: { scanned: rows.length, created, unchanged, days } });
+    return ok(res, { scanned: rows.length, created, unchanged, generatedAt: now.toISOString(), days });
+  } catch (e: any) { return fail(res, e?.message || "Failed to generate cheque reminders"); }
 }
