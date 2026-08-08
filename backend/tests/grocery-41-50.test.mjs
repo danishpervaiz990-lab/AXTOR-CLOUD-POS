@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const read=p=>readFileSync(new URL(p,import.meta.url),"utf8");
-const service=[read("../src/services/grocery-41-50.service.ts"),read("../src/services/grocery-41-50-valuation.service.ts"),read("../src/services/grocery-41-50-print.service.ts"),read("../src/services/grocery-41-50-ops.service.ts"),read("../src/services/grocery-41-50-data.service.ts")].join("\n");
+const service=[read("../src/services/grocery-41-50.service.ts"),read("../src/services/grocery-41-50-valuation.service.ts"),read("../src/services/grocery-41-50-print.service.ts"),read("../src/services/grocery-41-50-print-profile.service.ts"),read("../src/services/grocery-41-50-ops.service.ts"),read("../src/services/grocery-41-50-notifications.service.ts"),read("../src/services/grocery-41-50-data.service.ts")].join("\n");
 const routes=read("../src/routes/grocery-41-50.routes.ts");
 const sales=read("../src/controllers/grocery-sales.controller.ts");
 const lookup=read("../src/controllers/grocery-product-lookup-v5.controller.ts");
@@ -19,7 +19,7 @@ test("41 uses one explicit weighted-average valuation method while retaining FEF
 
 test("42 centralized printing covers thermal standard paper and all required document families",()=>{
   for(const marker of ["58mm","80mm","A5","A4","Letter","sales_receipt","tax_invoice","credit_invoice","quotation","sales_return","customer_payment_receipt","customer_statement","purchase_order","grn","purchase_invoice","purchase_return","supplier_payment_voucher","receipt_voucher","payment_voucher","stock_transfer","stock_count","expense_voucher","journal_voucher"])assert.match(service,new RegExp(marker));
-  assert.match(routes,/\/print\/profiles/);assert.match(routes,/\/print\/document\/\:type\/\:id/);
+  assert.match(routes,/\/print\/profiles/);assert.match(routes,/\/print\/document\/\:type\/\:id/);assert.match(service,/profileCode/);assert.match(service,/return\{\.\.\.document,profile\}/);
 });
 
 test("43 barcode shelf and price label previews are bounded and printer friendly",()=>{
@@ -30,8 +30,8 @@ test("44 dashboard exposes required supermarket KPIs charts and safe comparisons
   for(const marker of ["todaySales","todayProfit","todayPurchases","todayExpenses","netCash","receivables","payables","currentStockValue","lowStock","expiringProducts","overdueCustomers","supplierBillsDue","chequesDue","salesTrend","paymentMethods","categories","topProducts","topCustomers","salesVsPreviousMonth","changePct:null"])assert.match(service,new RegExp(marker));
 });
 
-test("45 notification center evaluates all required operational alert families",()=>{
-  for(const marker of ["out_of_stock","low_stock","expired_stock","near_expiry","customer_overdue","customer_payment_due","supplier_overdue","supplier_payment_due","outward_cheque_due","inward_cheque_due","pending_po","transfer_pending","stock_count_pending","large_discount","large_refund"])assert.match(service,new RegExp(marker));
+test("45 notification center evaluates all required operational alert families and configured thresholds",()=>{
+  for(const marker of ["out_of_stock","low_stock","expired_stock","near_expiry","customer_overdue","customer_payment_due","supplier_overdue","supplier_payment_due","outward_cheque_due","inward_cheque_due","pending_po","transfer_pending","stock_count_pending","large_discount","large_refund","lowStockThreshold","GREATEST(min_stock,$2::numeric)"])assert.match(service,new RegExp(marker.replace('$','\\$')));
   assert.match(routes,/notification-rules/);assert.match(routes,/notifications\/generate/);
 });
 
@@ -57,6 +57,6 @@ test("50 removes 10k in-memory Grocery identifier scan and uses bounded database
   assert.doesNotMatch(lookup,/take:\s*10000/);assert.match(lookup,/array_contains/);assert.match(lookup,/take:20/);assert.match(service,/limitOf/);assert.match(service,/LIMIT \$\$\{limitPos\}/);assert.match(service,/LIMIT 2000/);
 });
 
-test("41-50 routes remain Grocery guarded and are mounted",()=>{
-  assert.match(routes,/router\.use\(requireAuth, requireIndustry\("grocery"\)\)/);assert.match(app,/grocery41To50Routes/);
+test("41-50 routes remain Grocery guarded and bounded lookup is mounted before legacy extension",()=>{
+  assert.match(routes,/router\.use\(requireAuth, requireIndustry\("grocery"\)\)/);assert.match(app,/grocery41To50Routes/);assert.ok(app.indexOf('grocery41To50Routes')<app.indexOf('groceryChequesRoutes')||app.indexOf('app.use("\/api\/v1\/grocery", grocery41To50Routes)')<app.indexOf('app.use("\/api\/v1\/grocery", groceryChequesRoutes)'));
 });
