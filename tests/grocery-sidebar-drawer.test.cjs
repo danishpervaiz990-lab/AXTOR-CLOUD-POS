@@ -12,7 +12,7 @@ const accordionJs = fs.readFileSync(path.join(root, 'js/grocery-sidebar-accordio
 assert.match(html, /grocery-sidebar-hotfix\.css\?v=20260808-1/);
 assert.match(html, /grocery-sidebar-hotfix\.js\?v=20260808-1/);
 assert.match(html, /grocery-sidebar-accordion\.css\?v=20260808-1/);
-assert.match(html, /grocery-sidebar-accordion\.js\?v=20260808-1/);
+assert.match(html, /grocery-sidebar-accordion\.js\?v=20260808-2/);
 assert.ok(
   html.indexOf('grocery-sidebar-hotfix.js') < html.indexOf('grocery-sidebar-accordion.js'),
   'accordion enhancement must load after the responsive drawer hotfix',
@@ -42,8 +42,13 @@ assert.match(accordionCss, /transform:\s*rotate\(90deg\)/);
 assert.match(accordionCss, /@media \(max-width: 820px\)/);
 
 assert.match(accordionJs, /grocerySidebarAccordionV1/);
+assert.match(accordionJs, /grocerySidebarScrollTopV1/);
 assert.match(accordionJs, /localStorage\.getItem\(STORAGE_KEY\)/);
 assert.match(accordionJs, /localStorage\.setItem\(STORAGE_KEY/);
+assert.match(accordionJs, /sessionStorage\.setItem\(SCROLL_KEY/);
+assert.match(accordionJs, /rememberCurrentScroll/);
+assert.match(accordionJs, /restoreScrollAndActive/);
+assert.match(accordionJs, /scrollIntoView\(\{ block:"nearest", inline:"nearest" \}\)/);
 assert.match(accordionJs, /document\.createElement\("button"\)/);
 assert.match(accordionJs, /grocery-nav-group-toggle/);
 assert.match(accordionJs, /aria-expanded/);
@@ -55,6 +60,7 @@ assert.match(accordionJs, /#side-nav \.grocery-nav-group-toggle/);
 assert.match(accordionJs, /MutationObserver/);
 assert.match(accordionJs, /expandAll/);
 assert.match(accordionJs, /collapseAll/);
+assert.doesNotMatch(accordionJs, /scrollTo\(\s*0\s*,\s*0\s*\)/, 'deep navigation must not force the sidebar to the top');
 assert.doesNotMatch(accordionJs, /state\.menu\s*=/, 'group accordion must not interfere with drawer open/close state');
 
-console.log('PASS: Grocery sidebar drawer closes correctly and menu groups support persistent accessible expand/collapse controls');
+console.log('PASS: Grocery sidebar drawer closes correctly and menu groups preserve expand/collapse and deep-navigation scroll state');
