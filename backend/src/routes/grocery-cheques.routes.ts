@@ -15,7 +15,8 @@ import {
   groceryReorderSuggestions, groceryTransfers, groceryVans, groceryVanStock, reconcileGroceryAccountingSource, saveGroceryCounterProfile,
   transitionGroceryJournal, updateGroceryStockCount, updateGroceryVan, approveGroceryStockCount,
 } from "../controllers/grocery-operations.controller.js";
-import { groceryProductLookupUom, groceryProductProfileUom, saveGroceryProductProfileUom } from "../controllers/grocery-product-uom.controller.js";
+import { groceryProductLookupUom, groceryProductProfileUom } from "../controllers/grocery-product-uom.controller.js";
+import { saveGroceryProductProfileWithPriceHistory } from "../controllers/grocery-price-profile-history.controller.js";
 import { groceryCreatePurchaseOrderUom, groceryReceivePurchaseUom } from "../controllers/grocery-purchase-uom.controller.js";
 import { createGroceryVanCollection, createGroceryVanDamage, createGroceryVanReturn, createGroceryVanSale } from "../controllers/grocery-van.controller.js";
 import { guardedGroceryTransferTransition, groceryVanReconciliationV2 } from "../controllers/grocery-operations-guards.controller.js";
@@ -34,6 +35,8 @@ import {
   groceryPriceResolve, groceryProductPriceHistory, groceryPromotionCreate, groceryPromotionDelete, groceryPromotionEvaluate,
   groceryPromotionsList, groceryPromotionUpdate,
 } from "../controllers/grocery-31-40.controller.js";
+import { groceryCommercialSaleControls } from "../controllers/grocery-31-40-sale-controls.controller.js";
+import { groceryPurchaseReturnCreate, groceryRefundCreate, grocerySalesReturnCreate } from "../controllers/grocery-31-40-returns.controller.js";
 
 const router = Router();
 router.use(requireAuth, requireIndustry("grocery"));
@@ -57,20 +60,18 @@ router.get("/suppliers/:id/overview", requirePermission("suppliers.view"), groce
 router.patch("/suppliers/:id/profile", requirePermission("suppliers.manage"), saveGrocerySupplierProfile);
 router.get("/ageing", requireAnyPermission("reports.view", "customers.view", "suppliers.view"), groceryAgeing);
 router.get("/expiry", requirePermission("inventory.view"), groceryExpiry);
-
 router.get("/products/lookup", requireAnyPermission("products.view", "inventory.view", "sales_documents.create"), groceryProductLookupUom);
 router.get("/products/:id/profile", requirePermission("products.view"), groceryProductProfileUom);
-router.patch("/products/:id/profile", requirePermission("products.manage"), saveGroceryProductProfileUom);
+router.patch("/products/:id/profile", requirePermission("products.manage"), saveGroceryProductProfileWithPriceHistory);
 router.get("/prices/resolve", requireAnyPermission("pricing.view", "products.view", "sales_documents.create"), groceryPriceResolve);
 router.post("/prices/customer", requirePermission("pricing.manage"), groceryCustomerPriceSave);
 router.get("/products/:productId/price-history", requireAnyPermission("pricing.view", "products.view_cost", "reports.profit"), groceryProductPriceHistory);
 
 router.get("/promotions", requirePermission("promotions.view"), groceryPromotionsList);
 router.post("/promotions/evaluate", requireAnyPermission("promotions.apply", "sales_documents.create"), groceryPromotionEvaluate);
-router.post("/promotions", requirePermission("promotions.manage"), groceryPromotionCreate);
-router.patch("/promotions/:id", requirePermission("promotions.manage"), groceryPromotionUpdate);
-router.delete("/promotions/:id", requirePermission("promotions.manage"), groceryPromotionDelete);
-
+router.post("/promotions", requireAnyPermission("promotions.create", "promotions.manage"), groceryPromotionCreate);
+router.patch("/promotions/:id", requireAnyPermission("promotions.edit", "promotions.manage"), groceryPromotionUpdate);
+router.delete("/promotions/:id", requireAnyPermission("promotions.delete", "promotions.manage"), groceryPromotionDelete);
 router.get("/loyalty/program", requirePermission("loyalty.view"), groceryLoyaltyProgram);
 router.put("/loyalty/program", requirePermission("loyalty.manage"), groceryLoyaltyProgramSave);
 router.get("/loyalty/accounts", requirePermission("loyalty.view"), groceryLoyaltyAccounts);
@@ -83,10 +84,13 @@ router.post("/purchase-orders", requirePermission("purchases.create"), groceryCr
 router.patch("/purchase-orders/:id/status", requirePermission("purchases.create"), groceryPurchaseStatus);
 router.post("/purchase-orders/:id/receive", requirePermission("purchases.receive"), groceryReceivePurchaseUom);
 router.post("/purchase-orders/:id/invoice", requirePermission("purchases.create"), groceryPostPurchaseInvoice);
+router.post("/purchase-returns", requirePermission("purchases.return"), groceryPurchaseReturnCreate);
 router.get("/held-sales", requirePermission("sales_documents.view"), groceryHeldSaleListV2);
 router.post("/held-sales", requirePermission("sales_documents.create"), groceryHeldSaleCreateV2);
 router.delete("/held-sales/:id", requirePermission("sales_documents.create"), groceryHeldSaleDeleteV2);
-router.post("/sales", grocerySalesGuard, groceryCreateSale);
+router.post("/sales", groceryCommercialSaleControls, grocerySalesGuard, groceryCreateSale);
+router.post("/sales-returns", requirePermission("sales_documents.return"), grocerySalesReturnCreate);
+router.post("/refunds", requirePermission("sales_documents.refund"), groceryRefundCreate);
 router.post("/exchanges", requirePermission("sales_documents.return"), requirePermission("sales_documents.create"), groceryExchange);
 
 router.get("/cashiers", locationRead, groceryCashiers);
@@ -117,7 +121,7 @@ router.get("/reorder-suggestions", requirePermission("inventory.view"), groceryR
 
 router.get("/accounting/chart", accountingRead, groceryChartOfAccounts);
 router.post("/accounting/bootstrap", accountingManage, bootstrapGroceryAccounting);
-router.get("/journals", accountingRead, groceryJournals);
+router.get("/journals", requireAnyPermission("journals.view", "accounts.view"), groceryJournals);
 router.post("/journals", requirePermission("journals.create"), createGroceryJournal);
 router.patch("/journals/:id/status", requirePermission("journals.post"), transitionGroceryJournal);
 router.post("/accounting/reconcile/:type/:id", requirePermission("accounts.reconcile"), reconcileGroceryAccountingSource);
@@ -129,7 +133,6 @@ router.post("/expense-templates", requirePermission("expenses.manage"), createGr
 router.delete("/expense-templates/:id", requirePermission("expenses.manage"), archiveGroceryExpenseTemplate);
 router.post("/customer-payments", requirePermission("payments.create"), createGroceryCustomerPayment);
 router.post("/supplier-payments", requirePermission("supplier_payments.post"), createGrocerySupplierPayment);
-
 router.get("/cheques", chequeRead, groceryChequeList);
 router.post("/cheques", chequeWrite, groceryChequeCreate);
 router.patch("/cheques/:id/transition", chequeWrite, groceryChequeTransition);
