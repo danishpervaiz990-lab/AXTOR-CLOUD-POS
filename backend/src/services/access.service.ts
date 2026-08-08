@@ -34,6 +34,8 @@ const exactOnlyPermissions = new Set([
   "settings.manage_permissions",
 ]);
 
+const canonicalSalesApprovalRoles = new Set(["manager", "store manager", "sales manager"]);
+
 export async function loadUserAccess(tx: any, businessId: string, userId?: string | null): Promise<UserAccess> {
   if (!userId) throw new Error("Authenticated user context is required");
   const user = await tx.user.findFirst({ where: { id: userId, businessId, status: "ACTIVE" }, include: { userRoles: { include: { role: true } } } });
@@ -53,9 +55,18 @@ export async function loadUserAccess(tx: any, businessId: string, userId?: strin
   };
 }
 
+function hasCanonicalSalesApprovalRole(access: UserAccess): boolean {
+  return access.roleNames.some((name) => canonicalSalesApprovalRoles.has(String(name || "").trim().toLowerCase()));
+}
+
 export function hasPermission(access: UserAccess, permission: string, legacyDefault = false): boolean {
   if (access.isOwner || access.isAdmin) return true;
   if (access.permissions.has("*") || access.permissions.has(permission)) return true;
+  // Grocery credit approvals explicitly authorize the canonical Manager family.
+  // Purchase/Warehouse Manager roles are intentionally excluded by exact name.
+  // The underlying sales guards still require a written override reason and all
+  // decisions remain tenant-scoped/audited.
+  if (permission === "sales_documents.override_credit_limit" && hasCanonicalSalesApprovalRole(access)) return true;
   if (exactOnlyPermissions.has(permission)) return false;
   const segments = permission.split(".");
   for (let index = segments.length - 1; index > 0; index -= 1) {

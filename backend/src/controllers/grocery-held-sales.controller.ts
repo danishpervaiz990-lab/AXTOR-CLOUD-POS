@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../db/prisma.js";
 import { writeAudit } from "../services/audit.service.js";
+import { nextEntityNumber } from "../services/numbering.service.js";
 
 const db: any = prisma;
 function text(value: unknown) { return String(value ?? "").trim(); }
@@ -26,37 +27,52 @@ export async function groceryHeldSaleCreateV2(req: Request, res: Response) {
     const input = req.body || {};
     const items = Array.isArray(input.items) ? input.items : [];
     if (!items.length) return res.status(422).json({ ok: false, error: { message: "Held sale must contain at least one item" } });
-    const referenceNo = text(input.referenceNo) || `HOLD-${Date.now()}`;
-    const record = await db.industryRecord.create({
-      data: {
-        businessId,
-        industryCode: "grocery",
-        entityType: "grocery_held_sale",
-        referenceNo,
-        displayName: text(input.name) || referenceNo,
-        status: "held",
-        relatedEntityId: text(input.customerId) || null,
-        amount: round2(num(input.total)),
-        currency: text(input.currency || "QAR").toUpperCase(),
+
+    const record = await db.$transaction(async (tx: any) => {
+      const manualReference = text(input.referenceNo);
+      let referenceNo = manualReference;
+      if (manualReference) {
+        const duplicate = await tx.industryRecord.findFirst({ where: { businessId, industryCode: "grocery", entityType: "grocery_held_sale", referenceNo: manualReference, archivedAt: null } });
+        if (duplicate) throw new Error("Held sale reference already exists");
+      } else {
+        referenceNo = await nextEntityNumber(tx, "industryRecord", "referenceNo", businessId, "HOLD", 6, {
+          sequenceKey: "grocery.held_sale",
+          where: { industryCode: "grocery", entityType: "grocery_held_sale" },
+        });
+      }
+
+      const created = await tx.industryRecord.create({
         data: {
-          items: items.slice(0, 500),
-          payments: Array.isArray(input.payments) ? input.payments.slice(0, 20) : [],
-          branchId: input.branchId || null,
-          warehouseId: input.warehouseId || null,
-          counterId: input.counterId || null,
-          salespersonId: input.salespersonId || null,
-          dueDate: input.dueDate || null,
-          invoiceDiscount: num(input.invoiceDiscount),
-          invoiceDiscountType: text(input.invoiceDiscountType) || "fixed",
-          promotionDiscount: num(input.promotionDiscount),
-          notes: text(input.notes) || null,
-          creditOverrideReason: text(input.creditOverrideReason) || null,
+          businessId,
+          industryCode: "grocery",
+          entityType: "grocery_held_sale",
+          referenceNo,
+          displayName: text(input.name) || referenceNo,
+          status: "held",
+          relatedEntityId: text(input.customerId) || null,
+          amount: round2(num(input.total)),
+          currency: text(input.currency || "QAR").toUpperCase(),
+          data: {
+            items: items.slice(0, 500),
+            payments: Array.isArray(input.payments) ? input.payments.slice(0, 20) : [],
+            branchId: input.branchId || null,
+            warehouseId: input.warehouseId || null,
+            counterId: input.counterId || null,
+            salespersonId: input.salespersonId || null,
+            dueDate: input.dueDate || null,
+            invoiceDiscount: num(input.invoiceDiscount),
+            invoiceDiscountType: text(input.invoiceDiscountType) || "fixed",
+            promotionDiscount: num(input.promotionDiscount),
+            notes: text(input.notes) || null,
+            creditOverrideReason: text(input.creditOverrideReason) || null,
+          },
+          createdByUserId: userId,
+          updatedByUserId: userId,
         },
-        createdByUserId: userId,
-        updatedByUserId: userId,
-      },
+      });
+      await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.hold", entityType: "IndustryRecord", entityId: created.id, after: { referenceNo, lineCount: items.length, amount: num(input.total), autoAllocated: !manualReference } });
+      return created;
     });
-    await writeAudit(db, req, { businessId, userId, action: "grocery.sale.hold", entityType: "IndustryRecord", entityId: record.id, after: { referenceNo, lineCount: items.length, amount: num(input.total) } });
     return res.status(201).json({ ok: true, data: serialize(record) });
   } catch (error: any) { return res.status(500).json({ ok: false, error: { message: error?.message || "Failed to hold sale" } }); }
 }
