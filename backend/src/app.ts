@@ -38,6 +38,7 @@ import industryRoutes from "./routes/industry.routes.js";
 import publicCatalogRoutes from "./routes/public-catalog.routes.js";
 import groceryRoutes from "./routes/grocery.routes.js";
 import groceryChequesRoutes from "./routes/grocery-cheques.routes.js";
+import grocery41To50Routes from "./routes/grocery-41-50.routes.js";
 import { clinicRouter, gymRouter, schoolRouter } from "./routes/release-ab.routes.js";
 import { hardwareRouter, paintRouter, restaurantRouter } from "./routes/release-c.routes.js";
 import { furnitureRouter, wholesaleRouter, workshopRouter } from "./routes/release-d.routes.js";
@@ -124,6 +125,8 @@ export function createApp() {
   app.use("/api/v1/platform-admin", platformAdminRoutes);
   app.use("/api/v1/platform-features", platformFeaturesRoutes);
   app.use("/api/v1/industry", industryRoutes);
+  // Requirements 41-50 must be mounted before the legacy Grocery router so the bounded product lookup wins.
+  app.use("/api/v1/grocery", grocery41To50Routes);
   app.use("/api/v1/grocery", groceryRoutes);
   app.use("/api/v1/grocery", groceryChequesRoutes);
   app.use("/api/v1/gym", gymRouter);
