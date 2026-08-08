@@ -1,0 +1,58 @@
+import type { Request, Response } from "express";
+import { prisma } from "../db/prisma.js";
+import { writeAudit } from "../services/audit.service.js";
+
+const db: any = prisma;
+function text(v: unknown) { return String(v ?? "").trim(); }
+function num(v: unknown, f = 0) { const n = Number(v); return Number.isFinite(n) ? n : f; }
+function round2(v: number) { return Math.round((v + Number.EPSILON) * 100) / 100; }
+function round3(v: number) { return Math.round((v + Number.EPSILON) * 1000) / 1000; }
+function json(v: unknown): Record<string, any> { return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, any> : {}; }
+function bool(v: unknown, f = false) { if (v === undefined || v === null || v === "") return f; if (typeof v === "boolean") return v; return ["1", "true", "yes", "on"].includes(String(v).toLowerCase()); }
+function tenant(req: Request) { const businessId = req.tenant?.businessId; const userId = req.tenant?.userId; if (!businessId || !userId) throw new Error("Authenticated Grocery tenant is required"); return { businessId, userId }; }
+function ok(res: Response, data: unknown, status = 200) { return res.status(status).json({ ok: true, data }); }
+function fail(res: Response, e: any, status = 400) { return res.status(status).json({ ok: false, error: { message: e?.message || "Request failed" } }); }
+async function product(businessId: string, id: string) { const row = await db.product.findFirst({ where: { id, businessId, deleted: false } }); if (!row) throw new Error("Product not found"); return row; }
+async function warehouse(businessId: string, id: string) { const row = await db.warehouse.findFirst({ where: { id, businessId, active: true } }); if (!row) throw new Error("Warehouse not found or inactive"); return row; }
+
+export function groceryFields(p: any) {
+  const f = json(p?.customFields); const g = json(f.grocery);
+  const barcodes = Array.isArray(g.barcodes) ? g.barcodes.map(text).filter(Boolean) : [];
+  const uoms = Array.isArray(g.uoms) ? g.uoms.map((x: any) => ({ unit: text(x.unit).toUpperCase(), multiplier: Math.max(0.0001, num(x.multiplier, 1)) })).filter((x: any) => x.unit) : [];
+  return { barcodes, plu: text(g.plu) || null, weightedBarcode: bool(g.weightedBarcode), priceEmbeddedBarcode: bool(g.priceEmbeddedBarcode), baseUnit: text(g.baseUnit || p?.unit || "PCS").toUpperCase(), uoms, retailPrice: num(g.retailPrice, num(p?.price)), wholesalePrice: num(g.wholesalePrice), memberPrice: num(g.memberPrice), promotionalPrice: num(g.promotionalPrice), minimumSellingPrice: num(g.minimumSellingPrice), maxStock: num(g.maxStock), reorderLevel: num(g.reorderLevel, num(p?.minStock)), reorderQuantity: num(g.reorderQuantity), margin: num(g.margin), markup: num(g.markup), expiryTracking: bool(g.expiryTracking || f.expiryTracking), batchTracking: bool(g.batchTracking || f.batchTracking) };
+}
+
+export async function groceryProductProfile(req: Request, res: Response) { try { const t = tenant(req); const p = await product(t.businessId, req.params.id); return ok(res, { product: p, grocery: groceryFields(p) }); } catch (e) { return fail(res, e); } }
+export async function saveGroceryProductProfile(req: Request, res: Response) {
+  try {
+    const t = tenant(req); const before = await product(t.businessId, req.params.id); const old = groceryFields(before); const input = req.body || {};
+    const barcodes = Array.isArray(input.barcodes) ? [...new Set<string>(input.barcodes.map(text).filter(Boolean))] : old.barcodes;
+    const uoms = Array.isArray(input.uoms) ? input.uoms.map((x: any) => ({ unit: text(x.unit).toUpperCase(), multiplier: round3(Math.max(0.0001, num(x.multiplier, 1))) })).filter((x: any) => x.unit) : old.uoms;
+    const baseUnit = text(input.baseUnit || old.baseUnit || before.unit || "PCS").toUpperCase(); if (!uoms.some((x: any) => x.unit === baseUnit)) uoms.unshift({ unit: baseUnit, multiplier: 1 });
+    const duplicatePrimary = barcodes.length ? await db.product.findFirst({ where: { businessId: t.businessId, id: { not: before.id }, deleted: false, barcode: { in: barcodes } }, select: { name: true, barcode: true } }) : null; if (duplicatePrimary) throw new Error(`Barcode ${duplicatePrimary.barcode} already belongs to ${duplicatePrimary.name}`);
+    const profile: any = { ...old, barcodes, uoms, baseUnit };
+    for (const name of ["plu"]) if (input[name] !== undefined) profile[name] = text(input[name]) || null;
+    for (const name of ["weightedBarcode","priceEmbeddedBarcode","expiryTracking","batchTracking"]) if (input[name] !== undefined) profile[name] = bool(input[name]);
+    for (const name of ["retailPrice","wholesalePrice","memberPrice","promotionalPrice","minimumSellingPrice","maxStock","reorderLevel","reorderQuantity"]) if (input[name] !== undefined) profile[name] = Math.max(0, num(input[name]));
+    for (const name of ["margin","markup"]) if (input[name] !== undefined) profile[name] = num(input[name]);
+    const customFields = { ...json(before.customFields), grocery: profile, expiryTracking: profile.expiryTracking, batchTracking: profile.batchTracking };
+    const updated = await db.product.update({ where: { id: before.id }, data: { unit: baseUnit, price: profile.retailPrice, minStock: profile.reorderLevel, customFields } });
+    await writeAudit(db, req, { businessId: t.businessId, userId: t.userId, action: "grocery.product.profile.update", entityType: "Product", entityId: before.id, before: old, after: profile }); return ok(res, { product: updated, grocery: profile });
+  } catch (e) { return fail(res, e); }
+}
+export async function groceryProductLookup(req: Request, res: Response) {
+  try { const t = tenant(req); const q = text(req.query.q || req.query.code).toLowerCase(); if (!q) throw new Error("Lookup code is required"); let p = await db.product.findFirst({ where: { businessId: t.businessId, deleted: false, active: true, OR: [{ sku: { equals: q, mode: "insensitive" } }, { barcode: { equals: q, mode: "insensitive" } }, { itemCode: { equals: q, mode: "insensitive" } }, { productCode: { equals: q, mode: "insensitive" } }] } }); if (!p) { const list = await db.product.findMany({ where: { businessId: t.businessId, deleted: false, active: true }, take: 10000 }); p = list.find((x: any) => { const g = groceryFields(x); return String(g.plu || "").toLowerCase() === q || g.barcodes.some((b: string) => b.toLowerCase() === q); }) || null; } if (!p) return fail(res, new Error("Product not found"), 404); return ok(res, { product: p, grocery: groceryFields(p) }); } catch (e) { return fail(res, e); }
+}
+
+export async function groceryCounters(req: Request, res: Response) {
+  try { const t = tenant(req); const [counters, profiles] = await Promise.all([db.counter.findMany({ where: { businessId: t.businessId }, include: { branch: true }, orderBy: { name: "asc" } }), db.industryRecord.findMany({ where: { businessId: t.businessId, industryCode: "grocery", entityType: "grocery_counter_profile", archivedAt: null } })]); const map = new Map<string, any>((profiles as any[]).map((x: any): [string, any] => [String(x.relatedEntityId), x])); return ok(res, counters.map((c: any) => ({ ...c, profile: json(map.get(String(c.id))?.data) }))); } catch (e) { return fail(res, e); }
+}
+export async function saveGroceryCounterProfile(req: Request, res: Response) {
+  try { const t = tenant(req); const counter = await db.counter.findFirst({ where: { id: req.params.id, businessId: t.businessId } }); if (!counter) throw new Error("Counter not found"); const current = await db.industryRecord.findFirst({ where: { businessId: t.businessId, industryCode: "grocery", entityType: "grocery_counter_profile", relatedEntityId: counter.id, archivedAt: null } }); const data = { ...json(current?.data), defaultWarehouseId: text(req.body?.defaultWarehouseId) || null, terminalDevice: text(req.body?.terminalDevice) || null, printer: text(req.body?.printer) || null, cashDrawer: text(req.body?.cashDrawer) || null }; if (data.defaultWarehouseId) await warehouse(t.businessId, data.defaultWarehouseId); const row = current ? await db.industryRecord.update({ where: { id: current.id }, data: { data, revision: { increment: 1 }, updatedByUserId: t.userId } }) : await db.industryRecord.create({ data: { businessId: t.businessId, industryCode: "grocery", entityType: "grocery_counter_profile", referenceNo: `COUNTER-${counter.id}`, displayName: counter.name, relatedEntityId: counter.id, status: "active", data, createdByUserId: t.userId, updatedByUserId: t.userId } }); await writeAudit(db, req, { businessId: t.businessId, userId: t.userId, action: "grocery.counter.profile.update", entityType: "Counter", entityId: counter.id, after: data }); return ok(res, row); } catch (e) { return fail(res, e); }
+}
+export async function groceryCounterCashMovement(req: Request, res: Response) {
+  try { const t = tenant(req); const shift = await db.shift.findFirst({ where: { id: text(req.params.shiftId), businessId: t.businessId, status: "OPEN" } }); if (!shift) throw new Error("Open shift not found"); const type = text(req.body?.type).toLowerCase(); if (!["cash_in","cash_out"].includes(type)) throw new Error("type must be cash_in or cash_out"); const amount = round2(num(req.body?.amount)); if (amount <= 0) throw new Error("Amount must be greater than zero"); const row = await db.industryRecord.create({ data: { businessId: t.businessId, industryCode: "grocery", entityType: "grocery_counter_cash", referenceNo: `CASH-${shift.id}-${Date.now()}`, displayName: `${type} ${shift.counterName || "Counter"}`, relatedEntityId: shift.id, amount, status: "posted", startAt: new Date(), data: { type, amount, reason: text(req.body?.reason) || null, counterId: shift.counterId, branchId: shift.branchId }, createdByUserId: t.userId } }); await writeAudit(db, req, { businessId: t.businessId, userId: t.userId, action: `grocery.counter.${type}`, entityType: "Shift", entityId: shift.id, after: { amount, reason: text(req.body?.reason) || null } }); return ok(res, row, 201); } catch (e) { return fail(res, e); }
+}
+export async function groceryCounterSummary(req: Request, res: Response) {
+  try { const t = tenant(req); const shift = await db.shift.findFirst({ where: { id: req.params.shiftId, businessId: t.businessId } }); if (!shift) throw new Error("Shift not found"); const [sales, moves] = await Promise.all([db.salesDocument.findMany({ where: { businessId: t.businessId, shiftId: shift.id, documentType: "INVOICE", status: { notIn: ["CANCELLED","VOID"] } } }), db.industryRecord.findMany({ where: { businessId: t.businessId, industryCode: "grocery", entityType: "grocery_counter_cash", relatedEntityId: shift.id, archivedAt: null } })]); const cashIn = round2(moves.filter((x: any) => json(x.data).type === "cash_in").reduce((s: number,x: any)=>s+num(x.amount),0)); const cashOut = round2(moves.filter((x: any) => json(x.data).type === "cash_out").reduce((s: number,x: any)=>s+num(x.amount),0)); const cashSales=round2(sales.filter((x:any)=>String(x.paymentMethod||"").toLowerCase()==="cash").reduce((s:number,x:any)=>s+num(x.paid),0)); const expectedCash=round2(num(shift.openingCash)+cashIn-cashOut+cashSales); const gross=round2(sales.reduce((s:number,x:any)=>s+num(x.total),0)); const paid=round2(sales.reduce((s:number,x:any)=>s+num(x.paid),0)); return ok(res,{shift,salesCount:sales.length,grossSales:gross,paid,openingCash:num(shift.openingCash),cashIn,cashOut,expectedCash,actualCash:shift.closingCash==null?null:num(shift.closingCash),difference:shift.closingCash==null?null:round2(num(shift.closingCash)-expectedCash),reportType:text(req.query.report||"X").toUpperCase()}); } catch (e) { return fail(res,e); }
+}
