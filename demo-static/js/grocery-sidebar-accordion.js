@@ -2,7 +2,9 @@
 
 (function grocerySidebarAccordion() {
   const STORAGE_KEY = "grocerySidebarAccordionV1";
+  const SCROLL_KEY = "grocerySidebarScrollTopV1";
   let syncQueued = false;
+  let scrollWriteQueued = false;
 
   function readState() {
     try {
@@ -14,9 +16,27 @@
   }
 
   function writeState(next) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (_) {}
+  }
+
+  function readScrollTop() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      const value = Number(sessionStorage.getItem(SCROLL_KEY) || localStorage.getItem(SCROLL_KEY) || 0);
+      return Number.isFinite(value) && value >= 0 ? value : 0;
+    } catch (_) { return 0; }
+  }
+
+  function writeScrollTop(value) {
+    const top = Math.max(0, Number(value) || 0);
+    try {
+      sessionStorage.setItem(SCROLL_KEY, String(top));
+      localStorage.setItem(SCROLL_KEY, String(top));
     } catch (_) {}
+  }
+
+  function rememberCurrentScroll() {
+    const nav = document.querySelector("#side-nav .nav-scroll");
+    if (nav) writeScrollTop(nav.scrollTop);
   }
 
   function normalizeKey(value, index) {
@@ -87,15 +107,37 @@
     applyCollapsedState(group, active ? false : rememberedCollapsed);
   }
 
+  function keepActiveVisible(nav) {
+    const active = nav.querySelector(".nav-link.active,[aria-current='page']");
+    if (!active) return;
+    const navRect = nav.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const clippedAbove = activeRect.top < navRect.top + 4;
+    const clippedBelow = activeRect.bottom > navRect.bottom - 4;
+    if (clippedAbove || clippedBelow) active.scrollIntoView({ block:"nearest", inline:"nearest" });
+  }
+
+  function restoreScrollAndActive(nav) {
+    const remembered = readScrollTop();
+    if (Math.abs(nav.scrollTop - remembered) > 1) nav.scrollTop = remembered;
+    requestAnimationFrame(function () {
+      keepActiveVisible(nav);
+      writeScrollTop(nav.scrollTop);
+    });
+  }
+
   function sync() {
     syncQueued = false;
     const sideNav = document.getElementById("side-nav");
     if (!sideNav) return;
+    const nav = sideNav.querySelector(".nav-scroll");
+    if (!nav) return;
 
     const stored = readState();
-    sideNav.querySelectorAll(".nav-scroll > .nav-group").forEach(function (group, index) {
+    nav.querySelectorAll(":scope > .nav-group").forEach(function (group, index) {
       enhanceGroup(group, index, stored);
     });
+    restoreScrollAndActive(nav);
   }
 
   function queueSync() {
@@ -113,6 +155,13 @@
     writeState(stored);
   }
 
+  // Capture scroll before the element-level data-nav click handler replaces the
+  // Grocery shell. This prevents deep navigation from snapping back to the top.
+  document.addEventListener("click", function (event) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("#side-nav [data-nav]")) rememberCurrentScroll();
+  }, true);
+
   document.addEventListener("click", function (event) {
     const target = event.target instanceof Element ? event.target : null;
     const toggle = target?.closest("#side-nav .grocery-nav-group-toggle");
@@ -126,6 +175,7 @@
     const nextCollapsed = !group.classList.contains("grocery-nav-collapsed");
     persistGroup(group, nextCollapsed);
     applyCollapsedState(group, nextCollapsed);
+    rememberCurrentScroll();
   });
 
   document.addEventListener("click", function (event) {
@@ -134,7 +184,19 @@
     queueSync();
   });
 
+  document.addEventListener("scroll", function (event) {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.matches("#side-nav .nav-scroll")) return;
+    if (scrollWriteQueued) return;
+    scrollWriteQueued = true;
+    requestAnimationFrame(function () {
+      scrollWriteQueued = false;
+      writeScrollTop(target.scrollTop);
+    });
+  }, true);
+
   window.addEventListener("popstate", queueSync);
+  window.addEventListener("pagehide", rememberCurrentScroll);
 
   const observer = new MutationObserver(function (mutations) {
     const relevant = mutations.some(function (mutation) {
@@ -152,6 +214,7 @@
 
   window.GrocerySidebarAccordion = {
     sync,
+    rememberScroll: rememberCurrentScroll,
     expandAll: function () {
       const sideNav = document.getElementById("side-nav");
       if (!sideNav) return;
@@ -163,6 +226,7 @@
         applyCollapsedState(group, false);
       });
       writeState(stored);
+      rememberCurrentScroll();
     },
     collapseAll: function () {
       const sideNav = document.getElementById("side-nav");
@@ -175,6 +239,7 @@
         applyCollapsedState(group, true);
       });
       writeState(stored);
+      rememberCurrentScroll();
     },
   };
 })();
