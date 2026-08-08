@@ -40,7 +40,7 @@ export async function groceryCommercialSaleControls(req: Request, res: Response,
       item.unitPrice = guardPrice; item.rate = guardPrice; item.price = guardPrice;
     }
     (req as any).groceryCommercial = commercial;
-    next();
+    return next();
   } catch (error: any) {
     return res.status(400).json({ ok: false, error: { code: "GROCERY_COMMERCIAL_CONTROL_FAILED", message: error?.message || "Unable to validate Grocery commercial controls" } });
   }
