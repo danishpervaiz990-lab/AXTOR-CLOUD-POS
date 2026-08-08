@@ -8,12 +8,14 @@ const html=read('grocery-new.html');
 const core=read('js/grocery-enhancement-core.js');
 const product=read('js/grocery-enhancement-product.js');
 const sales=read('js/grocery-enhancement-sales-admin.js');
+const customer=read('js/grocery-phase1-customer.js');
+const supplier=read('js/grocery-phase1-supplier.js');
 const compat=read('js/grocery-enhancement-compat.js');
 const init=read('js/grocery-enhancement-init.js');
 const css=read('css/grocery-enhancement-63-79.css');
 const accordion=read('js/grocery-sidebar-accordion.js');
 
-for(const [name,source] of Object.entries({core,product,sales,compat,init,accordion}))assert.doesNotThrow(()=>new Function(source),`${name} must remain syntax-valid`);
+for(const [name,source] of Object.entries({core,product,sales,customer,supplier,compat,init,accordion}))assert.doesNotThrow(()=>new Function(source),`${name} must remain syntax-valid`);
 
 for(const asset of ['grocery-enhancement-63-79.css','grocery-enhancement-core.js','grocery-enhancement-product.js','grocery-enhancement-sales-admin.js','grocery-enhancement-compat.js','grocery-enhancement-init.js'])assert.ok(html.includes(asset),`Grocery HTML missing ${asset}`);
 assert.ok(html.indexOf('grocery-enhancement-init.js')<html.indexOf('grocery-render-race-guard.js'),'existing render-race guard must wrap the enhancement render chain');
@@ -41,6 +43,14 @@ assert.match(core,/\/api\/v1\/grocery\/enhancement\/preferences/);
 assert.match(core,/\/api\/v1\/grocery\/enhancement\/numbering\//);
 assert.doesNotMatch(core,/localStorage[^\n]{0,100}(nextNumber|invoiceNo|sequence\+\+)/i,'frontend must not allocate document numbers in browser storage');
 
+assert.match(customer,/Auto Generate customer code/);
+assert.match(customer,/enhancement\/numbering\/customer\/preview/);
+assert.match(customer,/enhancement\/numbering\/customer\/allocate/);
+assert.match(supplier,/Auto Generate supplier code/);
+assert.match(supplier,/enhancement\/numbering\/supplier\/preview/);
+assert.match(supplier,/enhancement\/numbering\/supplier\/allocate/);
+assert.match(supplier,/enhancement\/entity-codes\/supplier/);
+
 for(const marker of ['Product name','Product Code / SKU','Primary barcode','PLU','Base unit / UOM','Purchase / cost price','Retail selling price','Primary supplier','Reorder level','Opening stock','Weighted item','Batch tracking','Expiry tracking'])assert.ok(product.includes(marker),`Add Product missing ${marker}`);
 assert.match(product,/enhancement\/numbering\/product\/preview/);
 assert.match(product,/enhancement\/numbering\/product\/allocate/);
@@ -64,6 +74,6 @@ assert.doesNotMatch(accordion,/scrollTo\(\s*0\s*,\s*0\s*\)/);
 assert.match(css,/@media\(max-width:900px\)/);
 assert.match(css,/@media\(max-width:620px\)/);
 assert.match(css,/html\[dir="rtl"\]/);
-assert.doesNotMatch(core+product+sales+compat+init,/AUTH_TOKEN_SECRET|DATABASE_URL\s*=|BEGIN PRIVATE KEY|postgresql:\/\//i,'enhancement browser files must not contain production secrets');
+assert.doesNotMatch(core+product+sales+customer+supplier+compat+init,/AUTH_TOKEN_SECRET|DATABASE_URL\s*=|BEGIN PRIVATE KEY|postgresql:\/\//i,'enhancement browser files must not contain production secrets');
 
-console.log('PASS: current Grocery production enhancement frontend is certified for Add Product, safe numbering UI, Settings/currency/language/RTL, Sales Administration, approvals and sidebar scroll retention');
+console.log('PASS: current Grocery production enhancement frontend is certified for Add Product, customer/supplier auto-numbering, Settings/currency/language/RTL, Sales Administration, approvals and sidebar scroll retention');
