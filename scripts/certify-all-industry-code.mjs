@@ -60,10 +60,12 @@ function certifyGrocery(project){
 
  assert.match(phase3,/Requirements 1–30/);
  for(const view of ['vouchers','reports-hub','reports-sales','reports-product','reports-customer','reports-payment','reports-purchase','reports-inventory','reports-pnl'])assert.ok(phase3.includes(view),`Grocery 21-30 navigation missing ${view}`);
+ assert.match(phase3,/"reports-pnl":"accounting"/);
+ assert.match(phase3,/catalog\.reports/);
  assert.match(phase3,/\/api\/v1\/grocery\/report-catalog/);
  assert.match(phase3,/\/api\/v1\/reports\//);
  assert.match(phase3,/\/api\/v1\/grocery\/vouchers/);
- for(const marker of ['grocery-profit-loss','Date preset','Comparison period','Sort column','Page size','CSV','XLSX','PDF','Print','Payment / Receipt Vouchers','Amount in words','A4','A5','thermal'])assert.ok(phase3.includes(marker),`Grocery 21-30 UI missing ${marker}`);
+ for(const marker of ['Date preset','Comparison period','Sort column','Page size','CSV','XLSX','PDF','Print','Payment / Receipt Vouchers','Amount in words','A4','A5','thermal'])assert.ok(phase3.includes(marker),`Grocery 21-30 UI missing ${marker}`);
  assert.match(exportsRuntime,/application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
  assert.match(exportsRuntime,/\[Content_Types\]\.xml/);
  assert.match(exportsRuntime,/%PDF-1\.4/);
@@ -79,35 +81,25 @@ function certifyGrocery(project){
 }
 
 function runtimeFilesFor(industry){return [`${industry}-app.js`];}
-
 assert.deepEqual(manifest.projects.map(item=>item.industry).sort(),expected.slice().sort());
 assert.deepEqual(manifest.unreleased,[]);
 const results=[];
 for(const project of manifest.projects){
- if(project.industry==='grocery'){
-  console.log('CERTIFY grocery from active isolated frontend');
-  results.push(certifyGrocery(project));
-  console.log('PASS grocery');
-  continue;
- }
+ if(project.industry==='grocery'){console.log('CERTIFY grocery from active isolated frontend');results.push(certifyGrocery(project));console.log('PASS grocery');continue;}
  const ref=releaseRefs[project.industry]||project.branch;
  const runtimeFiles=runtimeFilesFor(project.industry);
  console.log(`CERTIFY ${project.industry} from ${ref}`);
  const [dashboard,vercelText,...runtimes]=await Promise.all([fetchText(ref,project.dashboard),fetchText(ref,'vercel.json'),...runtimeFiles.map(file=>fetchText(ref,`js/${file}`))]);
  runtimeFiles.forEach((file,index)=>new vm.Script(runtimes[index],{filename:`${ref}/demo-static/js/${file}`}));
- const combinedRuntime=runtimes.join('\n');
- const vercel=JSON.parse(vercelText);
+ const combinedRuntime=runtimes.join('\n');const vercel=JSON.parse(vercelText);
  for(const runtimeFile of runtimeFiles)assert.match(dashboard,new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`${project.industry} dashboard does not load ${runtimeFile}`);
  assert.doesNotMatch(dashboard,/industry\.html\?module=/,`${project.industry} dashboard still uses generic industry routing`);
  assert.match(combinedRuntime,/\/api\/v1\//,`${project.industry} runtime has no backend API integration`);
  assert.match(combinedRuntime,/industry\/registry|verifyTenant|tenant|available only/i,`${project.industry} runtime has no tenant-industry guard`);
  assert.doesNotMatch(combinedRuntime,/industry\.html\?module=/,`${project.industry} runtime links to generic workspace`);
  assert.ok(Array.isArray(vercel.rewrites)&&vercel.rewrites.some(row=>row.source==='/'),`${project.industry} has no branch root route`);
- assert.equal(project.branch,`frontend-${project.industry}`);
- assert.equal(project.dashboard,`${project.industry}-dashboard.html`);
- assert.equal(project.status,'code_complete_not_deployed');
- results.push({industry:project.industry,ref,dashboard:project.dashboard,runtime:runtimeFiles.join(','),status:'PASS'});
- console.log(`PASS ${project.industry}`);
+ assert.equal(project.branch,`frontend-${project.industry}`);assert.equal(project.dashboard,`${project.industry}-dashboard.html`);assert.equal(project.status,'code_complete_not_deployed');
+ results.push({industry:project.industry,ref,dashboard:project.dashboard,runtime:runtimeFiles.join(','),status:'PASS'});console.log(`PASS ${project.industry}`);
 }
 assert.equal(results.length,13);
 fs.writeFileSync('all-industry-code-certification.json',JSON.stringify({checkedAt:new Date().toISOString(),deploymentAttempted:false,results},null,2));
