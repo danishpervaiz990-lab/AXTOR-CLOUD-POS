@@ -2,14 +2,15 @@ const fs=require('fs');const assert=require('assert');
 const html=fs.readFileSync('demo-static/grocery-new.html','utf8');
 const src=fs.readFileSync('demo-static/js/grocery-phase5-41-50.js','utf8');
 const completion=fs.readFileSync('demo-static/js/grocery-phase5-completion.js','utf8');
-const printProfile=fs.readFileSync('demo-static/js/grocery-phase5-print-profile.js','utf8');
+const printProfile=fs.readFileSync('demo-static/js/grocery-phase5-print-profile-v2.js','utf8');
 const all=src+'\n'+completion+'\n'+printProfile;
 
 assert(html.includes('/js/grocery-phase5-41-50.js?v=20260808-1'),'phase 5 runtime must load');
 assert(html.includes('/js/grocery-phase5-completion.js?v=20260808-1'),'phase 5 completion runtime must load');
-assert(html.includes('/js/grocery-phase5-print-profile.js?v=20260808-1'),'print profile runtime must load');
+assert(html.includes('/js/grocery-phase5-print-profile-v2.js?v=20260808-1'),'repaired print profile runtime must load');
+assert(!html.includes('/js/grocery-phase5-print-profile.js?v='),'broken print profile runtime must not load');
 assert(html.indexOf('grocery-phase5-41-50.js')>html.indexOf('grocery-phase4-completion.js'),'phase 5 must load after 31-40 completion');
-assert(html.indexOf('grocery-phase5-print-profile.js')>html.indexOf('grocery-phase5-completion.js'),'print-profile completion must load last');
+assert(html.indexOf('grocery-phase5-print-profile-v2.js')>html.indexOf('grocery-phase5-completion.js'),'print-profile completion must load after phase 5 completion');
 assert(src.includes('Grocery · Requirements 1–50'),'shell must identify 1-50 completion');
 
 for(const marker of ['Stock Valuation','Barcode & Shelf Labels','Purchase Cost History','Print Center','Notification Center','Grocery Settings','Bulk Import / Export','Global Search'])assert(src.includes(marker),`missing navigation/workspace: ${marker}`);
@@ -23,6 +24,7 @@ assert(src.includes('server-paginated'),'valuation list must disclose server pag
 for(const marker of ['58mm','80mm','A5','A4','Letter','p50-print-target','@media print','Print Center'])assert(src.includes(marker),`printing contract missing ${marker}`);
 for(const marker of ['Print Profile Settings','showLogo','showAddress','showPhone','showTaxNumber','showQr','showBarcode','showCashier','showCounter','showCustomer','showInvoiceNumber','showTaxSummary','marginTopMm','fontScale','copies','terms'])assert(printProfile.includes(marker),`print profile UI missing ${marker}`);
 assert(printProfile.includes('?profile=')&&printProfile.includes('p50ApplyPrintProfile'),'selected profile must drive printable preview');
+assert(printProfile.includes('p50RequestWithProfileBase=request')&&!/\bget\s*=\s*async\s+function/.test(printProfile),'print profile must wrap request without reassigning core const get');
 for(const marker of ['product_barcode','shelf_label','price_label','maximum 500','CODE128','EAN13','EAN8','UPC'])assert(src.includes(marker),`label contract missing ${marker}`);
 for(const marker of ['P50_CODE128','P50_L','P50_G','P50_R','p50Code128B','p50Ean13','p50Ean8','p50Upc','p50ModulesSvg'])assert(completion.includes(marker),`scannable barcode renderer missing ${marker}`);
 assert(!completion.includes('repeating-linear-gradient'),'completion renderer must use encoded SVG modules, not decorative bars');
