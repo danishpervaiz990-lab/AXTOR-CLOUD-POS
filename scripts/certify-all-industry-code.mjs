@@ -9,7 +9,7 @@ const base='https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-P
 
 async function fetchText(ref,path){
  const url=`${base}/${encodeURIComponent(ref).replaceAll('%2F','/')}/demo-static/${path.split('/').map(encodeURIComponent).join('/')}`;
- const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.4'},signal:AbortSignal.timeout(20000)});
+ const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.5'},signal:AbortSignal.timeout(20000)});
  assert.equal(response.status,200,`${ref}:${path} returned HTTP ${response.status}`);
  return await response.text();
 }
@@ -30,7 +30,8 @@ function certifyGrocery(project){
   'js/grocery-phase1-finance.js',
   'js/grocery-phase1-export-init.js',
   'js/grocery-phase2-11-20.js',
-  'js/grocery-phase2-runtime-fixes.js'
+  'js/grocery-phase2-runtime-fixes.js',
+  'js/grocery-phase2-completion.js'
  ];
  const required=['grocery-new.html','css/grocery-new.css','css/grocery-phase1.css','api/grocery-asset.js',...runtimeFiles];
  for(const file of required)assert.ok(fs.existsSync(`${root}/${file}`),`Active Grocery frontend is missing ${file}`);
@@ -38,6 +39,7 @@ function certifyGrocery(project){
  const core=fs.readFileSync(`${root}/js/grocery-phase1-core.js`,'utf8');
  const phase2=fs.readFileSync(`${root}/js/grocery-phase2-11-20.js`,'utf8');
  const fixes=fs.readFileSync(`${root}/js/grocery-phase2-runtime-fixes.js`,'utf8');
+ const completion=fs.readFileSync(`${root}/js/grocery-phase2-completion.js`,'utf8');
  const gateway=fs.readFileSync(`${root}/api/grocery-asset.js`,'utf8');
  const combined=runtimeFiles.map(file=>fs.readFileSync(`${root}/${file}`,'utf8')).join('\n');
  runtimeFiles.forEach(file=>new vm.Script(fs.readFileSync(`${root}/${file}`,'utf8'),{filename:`${root}/${file}`}));
@@ -47,6 +49,7 @@ function certifyGrocery(project){
  assert.match(html,/grocery-phase1-terminal-actions\.js/);
  assert.match(html,/grocery-phase2-11-20\.js/);
  assert.match(html,/grocery-phase2-runtime-fixes\.js/);
+ assert.match(html,/grocery-phase2-completion\.js/);
  assert.match(core,/axtor-cloud-pos-production\.up\.railway\.app/);
  assert.match(core,/\/api\/v1\/grocery\/context/);
  assert.match(combined,/\/api\/v1\/grocery\/sales/);
@@ -56,6 +59,7 @@ function certifyGrocery(project){
  for(const endpoint of [
   '/api/v1/grocery/products/',
   '/api/v1/grocery/counters',
+  '/api/v1/grocery/cashiers',
   '/api/v1/grocery/vans',
   '/api/v1/grocery/transfers',
   '/api/v1/grocery/stock-counts',
@@ -63,6 +67,8 @@ function certifyGrocery(project){
   '/api/v1/grocery/accounting/chart',
   '/api/v1/grocery/journals',
   '/api/v1/grocery/expenses',
+  '/api/v1/grocery/expense-report',
+  '/api/v1/grocery/expense-templates',
   '/api/v1/grocery/customer-payments',
   '/api/v1/grocery/supplier-payments'
  ]) assert.ok(combined.includes(endpoint),`Grocery requirements 11-20 runtime missing ${endpoint}`);
@@ -71,15 +77,22 @@ function certifyGrocery(project){
  assert.match(phase2,/Suggestions only\. Purchase orders are never auto-created/);
  assert.match(phase2,/Unbalanced entries are rejected server-side/);
  assert.match(fixes,/productId/);
+ assert.match(completion,/Assigned cashier/);
+ assert.match(completion,/Scan barcode \/ SKU \/ PLU/);
+ assert.match(completion,/Physical Van Closing/);
+ assert.match(completion,/varianceValue/);
+ assert.match(completion,/Recurring Expense Templates/);
+ assert.match(completion,/Monthly Trend/);
+ assert.match(completion,/Payment Method/);
+ assert.match(completion,/Cashier Summary/);
+ assert.match(completion,/Shift Report/);
  assert.match(gateway,/X-Axtor-Grocery-Backend["']:\s*["']shared-production["']/);
  assert.match(gateway,/X-Axtor-Legacy-Grocery/);
  assert.doesNotMatch(gateway,/GROCERY_RAILWAY_ORIGIN|frontend-grocery|raw\.githubusercontent\.com/);
- return {industry:'grocery',ref:'active-main-grocery',dashboard:'grocery-new.html',runtime:'isolated Grocery frontend + approved shared backend APIs + requirements 1-20 operations',status:'PASS'};
+ return {industry:'grocery',ref:'active-main-grocery',dashboard:'grocery-new.html',runtime:'isolated Grocery frontend + approved shared backend APIs + literal requirements 1-20 operational completion',status:'PASS'};
 }
 
-function runtimeFilesFor(industry){
- return [`${industry}-app.js`];
-}
+function runtimeFilesFor(industry){return [`${industry}-app.js`];}
 
 assert.deepEqual(manifest.projects.map(item=>item.industry).sort(),expected.slice().sort());
 assert.deepEqual(manifest.unreleased,[]);
@@ -102,9 +115,7 @@ for(const project of manifest.projects){
  runtimeFiles.forEach((file,index)=>new vm.Script(runtimes[index],{filename:`${ref}/demo-static/js/${file}`}));
  const combinedRuntime=runtimes.join('\n');
  const vercel=JSON.parse(vercelText);
- for(const runtimeFile of runtimeFiles){
-   assert.match(dashboard,new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`${project.industry} dashboard does not load ${runtimeFile}`);
- }
+ for(const runtimeFile of runtimeFiles)assert.match(dashboard,new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`${project.industry} dashboard does not load ${runtimeFile}`);
  assert.doesNotMatch(dashboard,/industry\.html\?module=/,`${project.industry} dashboard still uses generic industry routing`);
  assert.match(combinedRuntime,/\/api\/v1\//,`${project.industry} runtime has no backend API integration`);
  assert.match(combinedRuntime,/industry\/registry|verifyTenant|tenant|available only/i,`${project.industry} runtime has no tenant-industry guard`);
@@ -119,4 +130,4 @@ for(const project of manifest.projects){
 assert.equal(results.length,13);
 fs.writeFileSync('all-industry-code-certification.json',JSON.stringify({checkedAt:new Date().toISOString(),deploymentAttempted:false,results},null,2));
 console.table(results);
-console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified as the isolated frontend using approved shared backend APIs with requirements 1-20 operational runtime');
+console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified as the isolated frontend using approved shared backend APIs with literal requirements 1-20 operational completion');
