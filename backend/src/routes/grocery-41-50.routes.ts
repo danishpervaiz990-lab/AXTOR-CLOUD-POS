@@ -8,10 +8,12 @@ import {
   groceryNotificationsGenerate, groceryPrintableDocument, groceryPrintProfileSave, groceryPrintProfiles, grocerySettingsSaveV5,
   grocerySettingsV5, groceryStockValuation, grocerySyncValuation,
 } from "../controllers/grocery-41-50.controller.js";
+import { groceryProductLookupV5 } from "../controllers/grocery-product-lookup-v5.controller.js";
 
 const router = Router();
 router.use(requireAuth, requireIndustry("grocery"));
 
+router.get("/products/lookup", requireAnyPermission("products.view", "inventory.view", "sales_documents.create"), groceryProductLookupV5);
 router.get("/requirements-41-50/catalog", requireAnyPermission("dashboard.view", "reports.view", "settings.view"), grocery41To50Catalog);
 router.get("/valuation", requireAnyPermission("inventory.view", "reports.view", "reports.profit"), groceryStockValuation);
 router.post("/valuation/sync-weighted-average", requireAnyPermission("inventory.adjust", "accounts.manage"), grocerySyncValuation);
