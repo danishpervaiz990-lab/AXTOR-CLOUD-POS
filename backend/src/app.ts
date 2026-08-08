@@ -126,8 +126,8 @@ export function createApp() {
   app.use("/api/v1/platform-features", platformFeaturesRoutes);
   app.use("/api/v1/industry", industryRoutes);
   app.use("/api/v1/grocery", groceryRoutes);
-  app.use("/api/v1/grocery", groceryChequesRoutes);
   app.use("/api/v1/grocery", grocery41To50Routes);
+  app.use("/api/v1/grocery", groceryChequesRoutes);
   app.use("/api/v1/gym", gymRouter);
   app.use("/api/v1/school", schoolRouter);
   app.use("/api/v1/clinic", clinicRouter);
