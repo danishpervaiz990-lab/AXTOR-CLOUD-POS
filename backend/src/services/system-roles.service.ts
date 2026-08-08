@@ -38,7 +38,15 @@ export async function ensureSystemRoles(tx: any, businessId: string): Promise<vo
     const exactCanonicalRequired = ["Salesperson", "Storekeeper", "Purchase Manager", "Warehouse Manager"].includes(definition.name);
     const equivalent = existingRoles.some((role: any) => exactCanonicalRequired ? isCanonicalExactMatch(role.name, definition.name) : roleFamily(role.name) === family);
     if (equivalent) continue;
-    const created = await tx.role.create({ data: { businessId, name: definition.name, description: definition.description, permissions: [...definition.permissions], isSystemRole: true } });
+
+    // Multiple first-use access-control requests can reach this bootstrap at the
+    // same time. Use the tenant/name unique key atomically instead of a
+    // check-then-create sequence so both requests converge on the same role.
+    const created = await tx.role.upsert({
+      where: { businessId_name: { businessId, name: definition.name } },
+      create: { businessId, name: definition.name, description: definition.description, permissions: [...definition.permissions], isSystemRole: true },
+      update: { isSystemRole: true, description: definition.description },
+    });
     existingRoles.push(created);
   }
 }

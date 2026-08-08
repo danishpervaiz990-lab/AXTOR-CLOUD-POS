@@ -26,6 +26,34 @@ function access(overrides = {}) {
   };
 }
 
+function roleMock(existing, created, updated) {
+  return {
+    findMany: async () => existing.map((role) => ({ ...role })),
+    update: async ({ where, data }) => {
+      const original = existing.find((role) => role.id === where.id);
+      const next = { ...original, ...data };
+      const index = existing.findIndex((role) => role.id === where.id);
+      if (index >= 0) existing[index] = next;
+      updated.push({ id: where.id, data });
+      return next;
+    },
+    upsert: async ({ where, create, update }) => {
+      const name = where?.businessId_name?.name;
+      const original = existing.find((role) => role.name === name);
+      if (original) {
+        const next = { ...original, ...update };
+        const index = existing.findIndex((role) => role.id === original.id);
+        if (index >= 0) existing[index] = next;
+        return next;
+      }
+      const role = { id: `created-${create.name}`, ...create };
+      existing.push(role);
+      created.push(role);
+      return role;
+    },
+  };
+}
+
 test("R-13 exposes the required operational role families", () => {
   for (const roleName of ["Manager", "Cashier", "Salesperson", "Storekeeper", "Accountant", "Auditor", "Purchase Manager", "Warehouse Manager"]) {
     assert.ok(byName.has(roleName), `${roleName} role must exist`);
@@ -123,22 +151,7 @@ test("system role seeding migrates untouched aliases and adds required non-dupli
   ];
   const created = [];
   const updated = [];
-  const tx = {
-    role: {
-      findMany: async () => existing.map((role) => ({ ...role })),
-      update: async ({ where, data }) => {
-        const original = existing.find((role) => role.id === where.id);
-        const next = { ...original, ...data };
-        updated.push({ id: where.id, data });
-        return next;
-      },
-      create: async ({ data }) => {
-        const role = { id: `created-${data.name}`, ...data };
-        created.push(role);
-        return role;
-      },
-    },
-  };
+  const tx = { role: roleMock(existing, created, updated) };
 
   await ensureSystemRoles(tx, "business-1");
   const createdNames = created.map((role) => role.name).sort();
@@ -162,22 +175,7 @@ test("custom legacy aliases are preserved while canonical roles are added", asyn
   ];
   const created = [];
   const updated = [];
-  const tx = {
-    role: {
-      findMany: async () => existing.map((role) => ({ ...role })),
-      update: async ({ where, data }) => {
-        const original = existing.find((role) => role.id === where.id);
-        const next = { ...original, ...data };
-        updated.push({ id: where.id, data });
-        return next;
-      },
-      create: async ({ data }) => {
-        const role = { id: `created-${data.name}`, ...data };
-        created.push(role);
-        return role;
-      },
-    },
-  };
+  const tx = { role: roleMock(existing, created, updated) };
 
   await ensureSystemRoles(tx, "business-1");
   assert.ok(created.some((role) => role.name === "Salesperson"));
