@@ -24,6 +24,7 @@ jobs:
           node --check demo-static/js/grocery-phase4-31-40.js
           node --check demo-static/js/grocery-phase5-41-50.js
           node --check demo-static/js/grocery-phase5-completion.js
+          node --check demo-static/js/grocery-phase5-print-profile.js
           node --check tests/grocery-31-40-frontend.test.cjs
           node --check tests/grocery-41-50-frontend.test.cjs
           node --check tests/authenticated-production.e2e.mjs
