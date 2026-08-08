@@ -4,6 +4,8 @@ import { isGroceryOperationalReport, runGroceryOperationalReport } from "../serv
 import { isGrocerySalesAnalyticsReport, runGrocerySalesAnalyticsReport } from "../services/grocery-sales-analytics.service.js";
 import { isGroceryFinanceReport, runGroceryFinanceReport } from "../services/grocery-finance-reports.service.js";
 import { isFinancialMovementReport, runFinancialMovementReport } from "../services/financial-movement-reports.service.js";
+import { isGrocery21To30Report, runGrocery21To30Report } from "../services/grocery-21-30-reports.service.js";
+import { isGrocery21To30InventoryOverrideReport, runGrocery21To30InventoryOverrideReport } from "../services/grocery-21-30-inventory-overrides.service.js";
 import { handleError, tenant } from "../utils/http.js";
 
 export async function options(req: Request, res: Response) {
@@ -20,7 +22,11 @@ export async function run(req: Request, res: Response) {
     const context = tenant(req);
     const reportId = req.params.reportId;
     let data;
-    if (isFinancialMovementReport(reportId)) {
+    if (isGrocery21To30InventoryOverrideReport(reportId)) {
+      data = await runGrocery21To30InventoryOverrideReport(context.businessId, reportId, req.query);
+    } else if (isGrocery21To30Report(reportId)) {
+      data = await runGrocery21To30Report(context.businessId, reportId, req.query);
+    } else if (isFinancialMovementReport(reportId)) {
       data = await runFinancialMovementReport(context.businessId, reportId, req.query);
     } else if (isGroceryOperationalReport(reportId)) {
       data = await runGroceryOperationalReport(context.businessId, reportId, req.query);
