@@ -3,7 +3,6 @@ import { prisma } from "../db/prisma.js";
 import { hasPermission, loadUserAccess } from "../services/access.service.js";
 import { writeAudit } from "../services/audit.service.js";
 import { permissionDefinitions } from "../services/system-role-definitions.js";
-import { ensureSystemRoles } from "../services/system-roles.service.js";
 
 function businessId(req: Request) {
   return req.tenant?.businessId ?? undefined;
@@ -16,6 +15,10 @@ function userId(req: Request) {
 function text(value: unknown) {
   const result = String(value ?? "").trim();
   return result || undefined;
+}
+
+function isPermissionDenied(error: unknown): boolean {
+  return /^Permission denied:/i.test(String((error as any)?.message || error || ""));
 }
 
 async function requireAccessAdministrator(tx: any, req: Request, bid: string) {
@@ -34,9 +37,11 @@ export async function getAccessControlV2(req: Request, res: Response) {
       return res.status(401).json({ ok: false, error: { message: "Unauthorized" } });
     }
 
+    // access-control.routes already runs ensureTenantSystemRoles before this
+    // handler. This transaction is therefore read-only: preparing the same role
+    // catalogue a second time here created competing role-update transactions.
     const data = await prisma.$transaction(async (tx) => {
       const access = await requireAccessAdministrator(tx, req, bid);
-      await ensureSystemRoles(tx, bid);
       const [roles, users] = await Promise.all([
         tx.role.findMany({ where: { businessId: bid }, orderBy: [{ isSystemRole: "desc" }, { name: "asc" }] }),
         tx.user.findMany({
@@ -77,7 +82,9 @@ export async function getAccessControlV2(req: Request, res: Response) {
     return res.json({ ok: true, data });
   } catch (error: any) {
     console.error("getAccessControlV2 error:", error);
-    return res.status(403).json({ ok: false, error: { message: error?.message || "Unable to load access control" } });
+    const status = isPermissionDenied(error) ? 403 : 500;
+    const message = status === 403 ? error?.message : "Unable to load access control";
+    return res.status(status).json({ ok: false, error: { message } });
   }
 }
 
