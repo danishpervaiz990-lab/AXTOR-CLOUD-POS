@@ -16,7 +16,7 @@ export async function grocerySyncValuation(req:Request,res:Response){try{const t
 export async function groceryCostHistory(req:Request,res:Response){try{const t=tenant(req);return ok(res,await purchaseCostHistory(t.businessId,req.params.productId,req.query));}catch(e){return fail(res,e);}}
 export async function groceryPrintProfiles(req:Request,res:Response){try{const t=tenant(req);return ok(res,await listPrintProfiles(t.businessId,t.userId));}catch(e){return fail(res,e);}}
 export async function groceryPrintProfileSave(req:Request,res:Response){try{const t=tenant(req);return ok(res,await savePrintProfile(req,t.businessId,t.userId,req.params.code,req.body));}catch(e){return fail(res,e);}}
-export async function groceryPrintableDocument(req:Request,res:Response){try{const t=tenant(req);return ok(res,await printableDocument(t.businessId,req.params.type,req.params.id));}catch(e){return fail(res,e,404);}}
+export async function groceryPrintableDocument(req:Request,res:Response){try{const t=tenant(req);return ok(res,await printableDocument(t.businessId,req.params.type,req.params.id,String(req.query.profile||""),t.userId));}catch(e){return fail(res,e,404);}}
 export async function groceryLabelPreview(req:Request,res:Response){try{const t=tenant(req);return ok(res,await labelPreview(t.businessId,req.body));}catch(e){return fail(res,e);}}
 export async function groceryDashboardV5(req:Request,res:Response){try{const t=tenant(req);return ok(res,await groceryDashboard41To50(t.businessId));}catch(e){return fail(res,e);}}
 export async function grocerySettingsV5(req:Request,res:Response){try{const t=tenant(req);return ok(res,await grocerySettings(t.businessId));}catch(e){return fail(res,e);}}
