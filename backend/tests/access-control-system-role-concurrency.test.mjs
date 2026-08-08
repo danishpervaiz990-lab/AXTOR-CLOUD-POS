@@ -19,3 +19,11 @@ test('System role bootstrap atomically upserts missing canonical roles',()=>{
   assert.match(source,/update: \{ isSystemRole: true, description: definition\.description \}/);
   assert.doesNotMatch(source,/const created = await tx\.role\.create\(\{ data: \{ businessId, name: definition\.name/,'missing system roles must not use race-prone check-then-create');
 });
+
+test('Concurrent-safe bootstrap preserves existing customized role-family behavior',()=>{
+  assert.match(source,/shouldUpgradeLegacySystemRolePermissions\(current\.name, current\.permissions\)/);
+  assert.match(source,/const equivalent = existingRoles\.some/);
+  assert.match(source,/if \(equivalent\) continue;/);
+  assert.match(source,/update: \{ isSystemRole: true, description: definition\.description \}/);
+  assert.doesNotMatch(source,/update: \{[^}]*permissions:/,'upsert update must not overwrite permissions of an already-existing customized canonical role');
+});
