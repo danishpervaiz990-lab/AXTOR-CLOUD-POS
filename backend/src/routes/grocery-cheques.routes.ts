@@ -3,7 +3,7 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 import { requireIndustry } from "../middleware/industry-guard.middleware.js";
 import { requireAnyPermission, requirePermission } from "../middleware/permission.middleware.js";
 import { groceryCreateSale } from "../controllers/grocery-sales.controller.js";
-import { groceryPostPurchaseInvoice, groceryReceivePurchaseWithAccounting } from "../controllers/grocery-purchase-receive.controller.js";
+import { groceryPostPurchaseInvoice } from "../controllers/grocery-purchase-receive.controller.js";
 import { groceryCustomerDetail } from "../controllers/grocery-customer-detail.controller.js";
 import { groceryHeldSaleCreateV2, groceryHeldSaleDeleteV2, groceryHeldSaleListV2 } from "../controllers/grocery-held-sales.controller.js";
 import { createGroceryCustomerPayment, createGrocerySupplierPayment } from "../controllers/grocery-accounting-payments.controller.js";
@@ -20,20 +20,19 @@ import {
   groceryCounterSummary,
   groceryExpenses,
   groceryJournals,
-  groceryProductLookup,
-  groceryProductProfile,
   groceryReorderSuggestions,
   groceryTransfers,
   groceryVans,
   groceryVanStock,
   reconcileGroceryAccountingSource,
   saveGroceryCounterProfile,
-  saveGroceryProductProfile,
   transitionGroceryJournal,
   updateGroceryStockCount,
   updateGroceryVan,
   approveGroceryStockCount,
 } from "../controllers/grocery-operations.controller.js";
+import { groceryProductLookupUom, groceryProductProfileUom, saveGroceryProductProfileUom } from "../controllers/grocery-product-uom.controller.js";
+import { groceryCreatePurchaseOrderUom, groceryReceivePurchaseUom } from "../controllers/grocery-purchase-uom.controller.js";
 import {
   createGroceryVanCollection,
   createGroceryVanDamage,
@@ -61,7 +60,6 @@ import {
 import {
   groceryAgeing,
   groceryContext,
-  groceryCreatePurchaseOrder,
   groceryExpiry,
   groceryPurchaseStatus,
   grocerySalesGuard,
@@ -88,13 +86,13 @@ router.patch("/suppliers/:id/profile", requirePermission("suppliers.manage"), sa
 router.get("/ageing", requireAnyPermission("reports.view", "customers.view", "suppliers.view"), groceryAgeing);
 router.get("/expiry", requirePermission("inventory.view"), groceryExpiry);
 
-router.get("/products/lookup", requireAnyPermission("products.view", "inventory.view", "sales_documents.create"), groceryProductLookup);
-router.get("/products/:id/profile", requirePermission("products.view"), groceryProductProfile);
-router.patch("/products/:id/profile", requirePermission("products.manage"), saveGroceryProductProfile);
+router.get("/products/lookup", requireAnyPermission("products.view", "inventory.view", "sales_documents.create"), groceryProductLookupUom);
+router.get("/products/:id/profile", requirePermission("products.view"), groceryProductProfileUom);
+router.patch("/products/:id/profile", requirePermission("products.manage"), saveGroceryProductProfileUom);
 
-router.post("/purchase-orders", requirePermission("purchases.create"), groceryCreatePurchaseOrder);
+router.post("/purchase-orders", requirePermission("purchases.create"), groceryCreatePurchaseOrderUom);
 router.patch("/purchase-orders/:id/status", requirePermission("purchases.create"), groceryPurchaseStatus);
-router.post("/purchase-orders/:id/receive", requirePermission("purchases.receive"), groceryReceivePurchaseWithAccounting);
+router.post("/purchase-orders/:id/receive", requirePermission("purchases.receive"), groceryReceivePurchaseUom);
 router.post("/purchase-orders/:id/invoice", requirePermission("purchases.create"), groceryPostPurchaseInvoice);
 
 router.get("/held-sales", requirePermission("sales_documents.view"), groceryHeldSaleListV2);
