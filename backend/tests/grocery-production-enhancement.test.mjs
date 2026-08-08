@@ -10,6 +10,8 @@ const enhancement=readFileSync(join(here,'../src/services/grocery-enhancement.se
 const documentNumber=readFileSync(join(here,'../src/utils/document-number.ts'),'utf8');
 const routes=readFileSync(join(here,'../src/routes/grocery-41-50.routes.ts'),'utf8');
 const salesAdmin=readFileSync(join(here,'../src/controllers/grocery-sales-admin.controller.ts'),'utf8');
+const heldSales=readFileSync(join(here,'../src/controllers/grocery-held-sales.controller.ts'),'utf8');
+const financeOps=readFileSync(join(here,'../src/controllers/grocery-finance-ops.controller.ts'),'utf8');
 const access=readFileSync(join(here,'../src/services/access.service.ts'),'utf8');
 
 test('generic numbering is tenant serialized and durably stored',()=>{
@@ -24,6 +26,19 @@ test('sales documents use the same safe sequence allocator',()=>{
   assert.match(documentNumber,/nextEntityNumber/);
   assert.match(documentNumber,/sequenceKey:\s*`sales\.\$\{documentType\}`/);
   assert.doesNotMatch(documentNumber,/pg_advisory_xact_lock/,'document numbering must not rely on the production-incompatible advisory lock');
+});
+
+test('held sales, journals and expense vouchers use transactional tenant sequences',()=>{
+  assert.match(heldSales,/nextEntityNumber/);
+  assert.match(heldSales,/sequenceKey:\s*"grocery\.held_sale"/);
+  assert.doesNotMatch(heldSales,/HOLD-\$\{Date\.now\(\)\}/,'held sales must not use timestamp numbering');
+  assert.match(financeOps,/sequenceKey:"grocery\.journal"/);
+  assert.match(financeOps,/sequenceKey:"grocery\.expense"/);
+  assert.doesNotMatch(financeOps,/JRN-\$\{Date\.now\(\)\}/,'journals must not use timestamp numbering');
+  assert.doesNotMatch(financeOps,/EXP-\$\{Date\.now\(\)\}/,'expense vouchers must not use timestamp numbering');
+  assert.match(financeOps,/Journal number already exists/);
+  assert.match(financeOps,/Expense voucher number already exists/);
+  assert.match(financeOps,/grocery\.journal\.create/,'journal creation must emit audit evidence');
 });
 
 test('enhancement exposes a global currency and 15-language framework',async()=>{
