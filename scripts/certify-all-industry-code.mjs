@@ -9,7 +9,7 @@ const base='https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-P
 
 async function fetchText(ref,path){
  const url=`${base}/${encodeURIComponent(ref).replaceAll('%2F','/')}/demo-static/${path.split('/').map(encodeURIComponent).join('/')}`;
- const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.5'},signal:AbortSignal.timeout(20000)});
+ const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.6'},signal:AbortSignal.timeout(20000)});
  assert.equal(response.status,200,`${ref}:${path} returned HTTP ${response.status}`);
  return await response.text();
 }
@@ -31,15 +31,18 @@ function certifyGrocery(project){
   'js/grocery-phase1-export-init.js',
   'js/grocery-phase2-11-20.js',
   'js/grocery-phase2-runtime-fixes.js',
-  'js/grocery-phase2-completion.js'
+  'js/grocery-phase2-completion.js',
+  'js/grocery-phase2-uom-integration.js'
  ];
  const required=['grocery-new.html','css/grocery-new.css','css/grocery-phase1.css','api/grocery-asset.js',...runtimeFiles];
  for(const file of required)assert.ok(fs.existsSync(`${root}/${file}`),`Active Grocery frontend is missing ${file}`);
  const html=fs.readFileSync(`${root}/grocery-new.html`,'utf8');
  const core=fs.readFileSync(`${root}/js/grocery-phase1-core.js`,'utf8');
+ const actions=fs.readFileSync(`${root}/js/grocery-phase1-terminal-actions.js`,'utf8');
  const phase2=fs.readFileSync(`${root}/js/grocery-phase2-11-20.js`,'utf8');
  const fixes=fs.readFileSync(`${root}/js/grocery-phase2-runtime-fixes.js`,'utf8');
  const completion=fs.readFileSync(`${root}/js/grocery-phase2-completion.js`,'utf8');
+ const uom=fs.readFileSync(`${root}/js/grocery-phase2-uom-integration.js`,'utf8');
  const gateway=fs.readFileSync(`${root}/api/grocery-asset.js`,'utf8');
  const combined=runtimeFiles.map(file=>fs.readFileSync(`${root}/${file}`,'utf8')).join('\n');
  runtimeFiles.forEach(file=>new vm.Script(fs.readFileSync(`${root}/${file}`,'utf8'),{filename:`${root}/${file}`}));
@@ -50,6 +53,7 @@ function certifyGrocery(project){
  assert.match(html,/grocery-phase2-11-20\.js/);
  assert.match(html,/grocery-phase2-runtime-fixes\.js/);
  assert.match(html,/grocery-phase2-completion\.js/);
+ assert.match(html,/grocery-phase2-uom-integration\.js/);
  assert.match(core,/axtor-cloud-pos-production\.up\.railway\.app/);
  assert.match(core,/\/api\/v1\/grocery\/context/);
  assert.match(combined,/\/api\/v1\/grocery\/sales/);
@@ -58,6 +62,7 @@ function certifyGrocery(project){
  assert.match(combined,/\/api\/v1\/grocery\/ageing/);
  for(const endpoint of [
   '/api/v1/grocery/products/',
+  '/api/v1/grocery/products/lookup',
   '/api/v1/grocery/counters',
   '/api/v1/grocery/cashiers',
   '/api/v1/grocery/vans',
@@ -86,10 +91,20 @@ function certifyGrocery(project){
  assert.match(completion,/Payment Method/);
  assert.match(completion,/Cashier Summary/);
  assert.match(completion,/Shift Report/);
+ assert.match(uom,/customFields\?\.grocery|cf\.grocery/);
+ assert.match(uom,/grocery\/products\/lookup/);
+ assert.match(uom,/weightedBarcodePrefix/);
+ assert.match(uom,/priceEmbeddedBarcodePrefix/);
+ assert.match(uom,/UOM conversions/);
+ assert.match(uom,/Cost \/ selected UOM/);
+ assert.match(uom,/Inventory is posted automatically in each product's configured base unit/);
+ assert.match(uom,/baseQuantityReceived/);
+ assert.match(actions,/quantity:num\(l\.saleQty\)\*num\(l\.factor,1\)/);
+ assert.match(actions,/unitPrice:num\(l\.price\)\/num\(l\.factor,1\)/);
  assert.match(gateway,/X-Axtor-Grocery-Backend["']:\s*["']shared-production["']/);
  assert.match(gateway,/X-Axtor-Legacy-Grocery/);
  assert.doesNotMatch(gateway,/GROCERY_RAILWAY_ORIGIN|frontend-grocery|raw\.githubusercontent\.com/);
- return {industry:'grocery',ref:'active-main-grocery',dashboard:'grocery-new.html',runtime:'isolated Grocery frontend + approved shared backend APIs + literal requirements 1-20 operational completion',status:'PASS'};
+ return {industry:'grocery',ref:'active-main-grocery',dashboard:'grocery-new.html',runtime:'isolated Grocery frontend + approved shared backend APIs + literal requirements 1-20 + end-to-end base-unit/UOM integration',status:'PASS'};
 }
 
 function runtimeFilesFor(industry){return [`${industry}-app.js`];}
@@ -130,4 +145,4 @@ for(const project of manifest.projects){
 assert.equal(results.length,13);
 fs.writeFileSync('all-industry-code-certification.json',JSON.stringify({checkedAt:new Date().toISOString(),deploymentAttempted:false,results},null,2));
 console.table(results);
-console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified as the isolated frontend using approved shared backend APIs with literal requirements 1-20 operational completion');
+console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified as the isolated frontend using approved shared backend APIs with literal requirements 1-20 and end-to-end UOM/base-unit integration');
