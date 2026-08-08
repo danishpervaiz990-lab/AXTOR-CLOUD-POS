@@ -7,6 +7,7 @@ import { isFinancialMovementReport, runFinancialMovementReport } from "../servic
 import { isGrocery21To30Report, runGrocery21To30Report } from "../services/grocery-21-30-reports.service.js";
 import { isGrocery21To30InventoryOverrideReport, runGrocery21To30InventoryOverrideReport } from "../services/grocery-21-30-inventory-overrides.service.js";
 import { resolveGrocery21To30GroupBy } from "../services/grocery-21-30-grouping.service.js";
+import { isGrocery31To33Report, runGrocery31To33Report } from "../services/grocery-31-40-accounting.service.js";
 import { handleError, tenant } from "../utils/http.js";
 
 export async function options(req: Request, res: Response) {
@@ -20,7 +21,8 @@ export async function run(req: Request, res: Response) {
     const requestedReportId = req.params.reportId;
     const reportId = isGrocery21To30Report(requestedReportId) ? resolveGrocery21To30GroupBy(requestedReportId, req.query.groupBy) : requestedReportId;
     let data;
-    if (isGrocery21To30InventoryOverrideReport(reportId)) data = await runGrocery21To30InventoryOverrideReport(context.businessId, reportId, req.query);
+    if (isGrocery31To33Report(reportId)) data = await runGrocery31To33Report(context.businessId, reportId, req.query);
+    else if (isGrocery21To30InventoryOverrideReport(reportId)) data = await runGrocery21To30InventoryOverrideReport(context.businessId, reportId, req.query);
     else if (isGrocery21To30Report(reportId)) data = await runGrocery21To30Report(context.businessId, reportId, req.query);
     else if (isFinancialMovementReport(reportId)) data = await runFinancialMovementReport(context.businessId, reportId, req.query);
     else if (isGroceryOperationalReport(reportId)) data = await runGroceryOperationalReport(context.businessId, reportId, req.query);
