@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { requirePersistentIdempotency } from "../middleware/idempotency.middleware.js";
-import { requirePermission } from "../middleware/permission.middleware.js";
+import { requireAnyPermission, requirePermission } from "../middleware/permission.middleware.js";
 import * as c from "../controllers/purchases.controller.js";
 import { createPurchaseReturnByIndustry } from "../controllers/grocery-mutation-dispatch.controller.js";
 
@@ -12,7 +12,7 @@ router.post("/requests", requirePermission("purchases.create"), requirePersisten
 router.post("/requests/:id/convert", requirePermission("purchases.create"), requirePersistentIdempotency("purchase.request.convert"), c.convertRequest);
 router.get("/goods-receipts", requirePermission("purchases.view"), c.receipts);
 router.get("/supplier-payments", requirePermission("purchases.view"), c.payments);
-router.post("/supplier-payments", requirePermission("supplier_payments.post"), requirePersistentIdempotency("purchase.supplier-payment.create"), c.createPayment);
+router.post("/supplier-payments", requireAnyPermission("purchases.pay", "supplier_payments.post"), requirePersistentIdempotency("purchase.supplier-payment.create"), c.createPayment);
 router.get("/supplier-statement/:supplierId", requirePermission("suppliers.view"), c.statement);
 router.get("/returns", requirePermission("purchases.view"), c.returns);
 router.post("/returns", requirePermission("purchases.return"), requirePersistentIdempotency("purchase.return.create"), createPurchaseReturnByIndustry);
