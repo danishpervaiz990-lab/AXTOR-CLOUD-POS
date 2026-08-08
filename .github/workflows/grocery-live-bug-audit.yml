@@ -23,6 +23,9 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
+      - name: Prepare exposed mobile backdrop tap
+        run: |
+          sed -i 's/position: { x: 5, y: 5 }/position: { x: 400, y: 50 }/' scripts/grocery-authenticated-live-bug-audit.mjs
       - name: Run authenticated Grocery production bug audit
         env:
           FRONTEND: https://axtorpos.vercel.app/apps/grocery
