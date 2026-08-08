@@ -8,7 +8,7 @@ const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const html=read('demo-static/grocery-new.html');
 const core=read('demo-static/js/grocery-phase1-core.js');
 const phase5=read('demo-static/js/grocery-phase5-41-50.js');
-const phase5Print=read('demo-static/js/grocery-phase5-print-profile.js');
+const phase5Print=read('demo-static/js/grocery-phase5-print-profile-v2.js');
 const phase6=read('demo-static/js/grocery-phase6-51-62.js');
 const css=read('demo-static/css/grocery-phase6-51-62.css');
 const vercel=read('vercel.json');
@@ -51,7 +51,7 @@ test('61 no production secrets or database credentials exist in Grocery browser 
 test('62 Grocery hardening is isolated, loaded last, and production certification remains reserved for 63',()=>{
   assert.ok(html.includes('/css/grocery-phase6-51-62.css'));
   assert.ok(html.includes('/js/grocery-phase6-51-62.js'));
-  assert.ok(html.indexOf('grocery-phase6-51-62.js')>html.indexOf('grocery-phase5-print-profile.js'));
+  assert.ok(html.indexOf('grocery-phase6-51-62.js')>html.indexOf('grocery-phase5-print-profile-v2.js'));
   assert.doesNotMatch(html,/(?:pharmacy|gym|school|clinic|restaurant|hardware|paint|furniture|workshop|manufacturing)-.*\.js/i);
   assert.match(phase6,/productionCertificationReservedFor:63/);
   assert.doesNotMatch(vercel,/DATABASE_URL|AUTH_TOKEN_SECRET|JWT_SECRET|postgres(?:ql)?:\/\//i);
