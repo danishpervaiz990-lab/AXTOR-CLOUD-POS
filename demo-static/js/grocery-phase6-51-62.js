@@ -50,7 +50,8 @@ window.addEventListener('error',event=>{if(event?.message)g62Status(event.messag
 window.addEventListener('offline',()=>g62Status('Network connection lost. Changes cannot be saved until connectivity returns.','error',0));
 window.addEventListener('online',()=>g62Status('Network connection restored.','success',5000));
 
-function g62PaperName(){return String(window.p50LastPrintProfile?.paperSize||window.p50LastPrintProfile?.widthMm&&`${window.p50LastPrintProfile.widthMm}mm`||'').trim();}
+function g62PrintProfile(){return typeof p50LastPrintProfile!=='undefined'&&p50LastPrintProfile?p50LastPrintProfile:null;}
+function g62PaperName(){const profile=g62PrintProfile();return String(profile?.paperSize||(profile?.widthMm?`${profile.widthMm}mm`:'')).trim();}
 function g62PreparePrint(){
   const sheet=document.querySelector('.p50-print-target');if(!sheet)return;
   const paper=g62PaperName();if(paper)sheet.dataset.paper=paper;
