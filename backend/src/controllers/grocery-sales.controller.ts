@@ -52,32 +52,40 @@ async function prepareWeightedValuation(req: Request) {
   (req as any).groceryWeightedValuation = valuation;
 }
 
-async function captureAndPost(req: Request, documentId: string, promotionEvaluation: any, commercial: any) {
+async function captureAndPost(tx: any, req: Request, documentId: string, promotionEvaluation: any, commercial: any) {
   const businessId = req.tenant?.businessId, userId = req.tenant?.userId; if (!businessId || !documentId) return null;
-  return db.$transaction(async (tx: any) => {
-    const document = await tx.salesDocument.findFirst({ where: { id: documentId, businessId }, include: { items: { include: { inventoryBatch: true } } } }); if (!document) return null;
-    const metadata = json(document.metadata), commercialMeta = { priceLevel: commercial?.priceLevel || "retail", authorizedPrices: commercial?.authorizedPrices || [], manualPriceOverrides: commercial?.manualPriceOverrides || [], manualDiscountOverride: Boolean(commercial?.manualDiscountOverride), promotions: promotionEvaluation?.appliedPromotions || [], promotionDiscount: round2(num(promotionEvaluation?.totalDiscount)), promotionStackingPrevented: Boolean(promotionEvaluation?.stackingPrevented) };
-    let snapshot = json(metadata.groceryCostSnapshot);
-    if (!snapshot.version) {
-      const productIds = [...new Set((document.items || []).map((item: any) => item.productId).filter(Boolean))], products = productIds.length ? await tx.product.findMany({ where: { businessId, id: { in: productIds } } }) : [], productById = new Map<string, any>(products.map((product: any) => [String(product.id), product]));
-      const valuation = json((req as any).groceryWeightedValuation);
-      const rows = (document.items || []).map((item: any) => {
-        const itemQty = num(item.qty), product = item.productId ? productById.get(String(item.productId)) : null, prepared = item.productId ? json(valuation[String(item.productId)]) : {};
-        const profile = product ? readGroceryProductProfile(product) : null, saleUnit = text(item.unit || profile?.baseUnit).toUpperCase(), conversion = profile?.uoms?.find((u: any) => text(u.unit).toUpperCase() === saleUnit), multiplier = Math.max(.0001, num(conversion?.multiplier, 1));
-        const baseQty = itemQty * multiplier, unitCostBase = num(prepared.averageCost, num(product?.costPrice)), source = prepared.capturedAt ? "moving_weighted_average_pre_sale" : "product_cost_fallback";
-        return { salesDocumentItemId: item.id, productId: item.productId, inventoryBatchId: item.inventoryBatchId || null, qty: itemQty, baseQty, unitCostBase, cogs: round2(baseQty * unitCostBase), source };
-      });
-      snapshot = { version: 2, valuationMethod: "weighted_average", physicalRotation: "FEFO", capturedAt: new Date().toISOString(), totalCogs: round2(rows.reduce((sum: number, row: any) => sum + row.cogs, 0)), items: rows };
-      await tx.salesDocument.update({ where: { id: document.id }, data: { metadata: { ...metadata, groceryCostSnapshot: snapshot, groceryCommercial: commercialMeta } } }); document.metadata = { ...metadata, groceryCostSnapshot: snapshot, groceryCommercial: commercialMeta };
-      await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.cost_snapshot", entityType: "sales_document", entityId: document.id, after: { valuationMethod: "weighted_average", physicalRotation: "FEFO", totalCogs: snapshot.totalCogs, itemCount: rows.length } });
-    } else if (!metadata.groceryCommercial) { await tx.salesDocument.update({ where: { id: document.id }, data: { metadata: { ...metadata, groceryCommercial: commercialMeta } } }); document.metadata = { ...metadata, groceryCommercial: commercialMeta }; }
-    const accounting = await postGrocerySaleAccounting(tx, { businessId, userId, document, cogs: num(snapshot.totalCogs) });
-    await recordGroceryPromotionUsage(tx, businessId, userId || null, document, promotionEvaluation); const loyalty = await applyGrocerySaleLoyalty(tx, businessId, userId || null, document);
-    await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.accounting_posted", entityType: "sales_document", entityId: document.id, after: accounting });
-    if (commercialMeta.manualPriceOverrides.length || commercialMeta.manualDiscountOverride) await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.commercial_override", entityType: "sales_document", entityId: document.id, after: { priceOverrides: commercialMeta.manualPriceOverrides, discountOverride: commercialMeta.manualDiscountOverride, reason: text(req.body?.priceOverrideReason || req.body?.discountOverrideReason) || null } });
-    if (commercialMeta.promotions.length) await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.promotions_applied", entityType: "sales_document", entityId: document.id, after: { promotions: commercialMeta.promotions, totalDiscount: commercialMeta.promotionDiscount } });
-    return { snapshot, accounting, loyalty, commercial: commercialMeta };
-  });
+  const document = await tx.salesDocument.findFirst({ where: { id: documentId, businessId }, include: { items: { include: { inventoryBatch: true } } } }); if (!document) return null;
+  const metadata = json(document.metadata), commercialMeta = { priceLevel: commercial?.priceLevel || "retail", authorizedPrices: commercial?.authorizedPrices || [], manualPriceOverrides: commercial?.manualPriceOverrides || [], manualDiscountOverride: Boolean(commercial?.manualDiscountOverride), promotions: promotionEvaluation?.appliedPromotions || [], promotionDiscount: round2(num(promotionEvaluation?.totalDiscount)), promotionStackingPrevented: Boolean(promotionEvaluation?.stackingPrevented) };
+  let snapshot = json(metadata.groceryCostSnapshot);
+  if (!snapshot.version) {
+    const productIds = [...new Set((document.items || []).map((item: any) => item.productId).filter(Boolean))], products = productIds.length ? await tx.product.findMany({ where: { businessId, id: { in: productIds } } }) : [], productById = new Map<string, any>(products.map((product: any) => [String(product.id), product]));
+    const valuation = json((req as any).groceryWeightedValuation);
+    const rows = (document.items || []).map((item: any) => {
+      const itemQty = num(item.qty), product = item.productId ? productById.get(String(item.productId)) : null, prepared = item.productId ? json(valuation[String(item.productId)]) : {};
+      const profile = product ? readGroceryProductProfile(product) : null, saleUnit = text(item.unit || profile?.baseUnit).toUpperCase(), conversion = profile?.uoms?.find((u: any) => text(u.unit).toUpperCase() === saleUnit), multiplier = Math.max(.0001, num(conversion?.multiplier, 1));
+      const baseQty = itemQty * multiplier, unitCostBase = num(prepared.averageCost, num(product?.costPrice)), source = prepared.capturedAt ? "moving_weighted_average_pre_sale" : "product_cost_fallback";
+      return { salesDocumentItemId: item.id, productId: item.productId, inventoryBatchId: item.inventoryBatchId || null, qty: itemQty, baseQty, unitCostBase, cogs: round2(baseQty * unitCostBase), source };
+    });
+    snapshot = { version: 2, valuationMethod: "weighted_average", physicalRotation: "FEFO", capturedAt: new Date().toISOString(), totalCogs: round2(rows.reduce((sum: number, row: any) => sum + row.cogs, 0)), items: rows };
+    await tx.salesDocument.update({ where: { id: document.id }, data: { metadata: { ...metadata, groceryCostSnapshot: snapshot, groceryCommercial: commercialMeta } } }); document.metadata = { ...metadata, groceryCostSnapshot: snapshot, groceryCommercial: commercialMeta };
+    await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.cost_snapshot", entityType: "sales_document", entityId: document.id, after: { valuationMethod: "weighted_average", physicalRotation: "FEFO", totalCogs: snapshot.totalCogs, itemCount: rows.length } });
+  } else if (!metadata.groceryCommercial) { await tx.salesDocument.update({ where: { id: document.id }, data: { metadata: { ...metadata, groceryCommercial: commercialMeta } } }); document.metadata = { ...metadata, groceryCommercial: commercialMeta }; }
+  const accounting = await postGrocerySaleAccounting(tx, { businessId, userId, document, cogs: num(snapshot.totalCogs) });
+  await recordGroceryPromotionUsage(tx, businessId, userId || null, document, promotionEvaluation); const loyalty = await applyGrocerySaleLoyalty(tx, businessId, userId || null, document);
+  await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.accounting_posted", entityType: "sales_document", entityId: document.id, after: accounting });
+  if (commercialMeta.manualPriceOverrides.length || commercialMeta.manualDiscountOverride) await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.commercial_override", entityType: "sales_document", entityId: document.id, after: { priceOverrides: commercialMeta.manualPriceOverrides, discountOverride: commercialMeta.manualDiscountOverride, reason: text(req.body?.priceOverrideReason || req.body?.discountOverrideReason) || null } });
+  if (commercialMeta.promotions.length) await writeAudit(tx, req, { businessId, userId, action: "grocery.sale.promotions_applied", entityType: "sales_document", entityId: document.id, after: { promotions: commercialMeta.promotions, totalDiscount: commercialMeta.promotionDiscount } });
+  return { snapshot, accounting, loyalty, commercial: commercialMeta };
+}
+
+class GroceryAtomicSaleError extends Error {
+  statusCode: number;
+  payload: any;
+  constructor(statusCode: number, payload: any) {
+    super(payload?.error?.message || "Grocery sale failed");
+    this.statusCode = statusCode;
+    this.payload = payload;
+  }
 }
 
 export async function groceryCreateSale(req: Request, res: Response) {
@@ -93,9 +101,26 @@ export async function groceryCreateSale(req: Request, res: Response) {
     const manualHeader = Math.max(0, num(req.body?.discount ?? req.body?.discountTotal)); req.body.discount = round2(manualHeader + Math.max(0, num(promotionEvaluation?.invoiceDiscount))); (req as any).groceryAutomaticPromotion = promotionEvaluation;
   } catch (error: any) { return res.status(400).json({ ok: false, error: { code: "PROMOTION_EVALUATION_FAILED", message: error?.message || "Promotion evaluation failed" } }); }
   try { await prepareWeightedValuation(req); } catch (error: any) { return res.status(400).json({ ok: false, error: { code: "VALUATION_PREPARATION_FAILED", message: error?.message || "Unable to prepare weighted-average valuation" } }); }
-  let statusCode = 200, payload: any = null; const captureResponse: any = { status(code: number) { statusCode = code; return this; }, json(body: any) { payload = body; return this; } };
-  await createSalesDocument(req, captureResponse as Response); if (!payload?.ok || !payload?.data?.id) return res.status(statusCode).json(payload);
-  try { const posted = await captureAndPost(req, payload.data.id, promotionEvaluation, commercial); if (posted?.snapshot) payload.data.metadata = { ...(payload.data.metadata || {}), groceryCostSnapshot: posted.snapshot, groceryCommercial: posted.commercial }; payload.data.accounting = posted?.accounting || null; payload.data.loyalty = posted?.loyalty || null; payload.data.promotions = promotionEvaluation; }
-  catch (error: any) { console.error("grocery sale accounting/commercial synchronization error:", error); payload.accountingWarning = `Sale posted, post-sale synchronization failed: ${error?.message || "unknown error"}`; }
+
+  let statusCode = 200, payload: any = null, posted: any = null;
+  const captureResponse: any = { status(code: number) { statusCode = code; return this; }, json(body: any) { payload = body; return this; } };
+  try {
+    await db.$transaction(async (tx: any) => {
+      await createSalesDocument(req, captureResponse as Response);
+      if (!payload?.ok || !payload?.data?.id) throw new GroceryAtomicSaleError(statusCode, payload);
+      posted = await captureAndPost(tx, req, payload.data.id, promotionEvaluation, commercial);
+      if (!posted?.snapshot) throw new Error("Grocery accounting synchronization did not return a cost snapshot");
+    });
+  } catch (error: any) {
+    if (error instanceof GroceryAtomicSaleError) return res.status(error.statusCode).json(error.payload);
+    console.error("grocery atomic sale posting error:", error);
+    return res.status(400).json({ ok: false, error: { code: "GROCERY_ATOMIC_SALE_FAILED", message: error?.message || "Sale was rolled back because all required postings could not complete" } });
+  }
+
+  payload.data.metadata = { ...(payload.data.metadata || {}), groceryCostSnapshot: posted.snapshot, groceryCommercial: posted.commercial };
+  payload.data.accounting = posted.accounting || null;
+  payload.data.loyalty = posted.loyalty || null;
+  payload.data.promotions = promotionEvaluation;
+  payload.atomic = true;
   return res.status(statusCode).json(payload);
 }
