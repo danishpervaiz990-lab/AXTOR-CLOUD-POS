@@ -7,142 +7,32 @@ const expected=['retail','grocery','pharmacy','gym','school','clinic','restauran
 const releaseRefs={manufacturing:'fix/manufacturing/dedicated-frontend-v1'};
 const base='https://raw.githubusercontent.com/danishpervaiz990-lab/AXTOR-CLOUD-POS';
 
-async function fetchText(ref,path){
- const url=`${base}/${encodeURIComponent(ref).replaceAll('%2F','/')}/demo-static/${path.split('/').map(encodeURIComponent).join('/')}`;
- const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.6'},signal:AbortSignal.timeout(20000)});
- assert.equal(response.status,200,`${ref}:${path} returned HTTP ${response.status}`);
- return await response.text();
-}
+async function fetchText(ref,path){const url=`${base}/${encodeURIComponent(ref).replaceAll('%2F','/')}/demo-static/${path.split('/').map(encodeURIComponent).join('/')}`;const response=await fetch(url,{headers:{'User-Agent':'Axtor-All-Industries-Code-Certification/1.8'},signal:AbortSignal.timeout(20000)});assert.equal(response.status,200,`${ref}:${path} returned HTTP ${response.status}`);return await response.text();}
 
 function certifyGrocery(project){
  const root='demo-static';
- const runtimeFiles=[
-  'js/grocery-phase1-core.js',
-  'js/grocery-phase1-customer.js',
-  'js/grocery-phase1-supplier.js',
-  'js/grocery-phase1-ageing.js',
-  'js/grocery-phase1-purchase.js',
-  'js/grocery-phase1-terminal-context.js',
-  'js/grocery-phase1-terminal-components.js',
-  'js/grocery-phase1-terminal-layout.js',
-  'js/grocery-phase1-terminal-bind.js',
-  'js/grocery-phase1-terminal-actions.js',
-  'js/grocery-phase1-finance.js',
-  'js/grocery-phase1-export-init.js',
-  'js/grocery-phase2-11-20.js',
-  'js/grocery-phase2-runtime-fixes.js',
-  'js/grocery-phase2-completion.js',
-  'js/grocery-phase2-uom-integration.js'
- ];
- const required=['grocery-new.html','css/grocery-new.css','css/grocery-phase1.css','api/grocery-asset.js',...runtimeFiles];
- for(const file of required)assert.ok(fs.existsSync(`${root}/${file}`),`Active Grocery frontend is missing ${file}`);
- const html=fs.readFileSync(`${root}/grocery-new.html`,'utf8');
- const core=fs.readFileSync(`${root}/js/grocery-phase1-core.js`,'utf8');
- const actions=fs.readFileSync(`${root}/js/grocery-phase1-terminal-actions.js`,'utf8');
- const phase2=fs.readFileSync(`${root}/js/grocery-phase2-11-20.js`,'utf8');
- const fixes=fs.readFileSync(`${root}/js/grocery-phase2-runtime-fixes.js`,'utf8');
- const completion=fs.readFileSync(`${root}/js/grocery-phase2-completion.js`,'utf8');
- const uom=fs.readFileSync(`${root}/js/grocery-phase2-uom-integration.js`,'utf8');
- const gateway=fs.readFileSync(`${root}/api/grocery-asset.js`,'utf8');
- const combined=runtimeFiles.map(file=>fs.readFileSync(`${root}/${file}`,'utf8')).join('\n');
- runtimeFiles.forEach(file=>new vm.Script(fs.readFileSync(`${root}/${file}`,'utf8'),{filename:`${root}/${file}`}));
- assert.equal(project.project,'axtor-grocery');
- assert.equal(project.origin,'https://axtorpos.vercel.app/apps/grocery');
- assert.match(html,/grocery-phase1-core\.js/);
- assert.match(html,/grocery-phase1-terminal-actions\.js/);
- assert.match(html,/grocery-phase2-11-20\.js/);
- assert.match(html,/grocery-phase2-runtime-fixes\.js/);
- assert.match(html,/grocery-phase2-completion\.js/);
- assert.match(html,/grocery-phase2-uom-integration\.js/);
- assert.match(core,/axtor-cloud-pos-production\.up\.railway\.app/);
- assert.match(core,/\/api\/v1\/grocery\/context/);
- assert.match(combined,/\/api\/v1\/grocery\/sales/);
- assert.match(combined,/\/api\/v1\/grocery\/purchase-orders/);
- assert.match(combined,/\/api\/v1\/grocery\/expiry/);
- assert.match(combined,/\/api\/v1\/grocery\/ageing/);
- for(const endpoint of [
-  '/api/v1/grocery/products/',
-  '/api/v1/grocery/products/lookup',
-  '/api/v1/grocery/counters',
-  '/api/v1/grocery/cashiers',
-  '/api/v1/grocery/vans',
-  '/api/v1/grocery/transfers',
-  '/api/v1/grocery/stock-counts',
-  '/api/v1/grocery/reorder-suggestions',
-  '/api/v1/grocery/accounting/chart',
-  '/api/v1/grocery/journals',
-  '/api/v1/grocery/expenses',
-  '/api/v1/grocery/expense-report',
-  '/api/v1/grocery/expense-templates',
-  '/api/v1/grocery/customer-payments',
-  '/api/v1/grocery/supplier-payments'
- ]) assert.ok(combined.includes(endpoint),`Grocery requirements 11-20 runtime missing ${endpoint}`);
- for(const view of ['grocery-products','counters','warehouses','vans','stock-transfers','stock-counts','reorder','chart-accounts','journals','expenses']) assert.ok(phase2.includes(view),`Grocery navigation missing ${view}`);
- assert.match(phase2,/Requirements 1–20/);
- assert.match(phase2,/Suggestions only\. Purchase orders are never auto-created/);
- assert.match(phase2,/Unbalanced entries are rejected server-side/);
- assert.match(fixes,/productId/);
- assert.match(completion,/Assigned cashier/);
- assert.match(completion,/Scan barcode \/ SKU \/ PLU/);
- assert.match(completion,/Physical Van Closing/);
- assert.match(completion,/varianceValue/);
- assert.match(completion,/Recurring Expense Templates/);
- assert.match(completion,/Monthly Trend/);
- assert.match(completion,/Payment Method/);
- assert.match(completion,/Cashier Summary/);
- assert.match(completion,/Shift Report/);
- assert.match(uom,/customFields\?\.grocery|cf\.grocery/);
- assert.match(uom,/grocery\/products\/lookup/);
- assert.match(uom,/weightedBarcodePrefix/);
- assert.match(uom,/priceEmbeddedBarcodePrefix/);
- assert.match(uom,/UOM conversions/);
- assert.match(uom,/Cost \/ selected UOM/);
- assert.match(uom,/Inventory is posted automatically in each product's configured base unit/);
- assert.match(uom,/baseQuantityReceived/);
- assert.match(actions,/quantity:num\(l\.saleQty\)\*num\(l\.factor,1\)/);
- assert.match(actions,/unitPrice:num\(l\.price\)\/num\(l\.factor,1\)/);
- assert.match(gateway,/X-Axtor-Grocery-Backend["']:\s*["']shared-production["']/);
- assert.match(gateway,/X-Axtor-Legacy-Grocery/);
- assert.doesNotMatch(gateway,/GROCERY_RAILWAY_ORIGIN|frontend-grocery|raw\.githubusercontent\.com/);
- return {industry:'grocery',ref:'active-main-grocery',dashboard:'grocery-new.html',runtime:'isolated Grocery frontend + approved shared backend APIs + literal requirements 1-20 + end-to-end base-unit/UOM integration',status:'PASS'};
-}
+ const runtimeFiles=['js/grocery-phase1-core.js','js/grocery-phase1-customer.js','js/grocery-phase1-supplier.js','js/grocery-phase1-ageing.js','js/grocery-phase1-purchase.js','js/grocery-phase1-terminal-context.js','js/grocery-phase1-terminal-components.js','js/grocery-phase1-terminal-layout.js','js/grocery-phase1-terminal-bind.js','js/grocery-phase1-terminal-actions.js','js/grocery-phase1-finance.js','js/grocery-phase1-export-init.js','js/grocery-phase2-11-20.js','js/grocery-phase2-runtime-fixes.js','js/grocery-phase2-completion.js','js/grocery-phase2-uom-integration.js','js/grocery-phase3-21-30.js','js/grocery-phase3-report-filters.js'];
+ const required=['grocery-new.html','css/grocery-new.css','css/grocery-phase1.css','api/grocery-asset.js',...runtimeFiles];for(const file of required)assert.ok(fs.existsSync(`${root}/${file}`),`Active Grocery frontend is missing ${file}`);
+ const html=fs.readFileSync(`${root}/grocery-new.html`,'utf8'),core=fs.readFileSync(`${root}/js/grocery-phase1-core.js`,'utf8'),actions=fs.readFileSync(`${root}/js/grocery-phase1-terminal-actions.js`,'utf8'),exportsRuntime=fs.readFileSync(`${root}/js/grocery-phase1-export-init.js`,'utf8'),phase2=fs.readFileSync(`${root}/js/grocery-phase2-11-20.js`,'utf8'),fixes=fs.readFileSync(`${root}/js/grocery-phase2-runtime-fixes.js`,'utf8'),completion=fs.readFileSync(`${root}/js/grocery-phase2-completion.js`,'utf8'),uom=fs.readFileSync(`${root}/js/grocery-phase2-uom-integration.js`,'utf8'),phase3=fs.readFileSync(`${root}/js/grocery-phase3-21-30.js`,'utf8'),filters=fs.readFileSync(`${root}/js/grocery-phase3-report-filters.js`,'utf8'),gateway=fs.readFileSync(`${root}/api/grocery-asset.js`,'utf8');
+ const combined=runtimeFiles.map(file=>fs.readFileSync(`${root}/${file}`,'utf8')).join('\n');runtimeFiles.forEach(file=>new vm.Script(fs.readFileSync(`${root}/${file}`,'utf8'),{filename:`${root}/${file}`}));
+ assert.equal(project.project,'axtor-grocery');assert.equal(project.origin,'https://axtorpos.vercel.app/apps/grocery');
+ for(const script of ['grocery-phase1-core.js','grocery-phase1-terminal-actions.js','grocery-phase2-11-20.js','grocery-phase2-runtime-fixes.js','grocery-phase2-completion.js','grocery-phase2-uom-integration.js','grocery-phase3-21-30.js','grocery-phase3-report-filters.js'])assert.ok(html.includes(script),`Grocery HTML missing ${script}`);
+ assert.match(core,/axtor-cloud-pos-production\.up\.railway\.app/);assert.match(core,/\/api\/v1\/grocery\/context/);
+ for(const endpoint of ['/api/v1/grocery/sales','/api/v1/grocery/purchase-orders','/api/v1/grocery/expiry','/api/v1/grocery/ageing','/api/v1/grocery/products/','/api/v1/grocery/products/lookup','/api/v1/grocery/counters','/api/v1/grocery/cashiers','/api/v1/grocery/vans','/api/v1/grocery/transfers','/api/v1/grocery/stock-counts','/api/v1/grocery/reorder-suggestions','/api/v1/grocery/accounting/chart','/api/v1/grocery/journals','/api/v1/grocery/expenses','/api/v1/grocery/expense-report','/api/v1/grocery/expense-templates','/api/v1/grocery/customer-payments','/api/v1/grocery/supplier-payments'])assert.ok(combined.includes(endpoint),`Grocery requirements 1-20 runtime missing ${endpoint}`);
+ for(const view of ['grocery-products','counters','warehouses','vans','stock-transfers','stock-counts','reorder','chart-accounts','journals','expenses'])assert.ok(phase2.includes(view),`Grocery navigation missing ${view}`);
+ assert.match(phase2,/Requirements 1–20/);assert.match(phase2,/Suggestions only\. Purchase orders are never auto-created/);assert.match(phase2,/Unbalanced entries are rejected server-side/);assert.match(fixes,/productId/);
+ for(const marker of ['Assigned cashier','Scan barcode / SKU / PLU','Physical Van Closing','varianceValue','Recurring Expense Templates','Monthly Trend','Payment Method','Cashier Summary','Shift Report'])assert.ok(completion.includes(marker),`Grocery 11-20 completion missing ${marker}`);
+ assert.match(uom,/customFields\?\.grocery|cf\.grocery/);assert.match(uom,/grocery\/products\/lookup/);assert.match(uom,/weightedBarcodePrefix/);assert.match(uom,/priceEmbeddedBarcodePrefix/);assert.match(uom,/UOM conversions/);assert.match(uom,/Cost \/ selected UOM/);assert.match(uom,/Inventory is posted automatically in each product's configured base unit/);assert.match(uom,/baseQuantityReceived/);assert.match(actions,/quantity:num\(l\.saleQty\)\*num\(l\.factor,1\)/);assert.match(actions,/unitPrice:num\(l\.price\)\/num\(l\.factor,1\)/);
 
+ assert.match(phase3,/Requirements 1–30/);for(const view of ['vouchers','reports-hub','reports-sales','reports-product','reports-customer','reports-payment','reports-purchase','reports-inventory','reports-pnl'])assert.ok(phase3.includes(view),`Grocery 21-30 navigation missing ${view}`);
+ assert.match(phase3,/"reports-pnl":"accounting"/);assert.match(phase3,/catalog\.reports/);assert.match(phase3,/\/api\/v1\/grocery\/report-catalog/);assert.match(phase3,/\/api\/v1\/reports\//);assert.match(phase3,/\/api\/v1\/grocery\/vouchers/);
+ for(const marker of ['Date preset','Comparison period','Sort column','Page size','CSV','XLSX','PDF','Print','Payment / Receipt Vouchers','Amount in words','A4','A5','thermal'])assert.ok(phase3.includes(marker),`Grocery 21-30 UI missing ${marker}`);
+ for(const marker of ['Cashier','User','Salesman','Customer','Supplier','Product','Category','Brand','Payment Method','Payment Status','Due Status','Tax','Group By','branch','warehouse','counter','van','cashier','salesperson','payment_method','supplier','status','hour','day','week','month'])assert.ok(filters.includes(marker),`Grocery Point 22 filter/group surface missing ${marker}`);
+ assert.match(exportsRuntime,/application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);assert.match(exportsRuntime,/\[Content_Types\]\.xml/);assert.match(exportsRuntime,/%PDF-1\.4/);assert.match(exportsRuntime,/function exportCsv/);assert.match(exportsRuntime,/function exportXlsx/);assert.match(exportsRuntime,/function exportPdf/);assert.match(exportsRuntime,/function printTable/);
+ assert.match(gateway,/X-Axtor-Grocery-Backend["']:\s*["']shared-production["']/);assert.match(gateway,/X-Axtor-Legacy-Grocery/);assert.doesNotMatch(gateway,/GROCERY_RAILWAY_ORIGIN|frontend-grocery|raw\.githubusercontent\.com/);
+ return {industry:'grocery',ref:'active-main-grocery',dashboard:'grocery-new.html',runtime:'isolated Grocery frontend + approved shared backend APIs + literal requirements 1-30 + complete reporting filters/vouchers/UOM integration',status:'PASS'};
+}
 function runtimeFilesFor(industry){return [`${industry}-app.js`];}
-
-assert.deepEqual(manifest.projects.map(item=>item.industry).sort(),expected.slice().sort());
-assert.deepEqual(manifest.unreleased,[]);
-const results=[];
-for(const project of manifest.projects){
- if(project.industry==='grocery'){
-  console.log('CERTIFY grocery from active isolated frontend');
-  results.push(certifyGrocery(project));
-  console.log('PASS grocery');
-  continue;
- }
- const ref=releaseRefs[project.industry]||project.branch;
- const runtimeFiles=runtimeFilesFor(project.industry);
- console.log(`CERTIFY ${project.industry} from ${ref}`);
- const [dashboard,vercelText,...runtimes]=await Promise.all([
-   fetchText(ref,project.dashboard),
-   fetchText(ref,'vercel.json'),
-   ...runtimeFiles.map(file=>fetchText(ref,`js/${file}`))
- ]);
- runtimeFiles.forEach((file,index)=>new vm.Script(runtimes[index],{filename:`${ref}/demo-static/js/${file}`}));
- const combinedRuntime=runtimes.join('\n');
- const vercel=JSON.parse(vercelText);
- for(const runtimeFile of runtimeFiles)assert.match(dashboard,new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`${project.industry} dashboard does not load ${runtimeFile}`);
- assert.doesNotMatch(dashboard,/industry\.html\?module=/,`${project.industry} dashboard still uses generic industry routing`);
- assert.match(combinedRuntime,/\/api\/v1\//,`${project.industry} runtime has no backend API integration`);
- assert.match(combinedRuntime,/industry\/registry|verifyTenant|tenant|available only/i,`${project.industry} runtime has no tenant-industry guard`);
- assert.doesNotMatch(combinedRuntime,/industry\.html\?module=/,`${project.industry} runtime links to generic workspace`);
- assert.ok(Array.isArray(vercel.rewrites)&&vercel.rewrites.some(row=>row.source==='/'),`${project.industry} has no branch root route`);
- assert.equal(project.branch,`frontend-${project.industry}`);
- assert.equal(project.dashboard,`${project.industry}-dashboard.html`);
- assert.equal(project.status,'code_complete_not_deployed');
- results.push({industry:project.industry,ref,dashboard:project.dashboard,runtime:runtimeFiles.join(','),status:'PASS'});
- console.log(`PASS ${project.industry}`);
-}
-assert.equal(results.length,13);
-fs.writeFileSync('all-industry-code-certification.json',JSON.stringify({checkedAt:new Date().toISOString(),deploymentAttempted:false,results},null,2));
-console.table(results);
-console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified as the isolated frontend using approved shared backend APIs with literal requirements 1-20 and end-to-end UOM/base-unit integration');
+assert.deepEqual(manifest.projects.map(item=>item.industry).sort(),expected.slice().sort());assert.deepEqual(manifest.unreleased,[]);const results=[];
+for(const project of manifest.projects){if(project.industry==='grocery'){console.log('CERTIFY grocery from active isolated frontend');results.push(certifyGrocery(project));console.log('PASS grocery');continue;}const ref=releaseRefs[project.industry]||project.branch,runtimeFiles=runtimeFilesFor(project.industry);console.log(`CERTIFY ${project.industry} from ${ref}`);const [dashboard,vercelText,...runtimes]=await Promise.all([fetchText(ref,project.dashboard),fetchText(ref,'vercel.json'),...runtimeFiles.map(file=>fetchText(ref,`js/${file}`))]);runtimeFiles.forEach((file,index)=>new vm.Script(runtimes[index],{filename:`${ref}/demo-static/js/${file}`}));const combinedRuntime=runtimes.join('\n'),vercel=JSON.parse(vercelText);for(const runtimeFile of runtimeFiles)assert.match(dashboard,new RegExp(runtimeFile.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),`${project.industry} dashboard does not load ${runtimeFile}`);assert.doesNotMatch(dashboard,/industry\.html\?module=/,`${project.industry} dashboard still uses generic industry routing`);assert.match(combinedRuntime,/\/api\/v1\//,`${project.industry} runtime has no backend API integration`);assert.match(combinedRuntime,/industry\/registry|verifyTenant|tenant|available only/i,`${project.industry} runtime has no tenant-industry guard`);assert.doesNotMatch(combinedRuntime,/industry\.html\?module=/,`${project.industry} runtime links to generic workspace`);assert.ok(Array.isArray(vercel.rewrites)&&vercel.rewrites.some(row=>row.source==='/'),`${project.industry} has no branch root route`);assert.equal(project.branch,`frontend-${project.industry}`);assert.equal(project.dashboard,`${project.industry}-dashboard.html`);assert.equal(project.status,'code_complete_not_deployed');results.push({industry:project.industry,ref,dashboard:project.dashboard,runtime:runtimeFiles.join(','),status:'PASS'});console.log(`PASS ${project.industry}`);}
+assert.equal(results.length,13);fs.writeFileSync('all-industry-code-certification.json',JSON.stringify({checkedAt:new Date().toISOString(),deploymentAttempted:false,results},null,2));console.table(results);console.log('PASS: 12 existing industry frontends remain certified and Grocery is certified with literal requirements 1-30, complete report filters, professional vouchers and UOM integration');
