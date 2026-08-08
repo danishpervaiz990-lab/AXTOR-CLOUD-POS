@@ -21,6 +21,8 @@ jobs:
           node --check demo-static/js/session-handoff.js
           node --check demo-static/js/platform-addons.js
           node --check demo-static/api/industry-asset.js
+          node --check demo-static/js/grocery-phase4-31-40.js
+          node --check tests/grocery-31-40-frontend.test.cjs
           node --check tests/authenticated-production.e2e.mjs
           node --check scripts/certify-all-industry-code.mjs
       - name: SaaS router release suite
@@ -29,6 +31,8 @@ jobs:
         run: node tests/industry-asset-gateway.test.cjs
       - name: Shared platform add-ons suite
         run: node tests/platform-addons.test.cjs
+      - name: Grocery requirements 31-40 certification
+        run: node tests/grocery-31-40-frontend.test.cjs
       - name: All-industry branch code certification
         run: node scripts/certify-all-industry-code.mjs
       - name: Upload code-certification report
