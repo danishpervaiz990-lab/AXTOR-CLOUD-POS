@@ -2,14 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const service=readFileSync(new URL("../src/services/grocery-41-50.service.ts",import.meta.url),"utf8");
-const routes=readFileSync(new URL("../src/routes/grocery-41-50.routes.ts",import.meta.url),"utf8");
-const sales=readFileSync(new URL("../src/controllers/grocery-sales.controller.ts",import.meta.url),"utf8");
-const lookup=readFileSync(new URL("../src/controllers/grocery-product-lookup-v5.controller.ts",import.meta.url),"utf8");
-const app=readFileSync(new URL("../src/app.ts",import.meta.url),"utf8");
+const read=p=>readFileSync(new URL(p,import.meta.url),"utf8");
+const service=[read("../src/services/grocery-41-50.service.ts"),read("../src/services/grocery-41-50-valuation.service.ts"),read("../src/services/grocery-41-50-print.service.ts"),read("../src/services/grocery-41-50-ops.service.ts"),read("../src/services/grocery-41-50-data.service.ts")].join("\n");
+const routes=read("../src/routes/grocery-41-50.routes.ts");
+const sales=read("../src/controllers/grocery-sales.controller.ts");
+const lookup=read("../src/controllers/grocery-product-lookup-v5.controller.ts");
+const app=read("../src/app.ts");
 
 test("41 uses one explicit weighted-average valuation method while retaining FEFO physical rotation",()=>{
-  assert.match(service,/method: "weighted_average"/);
+  assert.match(service,/method:"weighted_average"/);
   assert.match(sales,/valuationMethod: "weighted_average"/);
   assert.match(sales,/physicalRotation: "FEFO"/);
   assert.match(sales,/moving_weighted_average_pre_sale/);
@@ -22,11 +23,11 @@ test("42 centralized printing covers thermal standard paper and all required doc
 });
 
 test("43 barcode shelf and price label previews are bounded and printer friendly",()=>{
-  assert.match(service,/product_barcode/);assert.match(service,/shelf_label/);assert.match(service,/price_label/);assert.match(service,/limited to 500 labels/);assert.match(service,/printerFriendly: true/);
+  assert.match(service,/product_barcode/);assert.match(service,/shelf_label/);assert.match(service,/price_label/);assert.match(service,/limited to 500 labels/);assert.match(service,/printerFriendly:true/);
 });
 
 test("44 dashboard exposes required supermarket KPIs charts and safe comparisons",()=>{
-  for(const marker of ["todaySales","todayProfit","todayPurchases","todayExpenses","netCash","receivables","payables","currentStockValue","lowStock","expiringProducts","overdueCustomers","supplierBillsDue","chequesDue","salesTrend","paymentMethods","categories","topProducts","topCustomers","changePct: null"])assert.match(service,new RegExp(marker));
+  for(const marker of ["todaySales","todayProfit","todayPurchases","todayExpenses","netCash","receivables","payables","currentStockValue","lowStock","expiringProducts","overdueCustomers","supplierBillsDue","chequesDue","salesTrend","paymentMethods","categories","topProducts","topCustomers","salesVsPreviousMonth","changePct:null"])assert.match(service,new RegExp(marker));
 });
 
 test("45 notification center evaluates all required operational alert families",()=>{
@@ -43,17 +44,17 @@ test("47 supplier purchase cost history is persisted from actual goods receipts"
   assert.match(service,/purchaseCostHistory/);assert.match(service,/goodsReceiptItem\.findMany/);assert.match(routes,/cost-history/);
 });
 
-test("48 imports require preview hash validation and transactional commit",()=>{
+test("48 imports require preview hash validation, rejected-row reporting and transactional commit",()=>{
   for(const type of ["products","categories","customers","suppliers","opening_stock","product_pricing"])assert.match(service,new RegExp(type));
-  assert.match(service,/previewHash/);assert.match(service,/rows changed after preview/);assert.match(service,/db\.\$transaction/);assert.match(service,/rejectedRows/);
+  assert.match(service,/previewHash/);assert.match(service,/rows changed after preview/);assert.match(service,/db\.\$transaction/);assert.match(service,/rejectedRows/);assert.match(service,/grocery_price_history/);
 });
 
 test("49 global search is server side and covers operational identifiers",()=>{
-  assert.match(service,/globalSearch/);for(const marker of ["products","customers","suppliers","sales","purchases","grns","cheques","vouchers"])assert.match(service,new RegExp(marker));assert.match(service,/serverSide:true/);
+  assert.match(service,/globalSearch/);for(const marker of ["products","customers","suppliers","sales","purchases","grns","cheques","vouchers","voucherNo"])assert.match(service,new RegExp(marker));assert.match(service,/serverSide:true/);
 });
 
 test("50 removes 10k in-memory Grocery identifier scan and uses bounded database candidates",()=>{
-  assert.doesNotMatch(lookup,/take:\s*10000/);assert.match(lookup,/array_contains/);assert.match(lookup,/take:20/);assert.match(service,/limitOf/);assert.match(service,/LIMIT \$\$\{limitPos\}/);
+  assert.doesNotMatch(lookup,/take:\s*10000/);assert.match(lookup,/array_contains/);assert.match(lookup,/take:20/);assert.match(service,/limitOf/);assert.match(service,/LIMIT \$\$\{limitPos\}/);assert.match(service,/LIMIT 2000/);
 });
 
 test("41-50 routes remain Grocery guarded and are mounted",()=>{
