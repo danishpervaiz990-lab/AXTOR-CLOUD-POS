@@ -50,7 +50,7 @@ export async function groceryAuditLog(req: Request, res: Response) {
     const rows = await db.auditLog.findMany({ where, orderBy: { createdAt: "desc" }, take: Math.min(2000, Math.max(1, Number(req.query.limit || 500))) });
     const ids = [...new Set(rows.map((r: any) => r.userId).filter(Boolean))];
     const users = ids.length ? await db.user.findMany({ where: { businessId: t.businessId, id: { in: ids } }, select: { id: true, name: true, email: true } }) : [];
-    const userMap = new Map(users.map((u: any) => [String(u.id), u]));
+    const userMap = new Map<string, any>(users.map((u: any): [string, any] => [String(u.id), u]));
     return ok(res, rows.map((r: any) => ({ timestamp: r.createdAt, user: userMap.get(String(r.userId))?.name || userMap.get(String(r.userId))?.email || "System / unauthenticated", userId: r.userId, action: r.action, entity: r.entityType, entityId: r.entityId, oldValue: r.before, newValue: r.after, tenant: r.businessId, reason: json(r.after).reason || json(r.before).reason || null, ipAddress: r.ipAddress || null, userAgent: r.userAgent || null })));
   } catch (e) { return fail(res, e); }
 }
