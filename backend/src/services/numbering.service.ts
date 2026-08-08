@@ -85,8 +85,8 @@ export async function nextEntityNumber(
     nextNumber = await seedNextNumber(tx, modelName, fieldName, businessId, options);
   }
 
-  const effectivePrefix = normalizedPrefix || normalizePrefix(stored.prefix);
-  const effectivePadding = normalizedPadding || normalizePadding(stored.padding);
+  const effectivePrefix = existing ? normalizePrefix(stored.prefix || normalizedPrefix) : normalizedPrefix;
+  const effectivePadding = existing ? normalizePadding(stored.padding, normalizedPadding) : normalizedPadding;
   const value = {
     prefix: effectivePrefix,
     padding: effectivePadding,
@@ -122,8 +122,8 @@ export async function previewEntityNumber(
     : {};
   let nextNumber = Number(stored.nextNumber);
   if (!Number.isInteger(nextNumber) || nextNumber < 1) nextNumber = await seedNextNumber(tx, modelName, fieldName, businessId, options);
-  const effectivePrefix = normalizedPrefix || normalizePrefix(stored.prefix);
-  const effectivePadding = normalizedPadding || normalizePadding(stored.padding);
+  const effectivePrefix = existing ? normalizePrefix(stored.prefix || normalizedPrefix) : normalizedPrefix;
+  const effectivePadding = existing ? normalizePadding(stored.padding, normalizedPadding) : normalizedPadding;
   return {
     preview: `${effectivePrefix}-${String(nextNumber).padStart(effectivePadding, "0")}`,
     prefix: effectivePrefix,
