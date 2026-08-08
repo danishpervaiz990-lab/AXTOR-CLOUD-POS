@@ -4,6 +4,7 @@ import fs from 'node:fs';
 
 const service=fs.readFileSync('src/services/grocery-21-30-reports.service.ts','utf8');
 const overrides=fs.readFileSync('src/services/grocery-21-30-inventory-overrides.service.ts','utf8');
+const grouping=fs.readFileSync('src/services/grocery-21-30-grouping.service.ts','utf8');
 const controller=fs.readFileSync('src/controllers/grocery-21-30-reporting.controller.ts','utf8');
 const reportController=fs.readFileSync('src/controllers/reports.controller.ts','utf8');
 const routes=fs.readFileSync('src/routes/grocery-cheques.routes.ts','utf8');
@@ -19,9 +20,11 @@ test('requirements 21-30 report catalog covers all required families',()=>{
   ]) assert.ok(service.includes(`"${id}"`)||overrides.includes(`"${id}"`),`missing ${id}`);
 });
 
-test('report engine exposes real filters, paging, percentages and export surfaces',()=>{
+test('report engine exposes filters, paging, group-by, percentages and exports',()=>{
   for(const marker of ['pageSize','sortBy','groupBy','comparison','search','csv','xlsx','pdf','print']) assert.ok(service.includes(marker)||controller.includes(marker),`missing ${marker}`);
   for(const marker of ['contributionPct','unitsPct','profitPct','inventoryValuePct','creditUtilizationPct','collectionPct','purchasePct','payablePct']) assert.ok(service.includes(marker),`missing percentage ${marker}`);
+  for(const marker of ['grocery-sales-branch','grocery-sales-cashier','grocery-sales-payment-method','grocery-purchase-supplier','grocery-inventory-warehouse']) assert.ok(grouping.includes(marker),`missing group-by mapping ${marker}`);
+  assert.match(reportController,/resolveGrocery21To30GroupBy/);
 });
 
 test('P&L is ledger based with comparison and common-size analysis',()=>{
@@ -30,16 +33,17 @@ test('P&L is ledger based with comparison and common-size analysis',()=>{
   for(const marker of ['comparisonAmount','difference','changePct','revenuePct','Net Profit','Operating Profit','Cost of Goods Sold']) assert.ok(service.includes(marker));
 });
 
-test('inventory reports use actual Grocery persistence models',()=>{
+test('inventory reports use actual Grocery persistence models and adapter dispatches first',()=>{
   assert.match(overrides,/entityType:\s*"grocery_stock_transfer"/);
   assert.match(overrides,/db\.stockCount\.findMany/);
   assert.match(overrides,/countedQty/);
-  assert.match(reportController,/isGrocery21To30InventoryOverrideReport/);
-  assert.ok(reportController.indexOf('isGrocery21To30InventoryOverrideReport') < reportController.indexOf('isGrocery21To30Report'));
+  assert.match(reportController,/if \(isGrocery21To30InventoryOverrideReport\(reportId\)\)/);
+  assert.match(reportController,/else if \(isGrocery21To30Report\(reportId\)\)/);
 });
 
 test('professional voucher contract is routed and sourced from persisted records',()=>{
   assert.match(routes,/\/report-catalog/);
+  assert.match(routes,/router\.get\("\/vouchers"/);
   assert.match(routes,/\/vouchers\/:type\/:id/);
   assert.match(controller,/customerPayment\.findFirst/);
   assert.match(controller,/supplierPayment\.findFirst/);
