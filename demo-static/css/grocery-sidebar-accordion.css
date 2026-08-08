@@ -1,0 +1,88 @@
+/* Grocery sidebar group accordion — keeps the drawer behavior separate from menu grouping. */
+
+.side-nav .nav-group-title.grocery-nav-group-toggle {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #6f8076;
+  font: inherit;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1.2;
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.side-nav .nav-group-title.grocery-nav-group-toggle:hover {
+  background: rgba(23, 107, 67, .06);
+  color: var(--leaf-dark);
+}
+
+.side-nav .nav-group-title.grocery-nav-group-toggle:focus-visible {
+  outline: 3px solid rgba(23, 107, 67, .22);
+  outline-offset: 1px;
+}
+
+.side-nav .grocery-nav-group-toggle::after {
+  content: "›";
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--leaf-dark);
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform .18s ease, background-color .18s ease;
+}
+
+.side-nav .grocery-nav-group-toggle:hover::after {
+  background: rgba(23, 107, 67, .08);
+}
+
+.side-nav .nav-group.grocery-nav-collapsed > .grocery-nav-group-toggle::after {
+  transform: rotate(0deg);
+}
+
+.side-nav .nav-group.grocery-nav-collapsed {
+  gap: 0;
+  padding-bottom: 8px;
+}
+
+.side-nav .nav-group > .nav-link[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 820px) {
+  .side-nav .nav-group-title.grocery-nav-group-toggle {
+    min-height: 46px;
+    padding: 10px 12px;
+    font-size: .7rem;
+  }
+
+  .side-nav .grocery-nav-group-toggle::after {
+    width: 28px;
+    height: 28px;
+    font-size: 1.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-nav .grocery-nav-group-toggle::after {
+    transition: none !important;
+  }
+}
