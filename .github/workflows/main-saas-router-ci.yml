@@ -29,6 +29,7 @@ jobs:
           node --check demo-static/js/grocery-phase5-print-profile-v2.js
           node --check demo-static/js/grocery-phase6-51-62.js
           node --check demo-static/js/grocery-render-race-guard.js
+          node --check demo-static/js/grocery-report-race-hotfix.js
           node --check demo-static/js/grocery-sidebar-hotfix.js
           node --check tests/grocery-31-40-frontend.test.cjs
           node --check tests/grocery-41-50-frontend.test.cjs
@@ -36,6 +37,7 @@ jobs:
           node --check tests/grocery-sidebar-drawer.test.cjs
           node --check tests/grocery-live-runtime-regressions.test.cjs
           node --check tests/grocery-render-race-guard.test.cjs
+          node --check tests/grocery-report-race-hotfix.test.cjs
           node --check tests/authenticated-production.e2e.mjs
           node --check scripts/certify-all-industry-code.mjs
       - name: SaaS router release suite
@@ -56,6 +58,8 @@ jobs:
         run: node tests/grocery-live-runtime-regressions.test.cjs
       - name: Grocery stale-render navigation certification
         run: node tests/grocery-render-race-guard.test.cjs
+      - name: Grocery report race certification
+        run: node tests/grocery-report-race-hotfix.test.cjs
       - name: All-industry branch code certification
         run: node scripts/certify-all-industry-code.mjs
       - name: Upload code-certification report
