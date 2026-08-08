@@ -22,9 +22,13 @@ test('generic numbering is tenant serialized and durably stored',()=>{
   assert.doesNotMatch(numbering,/Date\.now\(\).*padding/,'allocator must not fall back to timestamp suffixes');
 });
 
-test('sales documents use the same safe sequence allocator',()=>{
+test('sales documents use the same safe sequence allocator and Grocery settings keys',()=>{
   assert.match(documentNumber,/nextEntityNumber/);
-  assert.match(documentNumber,/sequenceKey:\s*`sales\.\$\{documentType\}`/);
+  assert.match(documentNumber,/sequenceKeyForDocumentType/);
+  assert.match(documentNumber,/return 'grocery\.invoice'/);
+  assert.match(documentNumber,/return 'grocery\.quotation'/);
+  assert.match(documentNumber,/return 'grocery\.delivery_note'/);
+  assert.match(documentNumber,/numbering\.sequence\.\$\{sequenceKey\}/);
   assert.doesNotMatch(documentNumber,/pg_advisory_xact_lock/,'document numbering must not rely on the production-incompatible advisory lock');
 });
 
