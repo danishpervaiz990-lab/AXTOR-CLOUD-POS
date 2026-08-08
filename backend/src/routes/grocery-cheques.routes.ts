@@ -7,65 +7,25 @@ import { groceryPostPurchaseInvoice } from "../controllers/grocery-purchase-rece
 import { groceryCustomerDetail } from "../controllers/grocery-customer-detail.controller.js";
 import { groceryHeldSaleCreateV2, groceryHeldSaleDeleteV2, groceryHeldSaleListV2 } from "../controllers/grocery-held-sales.controller.js";
 import { createGroceryCustomerPayment, createGrocerySupplierPayment } from "../controllers/grocery-accounting-payments.controller.js";
+import { groceryReportCatalog, groceryVoucher } from "../controllers/grocery-21-30-reporting.controller.js";
 import {
-  bootstrapGroceryAccounting,
-  createGroceryExpense,
-  createGroceryJournal,
-  createGroceryStockCount,
-  createGroceryTransfer,
-  createGroceryVan,
-  groceryChartOfAccounts,
-  groceryCounterCashMovement,
-  groceryCounters,
-  groceryCounterSummary,
-  groceryExpenses,
-  groceryJournals,
-  groceryReorderSuggestions,
-  groceryTransfers,
-  groceryVans,
-  groceryVanStock,
-  reconcileGroceryAccountingSource,
-  saveGroceryCounterProfile,
-  transitionGroceryJournal,
-  updateGroceryStockCount,
-  updateGroceryVan,
-  approveGroceryStockCount,
+  bootstrapGroceryAccounting, createGroceryExpense, createGroceryJournal, createGroceryStockCount, createGroceryTransfer, createGroceryVan,
+  groceryChartOfAccounts, groceryCounterCashMovement, groceryCounters, groceryCounterSummary, groceryExpenses, groceryJournals,
+  groceryReorderSuggestions, groceryTransfers, groceryVans, groceryVanStock, reconcileGroceryAccountingSource, saveGroceryCounterProfile,
+  transitionGroceryJournal, updateGroceryStockCount, updateGroceryVan, approveGroceryStockCount,
 } from "../controllers/grocery-operations.controller.js";
 import { groceryProductLookupUom, groceryProductProfileUom, saveGroceryProductProfileUom } from "../controllers/grocery-product-uom.controller.js";
 import { groceryCreatePurchaseOrderUom, groceryReceivePurchaseUom } from "../controllers/grocery-purchase-uom.controller.js";
-import {
-  createGroceryVanCollection,
-  createGroceryVanDamage,
-  createGroceryVanReturn,
-  createGroceryVanSale,
-} from "../controllers/grocery-van.controller.js";
+import { createGroceryVanCollection, createGroceryVanDamage, createGroceryVanReturn, createGroceryVanSale } from "../controllers/grocery-van.controller.js";
 import { guardedGroceryTransferTransition, groceryVanReconciliationV2 } from "../controllers/grocery-operations-guards.controller.js";
 import {
-  archiveGroceryExpenseTemplate,
-  createGroceryCounter,
-  createGroceryExpenseTemplate,
-  createGroceryVanClosingCount,
-  groceryCashiers,
-  groceryExpenseReportComplete,
-  groceryExpenseTemplates,
-  latestGroceryVanClosingCount,
-  updateGroceryCounter,
+  archiveGroceryExpenseTemplate, createGroceryCounter, createGroceryExpenseTemplate, createGroceryVanClosingCount, groceryCashiers,
+  groceryExpenseReportComplete, groceryExpenseTemplates, latestGroceryVanClosingCount, updateGroceryCounter,
 } from "../controllers/grocery-11-20-completion.controller.js";
+import { groceryChequeCreate, groceryChequeGenerateReminders, groceryChequeList, groceryChequeTransition } from "../controllers/grocery-cheques.controller.js";
 import {
-  groceryChequeCreate,
-  groceryChequeGenerateReminders,
-  groceryChequeList,
-  groceryChequeTransition,
-} from "../controllers/grocery-cheques.controller.js";
-import {
-  groceryAgeing,
-  groceryContext,
-  groceryExpiry,
-  groceryPurchaseStatus,
-  grocerySalesGuard,
-  grocerySupplierOverview,
-  saveGroceryCustomerProfile,
-  saveGrocerySupplierProfile,
+  groceryAgeing, groceryContext, groceryExpiry, groceryPurchaseStatus, grocerySalesGuard, grocerySupplierOverview,
+  saveGroceryCustomerProfile, saveGrocerySupplierProfile,
 } from "../controllers/grocery-foundation.controller.js";
 
 const router = Router();
@@ -79,6 +39,9 @@ const accountingRead = requireAnyPermission("accounts.view", "reports.view");
 const accountingManage = requirePermission("accounts.manage");
 
 router.get("/context", requireAnyPermission("dashboard.view", "sales_documents.view", "inventory.view"), groceryContext);
+router.get("/report-catalog", requirePermission("reports.view"), groceryReportCatalog);
+router.get("/vouchers/:type/:id", requireAnyPermission("payments.view", "purchases.view", "expenses.view", "reports.view"), groceryVoucher);
+
 router.get("/customers/:id/overview", requirePermission("customers.view"), groceryCustomerDetail);
 router.patch("/customers/:id/profile", requirePermission("customers.manage"), saveGroceryCustomerProfile);
 router.get("/suppliers/:id/overview", requirePermission("suppliers.view"), grocerySupplierOverview);
@@ -123,7 +86,6 @@ router.get("/vans/:id/closing-counts/latest", requireAnyPermission("inventory.vi
 router.get("/transfers", requirePermission("inventory.view"), groceryTransfers);
 router.post("/transfers", requirePermission("inventory.transfer"), createGroceryTransfer);
 router.patch("/transfers/:id/status", requirePermission("inventory.transfer"), guardedGroceryTransferTransition);
-
 router.post("/stock-counts", requirePermission("inventory.count"), createGroceryStockCount);
 router.patch("/stock-counts/:id", requirePermission("inventory.count"), updateGroceryStockCount);
 router.post("/stock-counts/:id/approve", requirePermission("inventory.count"), approveGroceryStockCount);
