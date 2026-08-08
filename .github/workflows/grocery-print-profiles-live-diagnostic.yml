@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Diagnose single and concurrent live print-profile reads
+      - name: Diagnose parallel first-use live print-profile reads
         env:
           BACKEND: https://axtor-cloud-pos-production.up.railway.app
         run: |
@@ -46,13 +46,13 @@ jobs:
             const token=login.data?.token||login.data?.data?.token;
             if(!token)throw new Error('No token');
             const auth={Authorization:`Bearer ${token}`};
-            const single=await req('/api/v1/grocery/print/profiles',{headers:auth});
-            const parallel=await Promise.all(Array.from({length:4},()=>req('/api/v1/grocery/print/profiles',{headers:auth})));
+            const firstUseParallel=await Promise.all(Array.from({length:6},()=>req('/api/v1/grocery/print/profiles',{headers:auth})));
+            const settled=await req('/api/v1/grocery/print/profiles',{headers:auth});
             const compact={
-              single:{status:single.status,error:single.data?.error?.message||single.data?.message||null,count:(single.data?.data?.profiles||single.data?.profiles||[]).length},
-              parallel:parallel.map(x=>({status:x.status,error:x.data?.error?.message||x.data?.message||null,count:(x.data?.data?.profiles||x.data?.profiles||[]).length}))
+              firstUseParallel:firstUseParallel.map(x=>({status:x.status,error:x.data?.error?.message||x.data?.message||null,count:(x.data?.data?.profiles||x.data?.profiles||[]).length})),
+              settled:{status:settled.status,error:settled.data?.error?.message||settled.data?.message||null,count:(settled.data?.data?.profiles||settled.data?.profiles||[]).length}
             };
             console.log(JSON.stringify(compact,null,2));
-            if(single.status!==200||parallel.some(x=>x.status!==200))process.exit(1);
+            if(firstUseParallel.some(x=>x.status!==200)||settled.status!==200)process.exit(1);
           })().catch(e=>{console.error(e.stack||e);process.exit(1)});
           NODE
