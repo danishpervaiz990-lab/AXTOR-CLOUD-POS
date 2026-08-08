@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const product = read("src/controllers/grocery-product-uom.controller.ts");
+const priceHistory = read("src/controllers/grocery-price-profile-history.controller.ts");
 const purchase = read("src/controllers/grocery-purchase-uom.controller.ts");
 const routes = read("src/routes/grocery-cheques.routes.ts");
 const sales = read("src/controllers/grocery-sales.controller.ts");
@@ -43,9 +44,11 @@ test("GRN records purchase quantity but posts base quantity to inventory", () =>
   assert.match(purchase, /costPerBaseUnit: item\.costPerBaseUnit/);
 });
 
-test("Grocery routes use UOM-aware product PO and receiving handlers", () => {
+test("Grocery routes preserve UOM-aware profile PO and receiving handlers through price-history wrapper", () => {
   assert.match(routes, /groceryProductLookupUom/);
-  assert.match(routes, /saveGroceryProductProfileUom/);
+  assert.match(routes, /saveGroceryProductProfileWithPriceHistory/);
+  assert.match(priceHistory, /saveGroceryProductProfileUom/);
+  assert.match(priceHistory, /await saveGroceryProductProfileUom\(req, capture as Response\)/);
   assert.match(routes, /groceryCreatePurchaseOrderUom/);
   assert.match(routes, /groceryReceivePurchaseUom/);
   assert.doesNotMatch(routes, /router\.post\("\/purchase-orders"[^\n]+groceryCreatePurchaseOrder\)/);
