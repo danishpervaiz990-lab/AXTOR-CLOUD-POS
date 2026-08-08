@@ -1,0 +1,58 @@
+name: Grocery Print Profiles Live Diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/grocery-print-profiles-live-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Diagnose parallel first-use live print-profile reads
+        env:
+          BACKEND: https://axtor-cloud-pos-production.up.railway.app
+        run: |
+          node <<'NODE'
+          const crypto=require('node:crypto');
+          const base=process.env.BACKEND;
+          async function req(path,{method='GET',body,headers={}}={}){
+            const r=await fetch(base+path,{method,headers:{Accept:'application/json',...(body?{'Content-Type':'application/json'}:{}),...headers},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
+            const data=await r.json().catch(()=>null);
+            return {status:r.status,data};
+          }
+          (async()=>{
+            const catalog=await req('/api/v1/public/catalog');
+            const plans=catalog.data?.data?.plans||catalog.data?.plans||[];
+            const plan=plans.find(p=>String(p.code||'').toLowerCase()==='professional')||plans.find(p=>p.isRecommended)||plans[0];
+            if(!plan?.code)throw new Error('No plan');
+            const tag=`${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+            const email=`print.live.${tag}@example.test`;
+            const password=`PrintLive!${crypto.randomBytes(18).toString('base64url')}9aA`;
+            const reg=await req('/api/v1/public/register',{method:'POST',headers:{'Idempotency-Key':`print-live:${tag}`},body:{businessName:`Print Live ${tag}`,ownerName:'Print Live Owner',email,password,country:'QA',timezone:'Asia/Qatar',baseCurrency:'QAR',language:'en',industryCode:'grocery',planCode:String(plan.code).toLowerCase(),billingCycle:'MONTHLY',firstBranch:'Main Branch',firstWarehouse:'Main Warehouse',firstCounter:'Counter 1',taxSystem:'none',taxLabel:'Tax',invoicePrefix:'GRC',printProfile:'a4',pricesIncludeTax:false,sampleDataRequested:false,acceptTerms:true,acceptPrivacy:true}});
+            if(![200,201].includes(reg.status))throw new Error(`register HTTP ${reg.status}: ${JSON.stringify(reg.data)}`);
+            const workspace=reg.data?.data?.business?.slug||reg.data?.business?.slug;
+            const login=await req('/api/v1/auth/login',{method:'POST',body:{businessSlug:workspace,email,password}});
+            if(login.status!==200)throw new Error(`login HTTP ${login.status}`);
+            const token=login.data?.token||login.data?.data?.token;
+            if(!token)throw new Error('No token');
+            const auth={Authorization:`Bearer ${token}`};
+            const firstUseParallel=await Promise.all(Array.from({length:6},()=>req('/api/v1/grocery/print/profiles',{headers:auth})));
+            const settled=await req('/api/v1/grocery/print/profiles',{headers:auth});
+            const compact={
+              firstUseParallel:firstUseParallel.map(x=>({status:x.status,error:x.data?.error?.message||x.data?.message||null,count:(x.data?.data?.profiles||x.data?.profiles||[]).length})),
+              settled:{status:settled.status,error:settled.data?.error?.message||settled.data?.message||null,count:(settled.data?.data?.profiles||settled.data?.profiles||[]).length}
+            };
+            console.log(JSON.stringify(compact,null,2));
+            if(firstUseParallel.some(x=>x.status!==200)||settled.status!==200)process.exit(1);
+          })().catch(e=>{console.error(e.stack||e);process.exit(1)});
+          NODE

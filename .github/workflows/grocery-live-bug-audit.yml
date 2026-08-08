@@ -1,0 +1,43 @@
+name: Grocery Authenticated Live Bug Audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/grocery-live-bug-audit.yml'
+      - 'scripts/grocery-authenticated-live-bug-audit.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Prepare exposed mobile backdrop tap
+        run: |
+          sed -i 's/position: { x: 5, y: 5 }/position: { x: 400, y: 50 }/' scripts/grocery-authenticated-live-bug-audit.mjs
+      - name: Run authenticated Grocery production bug audit
+        env:
+          FRONTEND: https://axtorpos.vercel.app/apps/grocery
+          BACKEND: https://axtor-cloud-pos-production.up.railway.app
+        run: node scripts/grocery-authenticated-live-bug-audit.mjs
+      - name: Upload live QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grocery-authenticated-live-bug-audit-${{ github.run_id }}
+          path: |
+            grocery-live-bug-audit-report.json
+            grocery-live-bug-audit.png
+          if-no-files-found: warn
+          retention-days: 14
