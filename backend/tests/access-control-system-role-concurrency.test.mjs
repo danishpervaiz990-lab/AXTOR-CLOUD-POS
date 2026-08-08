@@ -15,9 +15,9 @@ test('Role model keeps tenant/name uniqueness used by concurrent bootstrap',()=>
 test('System role bootstrap atomically upserts missing canonical roles',()=>{
   assert.match(source,/tx\.role\.upsert/);
   assert.match(source,/businessId_name: \{ businessId, name: definition\.name \}/);
-  assert.match(source,/create: \{ businessId, name: definition\.name/);
+  assert.match(source,/create:\s*\{[\s\S]*?businessId,[\s\S]*?name:\s*definition\.name,[\s\S]*?permissions:\s*\[\.\.\.definition\.permissions\],[\s\S]*?isSystemRole:\s*true/);
   assert.match(source,/update: \{ isSystemRole: true, description: definition\.description \}/);
-  assert.doesNotMatch(source,/const created = await tx\.role\.create\(\{ data: \{ businessId, name: definition\.name/,'missing system roles must not use race-prone check-then-create');
+  assert.doesNotMatch(source,/const created = await tx\.role\.create\(\{\s*data:\s*\{[\s\S]*?businessId,[\s\S]*?name:\s*definition\.name/,'missing system roles must not use race-prone check-then-create');
 });
 
 test('Concurrent-safe bootstrap preserves existing customized role-family behavior',()=>{
