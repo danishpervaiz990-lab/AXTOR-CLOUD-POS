@@ -217,7 +217,7 @@ test("sales wildcards do not grant sensitive overrides without an exact permissi
     "sales_documents.override_stock",
   ]) {
     assert.equal(hasPermission(broadSales, permission), false, `${permission} must require an exact grant`);
-    assert.equal(hasPermission(access({ permissions: new Set([permission]) }), permission, true, `${permission} exact grant must work`);
-    assert.equal(hasPermission(access({ permissions: new Set(["*"]) }), permission, true, `${permission} global wildcard must work`);
+    assert.equal(hasPermission(access({ permissions: new Set([permission]) }), permission), true, `${permission} exact grant must work`);
+    assert.equal(hasPermission(access({ permissions: new Set(["*"]) }), permission), true, `${permission} global wildcard must work`);
   }
 });
