@@ -12,9 +12,9 @@ export {
   ensurePrintProfiles,
   listPrintProfiles,
   savePrintProfile,
-  printableDocument,
   labelPreview,
 } from "./grocery-41-50-print.service.js";
+export { printableDocument } from "./grocery-41-50-print-profile.service.js";
 
 export {
   GROCERY_SETTING_DEFAULTS,
@@ -23,8 +23,8 @@ export {
   saveGrocerySettings,
   listNotificationRules,
   saveNotificationRule,
-  generateOperationalNotifications,
 } from "./grocery-41-50-ops.service.js";
+export { generateOperationalNotifications } from "./grocery-41-50-notifications.service.js";
 
 export {
   previewImport,
