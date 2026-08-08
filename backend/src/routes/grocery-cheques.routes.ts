@@ -18,7 +18,6 @@ import {
   groceryCounterCashMovement,
   groceryCounters,
   groceryCounterSummary,
-  groceryExpenseReport,
   groceryExpenses,
   groceryJournals,
   groceryProductLookup,
@@ -42,6 +41,17 @@ import {
   createGroceryVanSale,
 } from "../controllers/grocery-van.controller.js";
 import { guardedGroceryTransferTransition, groceryVanReconciliationV2 } from "../controllers/grocery-operations-guards.controller.js";
+import {
+  archiveGroceryExpenseTemplate,
+  createGroceryCounter,
+  createGroceryExpenseTemplate,
+  createGroceryVanClosingCount,
+  groceryCashiers,
+  groceryExpenseReportComplete,
+  groceryExpenseTemplates,
+  latestGroceryVanClosingCount,
+  updateGroceryCounter,
+} from "../controllers/grocery-11-20-completion.controller.js";
 import {
   groceryChequeCreate,
   groceryChequeGenerateReminders,
@@ -92,7 +102,10 @@ router.post("/held-sales", requirePermission("sales_documents.create"), groceryH
 router.delete("/held-sales/:id", requirePermission("sales_documents.create"), groceryHeldSaleDeleteV2);
 router.post("/sales", grocerySalesGuard, groceryCreateSale);
 
+router.get("/cashiers", locationRead, groceryCashiers);
 router.get("/counters", locationRead, groceryCounters);
+router.post("/counters", locationManage, createGroceryCounter);
+router.patch("/counters/:id", locationManage, updateGroceryCounter);
 router.patch("/counters/:id/profile", locationManage, saveGroceryCounterProfile);
 router.post("/shifts/:shiftId/cash-movements", requireAnyPermission("shifts.open", "shifts.close", "accounts.manage"), groceryCounterCashMovement);
 router.get("/shifts/:shiftId/counter-summary", requireAnyPermission("shifts.view", "reports.view"), groceryCounterSummary);
@@ -106,6 +119,8 @@ router.post("/vans/:id/collections", requirePermission("payments.create"), creat
 router.post("/vans/:id/returns", requireAnyPermission("sales_returns.create", "sales_documents.create"), createGroceryVanReturn);
 router.post("/vans/:id/damaged", requirePermission("inventory.adjust"), createGroceryVanDamage);
 router.get("/vans/:id/reconciliation", requireAnyPermission("inventory.view", "reports.view"), groceryVanReconciliationV2);
+router.post("/vans/:id/closing-counts", requireAnyPermission("inventory.count", "inventory.adjust"), createGroceryVanClosingCount);
+router.get("/vans/:id/closing-counts/latest", requireAnyPermission("inventory.view", "reports.view"), latestGroceryVanClosingCount);
 
 router.get("/transfers", requirePermission("inventory.view"), groceryTransfers);
 router.post("/transfers", requirePermission("inventory.transfer"), createGroceryTransfer);
@@ -125,7 +140,10 @@ router.post("/accounting/reconcile/:type/:id", accountingManage, reconcileGrocer
 
 router.get("/expenses", requirePermission("expenses.view"), groceryExpenses);
 router.post("/expenses", requirePermission("expenses.manage"), createGroceryExpense);
-router.get("/expense-report", requireAnyPermission("expenses.view", "reports.view"), groceryExpenseReport);
+router.get("/expense-report", requireAnyPermission("expenses.view", "reports.view"), groceryExpenseReportComplete);
+router.get("/expense-templates", requirePermission("expenses.view"), groceryExpenseTemplates);
+router.post("/expense-templates", requirePermission("expenses.manage"), createGroceryExpenseTemplate);
+router.delete("/expense-templates/:id", requirePermission("expenses.manage"), archiveGroceryExpenseTemplate);
 router.post("/customer-payments", requirePermission("payments.create"), createGroceryCustomerPayment);
 router.post("/supplier-payments", requirePermission("purchases.pay"), createGrocerySupplierPayment);
 
