@@ -10,14 +10,25 @@ export function getDocumentPrefix(documentType: DocumentType): string {
   return 'DOC';
 }
 
+function sequenceKeyForDocumentType(documentType: DocumentType): string {
+  if (documentType === 'INVOICE') return 'grocery.invoice';
+  if (documentType === 'QUOTATION') return 'grocery.quotation';
+  if (documentType === 'DELIVERY_NOTE') return 'grocery.delivery_note';
+  return `grocery.${String(documentType).toLowerCase()}`;
+}
+
 async function numberSettings(prismaClient: PrismaClientOrTransaction, businessId: string, documentType: DocumentType) {
-  const counter = await (prismaClient as any).documentCounter.findFirst({
-    where: { businessId, branchId: null, documentType }
-  });
-  return {
-    prefix: String(counter?.prefix || getDocumentPrefix(documentType)).replace(/[-\s]+$/g, ''),
-    padding: Math.max(1, Math.min(12, Number(counter?.padding || 6))),
-  };
+  const sequenceKey = sequenceKeyForDocumentType(documentType);
+  const settingKey = `numbering.sequence.${sequenceKey}`;
+  const [setting, counter] = await Promise.all([
+    (prismaClient as any).appSetting.findUnique({ where: { businessId_key: { businessId, key: settingKey } } }),
+    (prismaClient as any).documentCounter.findFirst({ where: { businessId, branchId: null, documentType } }),
+  ]);
+  const value = setting?.value && typeof setting.value === 'object' && !Array.isArray(setting.value) ? setting.value as Record<string, unknown> : {};
+  const prefix = String(value.prefix || counter?.prefix || getDocumentPrefix(documentType)).replace(/[-\s]+$/g, '');
+  const rawPadding = Number(value.padding ?? counter?.padding ?? 6);
+  const padding = Number.isInteger(rawPadding) ? Math.max(1, Math.min(12, rawPadding)) : 6;
+  return { prefix, padding, sequenceKey };
 }
 
 export async function previewDocumentNumber(
@@ -33,16 +44,17 @@ export async function previewDocumentNumber(
     businessId,
     settings.prefix,
     settings.padding,
-    { sequenceKey: `sales.${documentType}`, where: { documentType } }
+    { sequenceKey: settings.sequenceKey, where: { documentType } }
   );
   return { preview: result.preview, prefix: result.prefix, nextNumber: result.nextNumber };
 }
 
 /**
  * Allocates the official invoice / quotation / delivery-note number inside the
- * caller's database transaction. Allocation is serialized by the tenant row
- * lock in nextEntityNumber(), so concurrent requests cannot receive the same
- * sequence value. Existing DocumentCounter prefixes/padding are still honored.
+ * caller's database transaction. The sequence key is intentionally identical
+ * to Grocery Settings -> Numbering so a saved tenant prefix/padding is the one
+ * used by the next real document. Allocation is serialized by the tenant row
+ * lock in nextEntityNumber().
  */
 export async function getNextDocumentNumber(
   prismaClient: PrismaClientOrTransaction,
@@ -58,11 +70,11 @@ export async function getNextDocumentNumber(
     businessId,
     settings.prefix,
     settings.padding,
-    { sequenceKey: `sales.${documentType}`, where: { documentType } }
+    { sequenceKey: settings.sequenceKey, where: { documentType } }
   );
 
-  // Keep the legacy counter's display value synchronized for existing settings
-  // screens. It is no longer the concurrency primitive.
+  // Keep the legacy counter's display value synchronized for older settings
+  // screens. AppSetting remains the concurrency-safe source of the next value.
   const numeric = Number(allocated.match(/(\d+)$/)?.[1] || 0);
   const counter = await (prismaClient as any).documentCounter.findFirst({ where: { businessId, branchId: null, documentType } });
   if (counter) {
